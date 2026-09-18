@@ -1,0 +1,10 @@
+{
+  "@atlaskit/forge-react-types@2.8.0": {
+    "license": "Apache-2.0",
+    "source": "LICENSE.md included in the integrity-locked npm package"
+  },
+  "@atlaskit/navigation-system@10.16.9": {
+    "license": "Apache-2.0",
+    "source": "https://bitbucket.org/atlassian/atlassian-frontend-mirror/raw/f69cf25b0e329740a82b624b8f19e1ef835799d4/LICENSE"
+  }
+}

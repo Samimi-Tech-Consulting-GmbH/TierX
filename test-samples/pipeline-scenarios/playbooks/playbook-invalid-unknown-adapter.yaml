@@ -1,0 +1,13 @@
+# INVALID — action adapter is not one of the platform-defined adapter
+# identifiers. Backend rejects the enum violation.
+prompt: Analyse the alert.
+description: Playbook with an unknown action adapter.
+actions:
+  - name: bad-action
+    adapter: TOTALLY_UNKNOWN_ADAPTER
+    query_template: "query {host.hostname}"
+    query_input_fields: []
+    time: "2026-07-23T08:00:00Z"
+    result: out
+is_active: true
+is_system: false

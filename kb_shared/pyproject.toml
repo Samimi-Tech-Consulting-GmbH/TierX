@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tierx-kb"
+version = "0.1.0"
+license = { text = "AGPL-3.0-only" }
+requires-python = ">=3.11"
+dependencies = ["markdown-it-py==3.0.0", "httpx==0.28.1"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tierx_kb*", "soc_mind_kb*"]
+
+[tool.setuptools.package-data]
+tierx_kb = ["synonyms-v1.json"]

@@ -1,0 +1,28 @@
+{
+    "tenant_id": "test-tenant",
+    "source_system": "SPLUNK",
+    "alert_type": "splunk.notable.endpoint_malware",
+    "timestamp": "2026-03-19T14:23:17.000Z",
+    "raw_payload": {
+      "search_name": "Endpoint - Malware Detection - Rule",
+      "sid": "scheduler__admin__search__RMD5a3f2b1c4e_at_1711036800_7",
+      "result": {
+        "_time": "2026-03-19T14:23:17.000+01:00",
+        "host": "WS-FRA-0847",
+        "src": "10.142.88.47",
+        "dest": "185.220.101.34",
+        "dest_port": 443,
+        "user": "m.schmidt",
+        "process": "powershell.exe",
+        "process_command_line": "powershell.exe -enc SQBFAFgAIAAoAE4AZQB3AC0A...",
+        "file_path": "C:\\Users\\m.schmidt\\AppData\\Local\\Temp\\update.exe",
+        "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "severity": "critical",
+        "category": "malware",
+        "action": "blocked",
+        "rule_name": "Encoded PowerShell Execution with Malware Signature",
+        "rule_id": "EPM-2024-0147",
+        "mitre_attack_id": "T1059.001"
+      }
+    }
+  }

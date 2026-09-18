@@ -1,0 +1,48 @@
+# Local development overrides
+
+services:
+  mongodb:
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  kafka:
+    ports:
+      - "127.0.0.1:9092:9092"
+  ollama:
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_PARALLEL=1
+
+  ingestion-proxy:
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - ./ingestion-proxy:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  backend:
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/app
+    # Run with reload for local dev
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  pipeline:
+    volumes:
+      - ./pipeline:/app
+
+  frontend:
+    build:
+      target: development
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    # Run dev server instead of production bundle
+    command: npm run dev

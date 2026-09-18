@@ -1,0 +1,20 @@
+{
+  "result": {
+    "host": "JIRA-TEST-ENDPOINT-01",
+    "src": "10.20.30.41",
+    "dest": "203.0.113.44",
+    "dest_port": 443,
+    "user": "jira.test.user",
+    "process": "powershell.exe",
+    "process_command_line": "powershell.exe -enc SQBFAFgA...",
+    "file_path": "C:\\Users\\jira.test.user\\AppData\\Local\\Temp\\payload.ps1",
+    "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "severity": "5",
+    "category": "malware",
+    "action": "blocked",
+    "rule_name": "Jira Transported Endpoint Malware Execution",
+    "rule_id": "JIRA-SPL-EDR-0042",
+    "mitre_attack_id": "T1059.001",
+    "_time": "2026-08-19T08:15:00Z"
+  }
+}

@@ -1,0 +1,8 @@
+# INVALID — unknown/extra keys are forbidden (typo protection).
+# "promt" (typo) and "steps" are not part of the playbook model.
+promt: This is a typo of prompt and must be rejected, not ignored.
+steps:
+  - step_number: 1
+description: Playbook with unknown fields.
+is_active: true
+is_system: false

@@ -1,0 +1,40 @@
+# Production overrides
+
+services:
+  backend:
+    # No ports exposed out of docker network, no source-code mounts
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  frontend:
+    # Frontend exposes port 3000
+    ports:
+      - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  mongodb:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+  kafka:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+  ollama:
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G

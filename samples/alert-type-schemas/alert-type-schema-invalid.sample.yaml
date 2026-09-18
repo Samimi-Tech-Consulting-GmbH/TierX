@@ -1,0 +1,19 @@
+# INVALID — intentionally fails API validation (expect HTTP 422 with structured errors in detail.errors).
+# Reasons:
+#   - version must be semver (major.minor.patch), e.g. 1.0.0 — not "1.0"
+#   - field_mapping must be non-empty
+#   - critical_fields must be a non-empty list
+#   - fields must be a list of objects when provided — not a scalar string
+
+alert_type: INVALID_DEMO_ALERT
+version: "1.0"
+description: >-
+  This sample is deliberately invalid for documentation and negative tests.
+
+field_mapping: {}
+
+critical_fields: []
+
+fields: not_a_list
+
+severity: high

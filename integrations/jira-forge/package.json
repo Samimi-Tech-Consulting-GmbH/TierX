@@ -1,0 +1,30 @@
+{
+  "name": "tierx-jira-forge",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "forge": "npx --yes @forge/cli@13.5.0",
+    "lint": "npx --yes @forge/cli@13.5.0 lint",
+    "validate-manifest": "node scripts/validate-manifest.cjs"
+  },
+  "dependencies": {
+    "@forge/api": "8.0.5",
+    "@forge/bridge": "6.3.1",
+    "@forge/events": "3.0.5",
+    "@forge/kvs": "2.0.5",
+    "@forge/react": "12.1.3",
+    "@forge/resolver": "2.0.0",
+    "react": "18.3.1"
+  },
+  "overrides": {
+    "fast-uri": "3.1.7",
+    "linkify-it": "5.0.2",
+    "uuid": "11.1.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,11 @@
+# INVALID at upload — the same source path (result.host) is mapped to two ECS
+# fields. Backend rejects: "field_mapping has the same source path mapped to
+# multiple ECS fields".
+alert_type: splunk.notable.broken_duplicate_source
+version: "1.0.0"
+field_mapping:
+  host.hostname: result.host
+  host.name: result.host
+  event.created: result._time
+critical_fields:
+  - host.hostname

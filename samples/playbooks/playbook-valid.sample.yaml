@@ -1,0 +1,16 @@
+# Valid playbook YAML for POST /api/v1/tenants/{tenant_id}/playbooks (multipart).
+# playbook_name comes from the form field "name", not from this file.
+#
+# Requires: UTF-8, .yaml / .yml extension.
+# Fields actions and alert_types may be omitted (treated as empty arrays).
+
+
+
+prompt: |
+  You are a Tier-1 SOC analyst. Using the enrichment results above,
+  summarize the incident, cite evidence, and list recommended next actions.
+
+description: >-
+  Automated enrichment for phishing and BEC-style alerts using Splunk and Cortex XDR.
+is_active: true
+is_system: false

@@ -1,0 +1,20 @@
+{
+  "alert_id": "corr-alert-b",
+  "tenant_id": "tenant-demo",
+  "alert_type": "splunk.notable.endpoint_malware",
+  "source_system": "SPLUNK",
+  "normalized_payload": {
+    "event.severity": "high",
+    "rule.id": "CORR-B",
+    "host.hostname": "WIN-B",
+    "source.ip": "10.44.0.8",
+    "threat.technique.id": "T1059.001"
+  },
+  "raw_payload": {"result": {"rule_id": "CORR-B"}},
+  "fingerprint": "correlation-fixture-b",
+  "kafka_state": "ENRICHED",
+  "status": "ANALYZING",
+  "validated": true,
+  "normalized": true,
+  "enriched": true
+}

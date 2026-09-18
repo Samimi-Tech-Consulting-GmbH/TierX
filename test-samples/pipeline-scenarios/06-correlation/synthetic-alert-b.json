@@ -1,0 +1,20 @@
+{
+  "alert_id": "00000000-0000-4000-8000-000000000102",
+  "tenant_id": "00000000-0000-4000-8000-000000000002",
+  "alert_type": "splunk.notable.endpoint_malware",
+  "source_system": "SPLUNK",
+  "normalized_payload": {
+    "event.severity": "medium",
+    "rule.id": "SYNTHETIC-CORRELATION-B",
+    "host.hostname": "EXAMPLE-SERVER-01",
+    "source.ip": "192.0.2.15",
+    "user.name": "example.user"
+  },
+  "raw_payload": {},
+  "fingerprint": "synthetic-correlation-regression-b",
+  "kafka_state": "ENRICHED",
+  "status": "ANALYZING",
+  "validated": true,
+  "normalized": true,
+  "enriched": true
+}

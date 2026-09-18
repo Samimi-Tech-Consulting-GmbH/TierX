@@ -1,0 +1,41 @@
+# VALID — passes alert-type schema YAML validation (POST /api/v1/tenants/{id}/schema-registry).
+# Server assigns schema_id (UUID) and tenant_id; optional playbook_id is supplied on the form.
+# Keys like schema_id, status, tenant_id in YAML are ignored if present.
+#
+# Upload troubleshooting (not YAML syntax):
+# - 409 Conflict: this alert_type + version already exists — bump `version` (semver).
+# - 422 playbook_id: chosen playbook does not exist for the tenant — pick “None” or a valid playbook.
+# - 422 file: filename must end in .yml or .yaml; file must be UTF-8.
+
+alert_type: splunk.notable.endpoint_malware
+version: "1.3.0"
+description: >
+  Alert-type schema for Splunk endpoint malware notable events.
+  Maps raw Splunk result fields to Elastic Common Schema (ECS).
+
+
+field_mapping:
+  host.hostname: result.host
+  source.ip: result.src
+  destination.ip: result.dest
+  destination.port: result.dest_port
+  user.name: result.user
+  process.name: result.process
+  process.command_line: result.process_command_line
+  file.path: result.file_path
+  file.hash.sha256: result.file_hash
+  event.severity: result.severity
+  event.category: result.category
+  event.action: result.action
+  rule.name: result.rule_name
+  rule.id: result.rule_id
+  threat.technique.id: result.mitre_attack_id
+  event.created: result._time
+
+critical_fields:
+  - host.hostname
+  - source.ip
+  - event.severity
+  - event.created
+
+severity: "5"

@@ -1,0 +1,22 @@
+# VALID (full) — includes alert_types (used by the Enrichment Worker's
+# fallback lookup) and one action entry (stored + validated, not executed
+# by the pipeline). The adapter value must be one of the platform-defined
+# adapter identifiers.
+prompt: |
+  You are a Tier-1 SOC analyst. Analyse this endpoint malware alert:
+  1. Classify the threat based on process, file hash, and technique id.
+  2. Assess blast radius using host and user fields.
+  3. Recommend escalation or closure with justification.
+description: Full triage playbook for endpoint malware alerts.
+alert_types:
+  - splunk.notable.endpoint_malware
+actions:
+  - name: fetch-related-events
+    adapter: GENERIC_HTTP
+    query_template: "GET /api/events?host={host.hostname}&window=24h"
+    query_input_fields:
+      - host.hostname
+    time: "2026-07-23T08:00:00Z"
+    result: related_events
+is_active: true
+is_system: false

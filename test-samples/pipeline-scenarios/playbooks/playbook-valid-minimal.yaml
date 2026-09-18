@@ -1,0 +1,8 @@
+# VALID (minimal) — upload as multipart POST /api/v1/tenants/{id}/playbooks
+# with form field "name". actions and alert_types may be omitted.
+prompt: |
+  You are a Tier-1 SOC analyst. Summarize the alert, cite the evidence
+  contained in its fields, and list recommended next actions.
+description: Minimal valid playbook — prompt and description only.
+is_active: true
+is_system: false

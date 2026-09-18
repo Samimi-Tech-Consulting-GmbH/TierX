@@ -1,0 +1,8 @@
+# INVALID at upload — field_mapping must not be empty (backend rejects with a
+# structured validation error: "field_mapping must not be empty").
+alert_type: splunk.notable.broken_empty_mapping
+version: "1.0.0"
+description: Broken schema — no mappings defined.
+field_mapping: {}
+critical_fields:
+  - host.hostname

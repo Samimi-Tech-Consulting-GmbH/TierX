@@ -1,0 +1,11 @@
+# INVALID — intentionally fails API validation (expect HTTP 422 with structured errors).
+# Reasons: missing required field `prompt` (still required).
+
+description: >-
+  Automated enrichment playbook.
+
+alert_types:
+  - PHISHING
+
+is_active: true
+is_system: false

@@ -1,0 +1,9 @@
+# INVALID at upload — broken YAML syntax (unclosed bracket / bad indent).
+# Backend rejects with the YAML parser message.
+alert_type: splunk.notable.broken_syntax
+version: "1.0.0
+field_mapping:
+    host.hostname: [result.host
+  event.created: result._time
+critical_fields:
+- host.hostname

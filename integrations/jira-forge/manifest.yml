@@ -1,0 +1,64 @@
+app:
+  id: ari:cloud:ecosystem::app/00000000-0000-4000-8000-000000000000
+  runtime:
+    name: nodejs22.x
+    memoryMB: 512
+
+modules:
+  jira:issueAction:
+    - key: soc-mind-send-issue
+      resource: issue-action
+      resolver:
+        function: ui-resolver
+      render: native
+      title: Send to TierX
+      viewportSize: medium
+
+  jira:adminPage:
+    - key: soc-mind-configure
+      resource: admin-page
+      resolver:
+        function: ui-resolver
+      render: native
+      title: Configure TierX
+      useAsConfig: true
+
+  consumer:
+    - key: jira-submit-consumer
+      queue: soc-mind-jira-submit
+      function: submit-consumer
+
+  scheduledTrigger:
+    - key: jira-result-poller
+      function: result-poller
+      interval: fiveMinute
+
+  function:
+    - key: ui-resolver
+      handler: index.handler
+    - key: submit-consumer
+      handler: submit-consumer.handler
+      timeoutSeconds: 900
+    - key: result-poller
+      handler: poller.handler
+      timeoutSeconds: 300
+
+resources:
+  - key: issue-action
+    path: src/frontend/issue-action.jsx
+  - key: admin-page
+    path: src/frontend/admin-page.jsx
+
+permissions:
+  scopes:
+    read:jira-work:
+      allowImpersonation: true
+    read:jira-user:
+      allowImpersonation: true
+    write:jira-work: {}
+    storage:app: {}
+  external:
+    fetch:
+      backend:
+        - address: https://tierx.example.com
+          inScopeEUD: true

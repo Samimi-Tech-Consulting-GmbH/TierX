@@ -1,0 +1,5 @@
+# INVALID — "prompt" is required and missing. Backend returns a structured
+# error list with loc=["prompt"].
+description: Playbook without a prompt — must be rejected.
+is_active: true
+is_system: false

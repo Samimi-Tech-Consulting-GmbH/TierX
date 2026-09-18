@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local build/test output
+.coverage
+coverage/
+.next/
+node_modules/
+.forge/
+
+# Local-only minimal dev stack
+compose.dev-min.yaml
+test-samples/pipeline-scenarios/seed/seed-dev-data.py
+test-samples/pipeline-scenarios/seed/seed-test-users.py
+test-samples/pipeline-scenarios/seed/seed-debug-traces.py

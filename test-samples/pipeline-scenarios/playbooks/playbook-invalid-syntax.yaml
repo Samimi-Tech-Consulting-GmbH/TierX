@@ -1,0 +1,5 @@
+# INVALID — broken YAML (tab indentation + unclosed quote).
+prompt: "Analyse the alert
+description:
+	bad-tab-indent: true
+is_active: yes:

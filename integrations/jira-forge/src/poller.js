@@ -1,0 +1,100 @@
+import { kvs, WhereConditions } from "@forge/kvs";
+
+import { addAppComment, commentMarker, failureComment, finalComment } from "./lib/comments.js";
+import { getConfig, tierxRequest } from "./lib/tierx.js";
+
+const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
+
+function pendingQuery(storage, cursor) {
+  let query = storage
+    .query()
+    .where("key", WhereConditions.beginsWith("pending:"))
+    .limit(100);
+  if (cursor) query = query.cursor(cursor);
+  return query;
+}
+
+export async function getPendingPage(storage = kvs) {
+  const cursor = await storage.get(POLL_CURSOR_KEY);
+  let page;
+  try {
+    page = await pendingQuery(storage, cursor).getMany();
+  } catch (error) {
+    if (!cursor) throw error;
+    // A cursor can become invalid after pending keys are deleted. Restarting
+    // from the first page preserves progress without failing the trigger.
+    await storage.delete(POLL_CURSOR_KEY);
+    page = await pendingQuery(storage, null).getMany();
+  }
+  if (page.nextCursor) {
+    await storage.set(POLL_CURSOR_KEY, page.nextCursor);
+  } else {
+    await storage.delete(POLL_CURSOR_KEY);
+  }
+  return page;
+}
+
+async function recordComment(submissionId, kind, commentId) {
+  return tierxRequest(`/api/v1/integrations/jira/submissions/${submissionId}/comments`, {
+    method: "POST",
+    body: { kind, jira_comment_id: String(commentId) },
+  });
+}
+
+async function terminalComment(submission, config) {
+  const kind = submission.state === "ANALYZED" ? "FINAL" : "ERROR";
+  if (submission.comments?.[kind]) return submission;
+  const body =
+    kind === "FINAL"
+      ? finalComment(submission, config)
+      : failureComment(submission, config);
+  const comment = await addAppComment(
+    submission.issue_key,
+    body,
+    commentMarker(submission, kind),
+  );
+  return recordComment(submission.submission_id, kind, comment.id);
+}
+
+export async function refreshPendingSubmission(pending, request = tierxRequest) {
+  let submission = await request(
+    `/api/v1/integrations/jira/submissions/${pending.submissionId}`,
+  );
+  if (submission.state === "FINALIZING") {
+    submission = await request(
+      `/api/v1/integrations/jira/submissions/${pending.submissionId}/finalize`,
+      { method: "POST", body: {} },
+    );
+  }
+  return submission;
+}
+
+export async function handler() {
+  const config = await getConfig({ includeSecret: true });
+  const page = await getPendingPage();
+  for (const item of page.results) {
+    const pending = item.value;
+    try {
+      let submission = await refreshPendingSubmission(pending);
+      await kvs.set(`job:${pending.requestId}`, {
+        requestId: pending.requestId,
+        issueKey: pending.issueKey,
+        submissionId: submission.submission_id,
+        alertId: submission.alert_id,
+        state: submission.state,
+        tracePath: submission.trace_path,
+      });
+      if (submission.state === "ANALYZED" || submission.state === "FAILED") {
+        submission = await terminalComment(submission, config);
+        await kvs.delete(item.key);
+      }
+    } catch (error) {
+      // Scheduled triggers do not retry automatically. Keeping the pending key
+      // makes the next five-minute invocation retry without resubmitting Jira.
+      await kvs.set(`poll-error:${pending.submissionId}`, {
+        at: new Date().toISOString(),
+        message: String(error?.message || error).slice(0, 1000),
+      });
+    }
+  }
+}

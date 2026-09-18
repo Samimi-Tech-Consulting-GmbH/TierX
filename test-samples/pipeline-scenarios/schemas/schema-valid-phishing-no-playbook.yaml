@@ -1,0 +1,16 @@
+# VALID — schema WITHOUT a playbook link. Enrichment must fall back to a playbook
+# whose alert_types list contains "splunk.notable.phishing" (resolution tier b).
+alert_type: splunk.notable.phishing
+version: "1.0.0"
+description: Splunk phishing notables.
+field_mapping:
+  host.hostname: result.host
+  source.ip: result.src
+  user.name: result.user
+  event.severity: result.severity
+  event.created: result._time
+critical_fields:
+  - host.hostname
+  - event.severity
+  - event.created
+severity: "3"

@@ -1,0 +1,41 @@
+# VALID — second example alert type (email / phishing). Same validation rules as other samples.
+# POST /api/v1/tenants/{id}/schema-registry with this file plus optional playbook on the form.
+
+alert_type: PHISHING_EMAIL_WORKSPACE
+version: "1.2.0"
+description: >
+  Schema for email phishing alerts from the secure email gateway.
+  Maps gateway and header fields to ECS for correlation and normalization.
+
+fields:
+  - name: message_fingerprint
+    description: Provider deduplication hash for the message envelope
+    source_path: alert.message_id_hash
+  - name: safe_links_rewrite
+    description: Whether URLs were rewritten by Safe Links
+    source_path: policies.safe_links
+
+field_mapping:
+  event.kind: alert.event_kind
+  event.category: alert.category
+  event.type: alert.event_type
+  event.action: alert.disposition
+  event.created: alert.detected_at
+  source.user.email: headers.from_address
+  destination.user.email: headers.to_address
+  email.subject: headers.subject
+  email.message_id: headers.message_id
+  url.original: body.first_malicious_url
+  file.hash.sha256: attachment.primary_hash
+  threat.indicator.description: intel.threat_name
+  rule.name: alert.rule_name
+  rule.id: alert.policy_id
+  host.name: gateway.hostname
+
+critical_fields:
+  - destination.user.email
+  - email.subject
+  - event.created
+  - source.user.email
+
+severity: "high"

@@ -1,0 +1,50 @@
+schema_id: base-schema-001
+schema_type: base
+version: "1.0.0"
+status: active
+description: "Minimal base schema defining mandatory fields for all alerts."
+
+required_fields:
+
+  tenant_id:
+    type: string
+    required: true
+    description: "Tenant identifier. Must exist and be ACTIVE."
+    constraints:
+      min_length: 1
+      max_length: 64
+      pattern: "^[a-z0-9-]+$"
+
+  source_system:
+    type: string
+    required: true
+    description: "Source system that generated this alert."
+    constraints:
+      allowed_values:
+        - SPLUNK
+        - CORTEX_XDR
+        - QRADAR
+        - WAZUH
+        - SENTINEL
+
+  alert_type:
+    type: string
+    required: true
+    description: "Alert type key matching a registered alert-type schema."
+    constraints:
+      min_length: 1
+      max_length: 128
+      pattern: "^[a-zA-Z0-9_.-]+$"
+
+  timestamp:
+    type: datetime
+    format: iso8601
+    required: true
+    description: "When the source system detected the event."
+
+  raw_payload:
+    type: object
+    required: true
+    description: "Complete raw alert payload from the source system."
+    constraints:
+      max_size_bytes: 1048576

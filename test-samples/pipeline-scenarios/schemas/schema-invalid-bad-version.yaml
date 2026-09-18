@@ -1,0 +1,8 @@
+# INVALID at upload — version must be full semver (MAJOR.MINOR.PATCH).
+# "1.0" fails the semver pattern check.
+alert_type: splunk.notable.broken_version
+version: "1.0"
+field_mapping:
+  host.hostname: result.host
+critical_fields:
+  - host.hostname

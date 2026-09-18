@@ -1,0 +1,321 @@
+name: CI and publish
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semantic-version component for an explicit release
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  kb-semantic:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kb_semantic
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest mongomock
+      - run: PYTHONPATH=. pytest tests/ -q
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:4.4.29
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongo --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MONGO44_URL: mongodb://127.0.0.1:27017
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: PYTHONPATH=. pytest tests/
+      - run: python -m compileall -q .
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm audit
+
+  ingestion:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ingestion-proxy
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ingestion-proxy/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: PYTHONPATH=. pytest tests/
+      - run: python -m compileall -q .
+
+  pipeline:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: PYTHONPATH=. pytest tests/
+      - run: python -m compileall -q .
+
+  jira-forge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/jira-forge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/jira-forge/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run validate-manifest
+      - run: npm audit
+
+  enrichment-action-example:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/enrichment-action-provider
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m unittest -v test_server.py
+      - run: python -m compileall -q .
+
+  configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: cp .env.example .env
+      - uses: docker/setup-compose-action@v2
+        with:
+          version: v5.2.0
+      - run: docker compose -f compose.yaml -f compose.override.yaml config --quiet
+      - name: Test semantic-version calculation
+        run: |
+          test "$(.github/scripts/next-version.sh '' patch)" = "0.2.0"
+          test "$(.github/scripts/next-version.sh v0.1.0 patch)" = "0.1.1"
+          test "$(.github/scripts/next-version.sh v0.9.9 minor)" = "0.10.0"
+          test "$(.github/scripts/next-version.sh v1.9.9 major)" = "2.0.0"
+          ! .github/scripts/next-version.sh v0.1 patch
+          ! .github/scripts/next-version.sh v0.1.0 unsupported
+      - name: Scan Git history for secrets
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --source=/repo --no-banner --redact
+      - name: Verify TierX branding and license artifacts
+        run: |
+          python3 tools/check_branding.py
+          python3 -m unittest discover -s tools -p 'test_*.py'
+          python3 tools/generate_license_artifacts.py
+          git diff --exit-code -- sbom.cdx.json THIRD_PARTY_NOTICES.md
+          test -s LICENSE
+          grep -q 'GNU AFFERO GENERAL PUBLIC LICENSE' LICENSE
+
+  version:
+    if: >-
+      github.event.repository.private == false && vars.RELEASES_ENABLED == 'true' && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      )
+    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, configuration, kb-semantic]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: next
+        name: Calculate semantic version
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: |
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+          version=$(.github/scripts/next-version.sh "$latest" "$BUMP")
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "tag=v$version" >>"$GITHUB_OUTPUT"
+
+  images:
+    if: >-
+      github.event.repository.private == false && vars.RELEASES_ENABLED == 'true' && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      )
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            context: .
+            dockerfile: backend/Dockerfile
+          - service: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+          - service: ingestion-proxy
+            context: ingestion-proxy
+            dockerfile: ingestion-proxy/Dockerfile
+          - service: pipeline
+            context: .
+            dockerfile: pipeline/Dockerfile
+          - service: kb-semantic
+            context: .
+            dockerfile: kb_semantic/Dockerfile
+          - service: init
+            context: init
+            dockerfile: init/Dockerfile
+          - service: enrichment-action-example
+            context: examples/enrichment-action-provider
+            dockerfile: examples/enrichment-action-provider/Dockerfile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/samimi-tech-consulting-gmbh/tierx-${{ matrix.service }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=
+            NEXT_PUBLIC_APP_RELEASE_SHA=${{ github.sha }}
+            NEXT_PUBLIC_APP_RELEASE_VERSION=${{ needs.version.outputs.version }}
+            NEXT_PUBLIC_TIERX_API_URL=
+            NEXT_PUBLIC_TIERX_RELEASE_SHA=${{ github.sha }}
+            NEXT_PUBLIC_TIERX_RELEASE_VERSION=${{ needs.version.outputs.version }}
+            NEXT_PUBLIC_TIERX_SOURCE_REPOSITORY=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  tag-release:
+    if: >-
+      github.event.repository.private == false && vars.RELEASES_ENABLED == 'true' && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      )
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Create immutable release tag
+        env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag --annotate "$RELEASE_TAG" --message "TierX $RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish semantic-version image aliases
+        env:
+          REGISTRY_NAMESPACE: samimi-tech-consulting-gmbh
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          for service in backend frontend ingestion-proxy pipeline init enrichment-action-example kb-semantic; do
+            docker buildx imagetools create \
+              --tag "ghcr.io/${REGISTRY_NAMESPACE}/tierx-${service}:${RELEASE_VERSION}" \
+              "ghcr.io/${REGISTRY_NAMESPACE}/tierx-${service}:${GITHUB_SHA}"
+          done
+
+  publish-release:
+    if: github.event.repository.private == false && vars.RELEASES_ENABLED == 'true'
+    needs: [version, tag-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify source and publish completed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$RELEASE_TAG/SOURCE.md" >/dev/null
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --title "TierX $RELEASE_TAG" \
+            --notes "TierX $RELEASE_TAG. See SOURCE.md for source, build and installation instructions."

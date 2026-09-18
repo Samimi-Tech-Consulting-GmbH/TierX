@@ -1,0 +1,16 @@
+{
+  "version": "soc-synonyms-v1",
+  "languages": ["de", "en"],
+  "groups": [
+    ["login", "logon", "anmeldung", "anmelden", "authentifizierung", "authentication"],
+    ["portscan", "portscans", "port-scan", "port-scans", "networkscan", "netzwerkscan"],
+    ["privileged", "privilegiert", "admin", "administrator", "administratorkonto"],
+    ["serviceaccount", "service-account", "dienstkonto", "servicekonto"],
+    ["production", "produktion", "produktionsnetz", "produktionsumgebung"],
+    ["lateral", "lateralbewegung", "lateral-movement", "seitenbewegung"],
+    ["powershell", "powershell.exe"],
+    ["ransomware", "erpressungstrojaner", "dateiverschlüsselung", "verschluesselung"],
+    ["allowlist", "whitelist", "ausnahme", "exception", "freigabe"],
+    ["critical", "kritisch", "hoch kritisch", "high priority", "höchste priorität"]
+  ]
+}

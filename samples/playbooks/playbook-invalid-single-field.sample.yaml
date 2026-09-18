@@ -1,0 +1,28 @@
+# INVALID — exactly one rule broken: required field `prompt` is omitted.
+# Everything else matches the schema (same shape as playbook-valid.sample.yaml).
+
+actions:
+  - name: Pull related events from Splunk
+    adapter: SPLUNK_SPL
+    query_template: 'search index=security sourcetype=alerts earliest=-48h alert_id="$alert_id$"'
+    query_input_fields:
+      - alert_id
+    time: "2026-05-05T14:30:00+00:00"
+    result: splunk_event_bundle
+  - name: Cortex XDR context
+    adapter: CORTEX_XDR_QUERY
+    query_template: "xql queryAlerts where alert_id == '{{alert_id}}'"
+    query_input_fields:
+      - alert_id
+    time: "2026-05-05T14:31:00+00:00"
+    result: xdr_bundle
+
+description: >-
+  Automated enrichment for phishing and BEC-style alerts using Splunk and Cortex XDR.
+
+alert_types:
+  - PHISHING
+  - BEC
+
+is_active: true
+is_system: false

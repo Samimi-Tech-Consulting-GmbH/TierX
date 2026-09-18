@@ -1,0 +1,26 @@
+{
+  "tenant_id": "tenant-does-not-exist",
+  "source_system": "SPLUNK",
+  "alert_type": "splunk.notable.endpoint_malware",
+  "timestamp": "2026-07-23T08:15:04Z",
+  "raw_payload": {
+    "result": {
+      "host": "EXAMPLE-SERVER-01",
+      "src": "192.0.2.15",
+      "dest": "203.0.113.44",
+      "dest_port": 443,
+      "user": "example.user",
+      "process": "powershell.exe",
+      "process_command_line": "powershell.exe -enc SQBFAFgA...",
+      "file_path": "C:\\\\Users\\\\example.user\\\\AppData\\\\Local\\\\Temp\\\\payload.ps1",
+      "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "severity": "5",
+      "category": "malware",
+      "action": "blocked",
+      "rule_name": "Endpoint Malware Execution",
+      "rule_id": "SPL-EDR-0042",
+      "mitre_attack_id": "T1059.001",
+      "_time": "2026-07-23T08:15:00Z"
+    }
+  }
+}

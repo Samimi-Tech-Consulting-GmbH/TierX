@@ -1,0 +1,12 @@
+# UPLOADS SUCCESSFULLY but is poisoned at runtime: critical_fields contains
+# "destination.ip" which has NO entry in field_mapping. The Validation Worker
+# resolves critical fields through field_mapping, so EVERY alert of this type
+# is dead-lettered with MISSING_REQUIRED_FIELD — regardless of its payload.
+# Use this to demonstrate the gap between upload-time and runtime validation.
+alert_type: splunk.notable.poisoned
+version: "1.0.0"
+description: Valid for upload, fails every alert at the validation stage.
+field_mapping:
+  host.hostname: result.host
+critical_fields:
+  - destination.ip
