@@ -30,8 +30,6 @@ export default function LoginPage() {
   const { login, user } = useAuth();
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -41,8 +39,12 @@ export default function LoginPage() {
     if (user) router.replace(getPostLoginRoute(user));
   }, [user, router]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Read the displayed values, including autofill without React change events.
+    const fields = new FormData(e.currentTarget);
+    const email = String(fields.get("email") ?? "");
+    const password = String(fields.get("password") ?? "");
     setError("");
     setSubmitting(true);
     try {
@@ -84,7 +86,7 @@ export default function LoginPage() {
             Melden Sie sich bei Ihrem Konto an
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-10">
+          <form id="login-form" method="post" onSubmit={handleSubmit} className="mt-10">
             {error && (
               <div
                 role="alert"
@@ -100,14 +102,13 @@ export default function LoginPage() {
             </Label>
             <Input
               id="email"
+              name="email"
               type="email"
               placeholder="Geben Sie Ihren Benutzernamen ein"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
               className="mt-3 h-[50px] bg-white/5 px-4 text-sm"
               required
               autoFocus
-              autoComplete="email"
+              autoComplete="username"
             />
 
             <Label
@@ -119,10 +120,9 @@ export default function LoginPage() {
             <div className="relative mt-3">
               <Input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="Geben Sie Ihr Passwort ein"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 className="h-[50px] bg-white/5 px-4 pr-11 text-sm"
                 required
                 autoComplete="current-password"
