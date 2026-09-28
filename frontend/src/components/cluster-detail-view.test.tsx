@@ -10,6 +10,7 @@ import {
 import type { AlertDocument, ClusterDocument } from "@/lib/types";
 import { UserRole } from "@/lib/types";
 import { ClusterDetailView } from "./cluster-detail-view";
+import { AlertClusterCard } from "./alert-cluster-card";
 
 vi.mock("@/lib/api", () => ({
   addClusterNote: vi.fn(),
@@ -75,6 +76,24 @@ afterEach(() => {
 });
 
 describe("ClusterDetailView", () => {
+  it("labels workflow and grouping independently on the alert card", async () => {
+    vi.mocked(getCluster).mockResolvedValue({ ...cluster, status: "CLOSED", is_open_for_grouping: true });
+    render(<AlertClusterCard tenantId="tenant-1" alert={{ ...alert, cluster_id: "cluster-1" }} />);
+    expect(await screen.findByText("Workflow: Closed")).toBeVisible();
+    expect(screen.getByText("Accepting related alerts").nextSibling).toHaveTextContent("Yes");
+  });
+
+  it("distinguishes closed workflow from the reopen action", async () => {
+    vi.mocked(getCluster).mockResolvedValue({ ...cluster, status: "CLOSED" });
+    vi.mocked(getClusterSummaryHistory).mockResolvedValue({ items: [] });
+    vi.mocked(listClusterAnalysisRuns).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(getClusterAlerts).mockResolvedValue({ items: [], total: 0 });
+    render(<ClusterDetailView tenantId="tenant-1" clusterId="cluster-1" alertBase="/alerts" />);
+    expect(await screen.findByText("Current workflow status: Closed")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reopen investigation" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Open$/ })).toBeNull();
+  });
+
   it("uses the exact host count and clears stale rows after a page failure", async () => {
     vi.mocked(getCluster).mockResolvedValue(cluster);
     vi.mocked(getClusterSummaryHistory).mockResolvedValue({ items: [] });
