@@ -503,7 +503,19 @@ class CorrelationClusteringWorker(BaseWorker):
                 )
                 return pending_request
 
-            severity = parse_severity(_resolve(msg.normalized_payload, "event.severity"))
+            try:
+                severity = parse_severity(_resolve(msg.normalized_payload, "event.severity"))
+            except ValueError as exc:
+                await trace.finish(
+                    "FAILED",
+                    error={
+                        "type": "CORRELATION_EXCEPTION",
+                        "detail": str(exc),
+                        "failed_fields": ["event.severity"],
+                    },
+                    checks=[{"name": "event.severity", "outcome": "FAILED"}],
+                )
+                raise
             delay_ms = debounce_ms(severity, tenant.get("settings") or {})
             incoming_entities, incoming_techniques = extract_correlation_values(
                 msg.normalized_payload
