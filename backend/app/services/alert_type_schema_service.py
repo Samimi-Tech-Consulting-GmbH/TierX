@@ -367,8 +367,24 @@ class AlertTypeSchemaService:
             "alert_type": alert_type,
             "schema_id": schema_id,
         }
-        if not collection.find_one(target_query):
+        target = collection.find_one(target_query)
+        if not target:
             raise ResourceNotFoundError("Schema version not found")
+
+        mapping = target.get("field_mapping") or {}
+        missing = sorted({
+            field for field in target.get("critical_fields", [])
+            if not str(mapping.get(field) or "").strip()
+        })
+        if missing:
+            raise AlertTypeSchemaValidationError([
+                {
+                    "loc": ["field_mapping", field],
+                    "msg": f"Critical field {field!r} requires a source mapping before activation",
+                    "type": "value_error",
+                }
+                for field in missing
+            ])
 
         collection.update_many(
             {"tenant_id": tenant_id, "alert_type": alert_type},
