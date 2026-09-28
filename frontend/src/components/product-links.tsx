@@ -2,8 +2,7 @@ import { Globe } from "lucide-react";
 
 export function ProductLinks({ version, sha }: { version: string; sha: string }) {
   const normalizedVersion = version.replace(/^v/, "");
-  const repository = (process.env.NEXT_PUBLIC_TIERX_SOURCE_REPOSITORY ??
-    "https://github.com/Samimi-Tech-Consulting-GmbH/TierX").replace(/\/$/, "");
+  const repository = "https://github.com/Samimi-Tech-Consulting-GmbH/TierX";
   const releaseUrl = /^\d+\.\d+\.\d+$/.test(normalizedVersion)
     ? `${repository}/releases/tag/v${normalizedVersion}`
     : `${repository}/releases`;
