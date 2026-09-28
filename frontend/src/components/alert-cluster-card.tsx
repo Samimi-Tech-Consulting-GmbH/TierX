@@ -70,7 +70,7 @@ export function AlertClusterCard({
         </h3>
         {cluster ? (
           <span className={cn(PILL, clusterStatusTone(cluster.status))}>
-            {titleCase(cluster.status)}
+            Workflow: {titleCase(cluster.status)}
           </span>
         ) : null}
         {cluster?.analysis_status ? (
@@ -126,8 +126,8 @@ export function AlertClusterCard({
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Members" value={String(cluster.alert_count)} />
             <Stat
-              label="Grouping"
-              value={cluster.is_open_for_grouping ? "Open" : "Closed"}
+              label="Accepting related alerts"
+              value={cluster.is_open_for_grouping ? "Yes" : "No"}
             />
             <Stat
               label="Analysis"
