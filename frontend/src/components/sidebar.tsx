@@ -10,6 +10,7 @@ import {
   useSelectedTenant,
 } from "@/lib/selected-tenant";
 import { TenantSwitcher } from "@/components/dashboard/tenant-switcher";
+import { ProductLinks } from "@/components/product-links";
 import {
   SettingsMenu,
   type SettingsMenuItem,
@@ -21,7 +22,6 @@ import {
   Building2,
   CircleArrowRight,
   Database,
-  FileCode2,
   LayoutDashboard,
   Network,
   LibraryBig,
@@ -286,22 +286,7 @@ export function Sidebar({
         <div className="border-t border-[#404040] pt-3">
           <SettingsMenu items={settingsItems} onNavigate={onNavigate} />
 
-          <div className="mt-3 px-3 pb-2 font-mono text-[10px] text-muted-foreground">
-            <div>
-              {releaseVersion === "development"
-                ? releaseVersion
-                : `v${releaseVersion}`}
-            </div>
-            <div>
-              {releaseSha === "development"
-                ? releaseSha
-                : releaseSha.slice(0, 7)}
-            </div>
-          </div>
-          <Link href="/legal/source" className={cn(ROW, "text-[#d4d4d4] hover:bg-white/5")}>
-            <FileCode2 className="size-4 shrink-0" />
-            <span>Source code (AGPL)</span>
-          </Link>
+          <ProductLinks version={releaseVersion} sha={releaseSha} />
           <button
             type="button"
             onClick={logout}
