@@ -17,7 +17,22 @@ describe("ProductLinks", () => {
   it("uses the release list for a development build", () => {
     render(<ProductLinks version="development" sha="development" />);
     const link = screen.getByRole("link", { name: "development" });
-    expect(link.getAttribute("href")).toMatch(/\/releases$/);
+    expect(link).toHaveAttribute("href", "https://github.com/Samimi-Tech-Consulting-GmbH/TierX/releases");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  it.each(["", "https://example.com/another-repository"])(
+    "ignores repository environment override %s",
+    (repository) => {
+      vi.stubEnv("NEXT_PUBLIC_TIERX_SOURCE_REPOSITORY", repository);
+      const { rerender } = render(<ProductLinks version="0.2.0" sha="1234567" />);
+      expect(screen.getByRole("link", { name: "v0.2.0" })).toHaveAttribute(
+        "href", "https://github.com/Samimi-Tech-Consulting-GmbH/TierX/releases/tag/v0.2.0",
+      );
+      rerender(<ProductLinks version="development" sha="development" />);
+      expect(screen.getByRole("link", { name: "development" })).toHaveAttribute(
+        "href", "https://github.com/Samimi-Tech-Consulting-GmbH/TierX/releases",
+      );
+    },
+  );
 });
