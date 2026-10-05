@@ -1,7 +1,8 @@
 import { kvs, WhereConditions } from "@forge/kvs";
 
 import { addAppComment, commentMarker, failureComment, finalComment } from "./lib/comments.js";
-import { getConfig, tierxRequest } from "./lib/tierx.js";
+import { getConfig, tierxRequest, withConnection } from "./lib/tierx.js";
+import { ConnectionChangedError } from "./lib/connection-store.js";
 
 const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
 
@@ -70,11 +71,12 @@ export async function refreshPendingSubmission(pending, request = tierxRequest) 
 }
 
 export async function handler() {
-  const config = await getConfig({ includeSecret: true });
   const page = await getPendingPage();
   for (const item of page.results) {
     const pending = item.value;
+    await withConnection(pending.connectionIdentity, async () => {
     try {
+      const config = await getConfig();
       let submission = await refreshPendingSubmission(pending);
       await kvs.set(`job:${pending.requestId}`, {
         requestId: pending.requestId,
@@ -89,12 +91,18 @@ export async function handler() {
         await kvs.delete(item.key);
       }
     } catch (error) {
+      if (error instanceof ConnectionChangedError) {
+        await kvs.set(`job:${pending.requestId}`, { requestId: pending.requestId, issueKey: pending.issueKey, state: "CANCELLED", failure: { error_detail: error.message } });
+        await kvs.delete(item.key);
+        return;
+      }
       // Scheduled triggers do not retry automatically. Keeping the pending key
       // makes the next five-minute invocation retry without resubmitting Jira.
       await kvs.set(`poll-error:${pending.submissionId}`, {
         at: new Date().toISOString(),
-        message: String(error?.message || error).slice(0, 1000),
+        message: "TierX polling failed. Check the connection and outbound permissions.",
       });
     }
+    });
   }
 }

@@ -9,10 +9,12 @@ import {
   validateAttachmentManifest,
 } from "../src/lib/constants.js";
 
-test("only the manifest allow-listed TierX host is accepted", () => {
+test("customer HTTPS origins are accepted without paths or credentials", () => {
   assert.equal(normalizeBaseUrl("https://tierx.example.com/"), "https://tierx.example.com");
-  assert.throws(() => normalizeBaseUrl("https://attacker.example"), /allow-listed/);
-  assert.throws(() => normalizeBaseUrl("http://tierx.example.com"), /allow-listed/);
+  assert.equal(normalizeBaseUrl("https://customer.example"), "https://customer.example");
+  for (const url of ["http://customer.example", "https://customer.example/api", "https://x:y@customer.example", "https://customer.example?x=1", "https://customer.example#x", "https://customer.example:8443", "https://localhost", "https://host.internal"]) {
+    assert.throws(() => normalizeBaseUrl(url));
+  }
 });
 
 test("Jira priorities map deterministically to pipeline severity", () => {

@@ -1,9 +1,9 @@
 # TierX Jira Forge app
 
-The checked-in app ID and `https://tierx.example.com` are placeholders. Before
-deployment, register your own Forge app and replace the app ID, manifest egress
-address, allowed URL in `src/lib/constants.js`, and configuration defaults with
-your HTTPS TierX endpoint. Never commit installation credentials.
+Customers configure their own public HTTPS TierX server in Jira; no rebuild or
+customer app registration is needed. Publishers use their existing Forge app ID
+when deploying. The checked-in ID is a placeholder for independent publishers.
+Never commit installation credentials.
 
 This Forge app adds **Send to TierX** to every Jira issue. The issue
 acts as a human-facing transport for one raw source alert. A click extracts the
@@ -35,7 +35,11 @@ creation time is never substituted.
 
 ## Safety boundaries
 
-- The manifest only permits backend egress to `https://tierx.example.com`.
+- Each installation uses administrator-approved customer-managed backend egress.
+  There is no fixed server, public relay, or static wildcard permission.
+- HTTPS port 443 origins only: no paths, URL credentials, query strings,
+  fragments, redirects, or private/reserved DNS answers. DNS is checked before
+  each request; Forge's outbound enforcement remains the final connection layer.
 - The integration credential is stored with Forge `kvs.setSecret`.
 - Exactly one JSON object is accepted from the description or one UTF-8
   `.json`/`.txt` attachment up to 1 MiB.
@@ -125,13 +129,36 @@ Content-Type: application/json
 The response shows the secret once. In Jira, open **Apps → Manage apps →
 Configure TierX**, then enter:
 
-- Base URL: `https://tierx.example.com`
-- Integration ID from the response
+- TierX server URL: your public HTTPS origin (for example `https://tierx.example.com`)
+- Connection ID from the response
 - One-time integration secret from the response
 
 The configuration page verifies that the credential is bound to the current
 Jira cloud ID before saving it. Routing remains exclusively in TierX; Forge
 cannot choose or override the tenant, source system, or alert type.
+
+**Test and save** first validates the destination, asks for Atlassian outbound
+consent, then verifies the credential. Rejected consent sends no credentials.
+**Test connection** checks the saved connection without revealing the secret.
+**Disconnect** removes the credential and stops future sends/polling; it does
+not delete Jira comments or TierX records. A request already sent cannot be recalled.
+
+Only Jira administrators may manage this configuration. One connection is active
+per installation. Replacing its URL or ID requires a new credential and makes
+old queued work ineligible. Rotating the secret for the same connection retains
+pending work. Prototype configurations require fresh pairing.
+
+Failed pairing leaves the saved connection intact. A destination approved before
+a failed pairing can remain in Atlassian Connected Apps; administrators can revoke
+unused destinations there. Revoked permissions fail closed on subsequent requests.
+
+Customer-managed egress is an Atlassian Preview feature. Validate the consent UI,
+async consumer, and scheduled polling in a development installation before
+production release. This app is not eligible for the Runs on Atlassian badge.
+Public DNS and trusted TLS must be reachable from Forge; VPN-only hosts are not
+supported. Forge's DNS/connection enforcement must be verified before claiming
+protection against DNS rebinding; application DNS prechecks alone do not pin the
+connection address.
 
 The app identity must have **Browse Projects** and **Add Comments** in each Jira
 project where acknowledgement or result comments are expected. A missing

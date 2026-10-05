@@ -13,10 +13,11 @@ import ForgeReconciler, {
   Text,
   Textfield,
 } from "@forge/react";
-import { invoke } from "@forge/bridge";
+import { invoke, permissions } from "@forge/bridge";
+import { approveDestination } from "../lib/egress.js";
 
 function App() {
-  const [baseUrl, setBaseUrl] = useState("https://tierx.example.com");
+  const [baseUrl, setBaseUrl] = useState("");
   const [integrationId, setIntegrationId] = useState("");
   const [secret, setSecret] = useState("");
   const [result, setResult] = useState(null);
@@ -25,30 +26,48 @@ function App() {
 
   useEffect(() => {
     invoke("getConfig").then((config) => {
-      setBaseUrl(config.baseUrl || "https://tierx.example.com");
+      setBaseUrl(config.baseUrl || "");
       setIntegrationId(config.integrationId || "");
       if (config.configured) {
-        setResult({
-          name: config.connectionName,
-          route_count: config.routeCount,
-          configured: true,
-        });
+        setResult(config);
       }
-    });
+    }).catch(() => setError("Unable to load configuration. Jira administrator access is required."));
   }, []);
 
   async function submit() {
     setSaving(true);
     setError(null);
     try {
-      const info = await invoke("saveConfig", { baseUrl, integrationId, secret });
+      if (!integrationId.trim() || !secret.trim()) throw new Error("Connection ID and secret are required.");
+      const destination = await invoke("prepareConnection", { baseUrl });
+      await approveDestination(permissions.egress, destination);
+      const info = await invoke("saveConfig", { baseUrl: destination.baseUrl, integrationId, secret });
       setResult(info);
-      setSecret("");
+      setBaseUrl(info.baseUrl);
     } catch (reason) {
       setError(String(reason?.message || reason));
     } finally {
+      setSecret("");
       setSaving(false);
     }
+  }
+
+  async function testSaved() {
+    setSaving(true); setError(null);
+    try { setResult(await invoke("testConnection")); }
+    catch { setError("Connection test failed. Check credentials, server availability, and outbound permissions."); }
+    finally { setSaving(false); }
+  }
+
+  async function disconnectSaved() {
+    setSaving(true); setError(null);
+    try {
+      const egressKey = result?.egressKey;
+      await invoke("disconnect");
+      setResult(null); setSecret(""); setBaseUrl(""); setIntegrationId("");
+      if (egressKey) await permissions.egress.deleteGroup({ key: egressKey });
+    } catch { setError("Check connection status. If disconnected, remove any remaining TierX outbound permissions in Connected Apps."); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -57,6 +76,9 @@ function App() {
       <Text>
         Enter the one-time credential created by a TierX platform administrator.
         The secret is stored in Forge encrypted storage.
+        Your server must be reachable from Atlassian over public HTTPS. Approve
+        the destination before credentials are sent. Changing the server or
+        connection ID stops observation of old submissions.
       </Text>
       {error && (
         <SectionMessage appearance="error" title="Connection failed">
@@ -65,24 +87,30 @@ function App() {
       )}
       {result && (
         <SectionMessage appearance="success" title="Connected">
-          <Text>Site connection: {result.name || "Configured Jira site"}</Text>
-          <Text>Configured project routes: {result.route_count ?? 0}</Text>
+          <Text>Site connection: {result.connectionName || "Configured Jira site"}</Text>
+          <Text>Saved server: {result.baseUrl}</Text>
+          <Text>Configured project routes: {result.routeCount ?? 0}</Text>
         </SectionMessage>
       )}
       <Form onSubmit={submit}>
         <FormHeader title="TierX connection" />
         <FormSection>
-          <Label labelFor="base-url">Base URL<RequiredAsterisk /></Label>
+          <Label labelFor="base-url">TierX server URL<RequiredAsterisk /></Label>
           <Textfield id="base-url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-          <Label labelFor="integration-id">Integration ID<RequiredAsterisk /></Label>
+          <Label labelFor="integration-id">Connection ID<RequiredAsterisk /></Label>
           <Textfield id="integration-id" value={integrationId} onChange={(event) => setIntegrationId(event.target.value)} />
-          <Label labelFor="secret">Integration secret<RequiredAsterisk /></Label>
+          <Label labelFor="secret">Connection secret<RequiredAsterisk /></Label>
           <Textfield id="secret" type="password" value={secret} onChange={(event) => setSecret(event.target.value)} />
         </FormSection>
         <FormFooter>
-          <Button appearance="primary" type="submit" isLoading={saving}>Test and save</Button>
+          <Button appearance="primary" type="submit" isLoading={saving} isDisabled={saving}>Test and save</Button>
         </FormFooter>
       </Form>
+      {result && <Stack space="space.100">
+        <Button onClick={testSaved} isDisabled={saving}>Test connection</Button>
+        <Text>Disconnect stops sending and polling. Existing Jira comments and TierX records are retained.</Text>
+        <Button appearance="danger" onClick={disconnectSaved} isDisabled={saving}>Disconnect</Button>
+      </Stack>}
     </Stack>
   );
 }

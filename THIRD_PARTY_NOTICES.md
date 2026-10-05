@@ -871,6 +871,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `internal-slot` | `1.1.0` | MIT | `frontend/package-lock.json` |
 | `ip-address` | `10.7.3` | MIT | `frontend/package-lock.json` |
 | `ipaddr.js` | `1.9.1` | MIT | `frontend/package-lock.json` |
+| `ipaddr.js` | `2.2.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `is-array-buffer` | `3.0.5` | MIT | `frontend/package-lock.json` |
 | `is-arrayish` | `0.2.1` | MIT | `integrations/jira-forge/package-lock.json` |
 | `is-async-function` | `2.1.1` | MIT | `frontend/package-lock.json` |

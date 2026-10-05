@@ -58,7 +58,5 @@ permissions:
     write:jira-work: {}
     storage:app: {}
   external:
-    fetch:
-      backend:
-        - address: https://tierx.example.com
-          inScopeEUD: true
+    configurable:
+      enabled: true
