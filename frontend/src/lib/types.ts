@@ -816,6 +816,14 @@ export interface PlatformHealth {
   release_sha: string;
 }
 
+export interface LatestRelease {
+  enabled: boolean;
+  status: "AVAILABLE" | "UNAVAILABLE" | "DISABLED";
+  latest_version: string | null;
+  release_url: string | null;
+  checked_at: string | null;
+}
+
 export interface TenantOwned {
   tenant_id?: string | null;
   tenant_name?: string | null;

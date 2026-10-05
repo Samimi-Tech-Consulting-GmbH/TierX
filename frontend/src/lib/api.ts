@@ -26,6 +26,7 @@ import type {
   ClusterDocument,
   ClusterPage,
   PlatformHealth,
+  LatestRelease,
   PlatformDashboardSummary,
   TenantDashboardSummary,
   AlertStats,
@@ -54,6 +55,10 @@ import type {
 } from "./types";
 
 import { readToken, clearToken } from "./auth";
+
+export async function getLatestRelease(): Promise<LatestRelease> {
+  return request<LatestRelease>("/api/v1/releases/latest");
+}
 
 const API_BASE =
   process.env.NEXT_PUBLIC_TIERX_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "";
