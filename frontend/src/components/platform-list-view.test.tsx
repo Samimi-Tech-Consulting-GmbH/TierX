@@ -125,7 +125,7 @@ describe("PlatformListView record count", () => {
     });
 
     await waitFor(() => expect(fetchPage).toHaveBeenCalled());
-    expect(view.getByText(/All tenants · 39 records$/)).toBeVisible();
+    expect(await view.findByText(/All tenants · 39 records$/)).toBeVisible();
   });
 
   it("counts matches while searching", async () => {

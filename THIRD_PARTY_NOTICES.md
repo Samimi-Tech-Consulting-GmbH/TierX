@@ -596,9 +596,9 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `boolbase` | `1.0.0` | ISC | `integrations/jira-forge/package-lock.json` |
 | `bowser-ultralight` | `1.0.6` | MIT | `integrations/jira-forge/package-lock.json` |
 | `brace-expansion` | `1.1.18` | MIT | `frontend/package-lock.json` |
+| `brace-expansion` | `5.0.12` | MIT | `integrations/jira-forge/package-lock.json` |
 | `brace-expansion` | `5.0.9` | MIT | `frontend/package-lock.json` |
 | `brace-expansion` | `5.0.9` | MIT | `frontend/package-lock.json` |
-| `brace-expansion` | `5.0.9` | MIT | `integrations/jira-forge/package-lock.json` |
 | `braces` | `3.0.3` | MIT | `frontend/package-lock.json` |
 | `browserslist` | `4.28.9` | MIT | `frontend/package-lock.json` |
 | `bundle-name` | `4.1.0` | MIT | `frontend/package-lock.json` |
@@ -765,7 +765,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `fast-string-truncated-width` | `3.0.3` | MIT | `frontend/package-lock.json` |
 | `fast-string-width` | `3.0.2` | MIT | `frontend/package-lock.json` |
 | `fast-uri` | `3.1.7` | BSD-3-Clause | `frontend/package-lock.json` |
-| `fast-uri` | `3.1.7` | BSD-3-Clause | `integrations/jira-forge/package-lock.json` |
+| `fast-uri` | `3.1.8` | BSD-3-Clause | `integrations/jira-forge/package-lock.json` |
 | `fast-wrap-ansi` | `0.2.2` | MIT | `frontend/package-lock.json` |
 | `fastapi` | `Not resolved` | MIT | `backend/requirements.txt` |
 | `fastapi` | `Not resolved` | MIT | `ingestion-proxy/requirements.txt` |
