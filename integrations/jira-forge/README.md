@@ -40,6 +40,12 @@ creation time is never substituted.
 - HTTPS port 443 origins only: no paths, URL credentials, query strings,
   fragments, redirects, or private/reserved DNS answers. DNS is checked before
   each request; Forge's outbound enforcement remains the final connection layer.
+- DNS checks use Cloudflare's DNS-over-HTTPS resolver through Forge's HTTPS
+  proxy, with a five-second deadline and fail-closed A/AAAA validation. Only the
+  server hostname is disclosed to that resolver, never credentials or alerts.
+  Its fixed egress permission is separate from administrator-approved TierX
+  destination access. A preflight DNS check does not pin Forge's subsequent
+  connection IP; do not claim it eliminates DNS-rebinding races.
 - The integration credential is stored with Forge `kvs.setSecret`.
 - Exactly one JSON object is accepted from the description or one UTF-8
   `.json`/`.txt` attachment up to 1 MiB.

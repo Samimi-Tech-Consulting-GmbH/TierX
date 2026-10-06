@@ -58,5 +58,8 @@ permissions:
     write:jira-work: {}
     storage:app: {}
   external:
+    fetch:
+      backend:
+        - https://cloudflare-dns.com
     configurable:
       enabled: true
