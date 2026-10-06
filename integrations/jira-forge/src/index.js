@@ -6,6 +6,7 @@ import { Queue } from "@forge/events";
 import { kvs } from "@forge/kvs";
 
 import { publicConfig, saveConfig, testConnection, disconnect, prepareConnection } from "./lib/tierx.js";
+import { requireIssueViewer } from "./lib/jira.js";
 
 const queue = new Queue({ key: "soc-mind-jira-submit" });
 
@@ -74,10 +75,13 @@ export const handler = makeResolver({
     return { requestId, issueKey, state: "QUEUED" };
   },
 
-  getActionStatus: async ({ payload }) => {
-    return (await kvs.get(`job:${payload.requestId}`)) || {
+  getActionStatus: async ({ payload, context }) => {
+    const job = await kvs.get(`job:${payload.requestId}`);
+    if (!job) return {
       requestId: payload.requestId,
       state: "UNKNOWN",
     };
+    await requireIssueViewer(context.accountId, job.issueKey);
+    return job;
   },
 });

@@ -15,7 +15,7 @@ import ForgeReconciler, {
 } from "@forge/react";
 import { invoke, permissions } from "@forge/bridge";
 import { approveDestination } from "../lib/egress.js";
-import { cleanupPreviousDestination } from "../lib/ui-state.js";
+import { permissionCleanupMessage } from "../lib/ui-state.js";
 
 function App() {
   const [baseUrl, setBaseUrl] = useState("");
@@ -45,10 +45,9 @@ function App() {
       const destination = await invoke("prepareConnection", { baseUrl });
       await approveDestination(permissions.egress, destination);
       const info = await invoke("saveConfig", { baseUrl: destination.baseUrl, integrationId, secret });
-      const previousKey = result?.egressKey;
       setResult(info);
       setBaseUrl(info.baseUrl);
-      setWarning(await cleanupPreviousDestination(permissions.egress, previousKey, info.egressKey));
+      setWarning(permissionCleanupMessage(false));
     } catch (reason) {
       setError(String(reason?.message || reason));
     } finally {
@@ -67,9 +66,9 @@ function App() {
   async function disconnectSaved() {
     setSaving(true); setError(null);
     try {
-      const { egressKey } = await invoke("disconnect");
+      await invoke("disconnect");
       setResult(null); setSecret(""); setBaseUrl(""); setIntegrationId("");
-      if (egressKey) await permissions.egress.deleteGroup({ key: egressKey });
+      setWarning(permissionCleanupMessage(true));
     } catch { setError("Check connection status. If disconnected, remove any remaining TierX outbound permissions in Connected Apps."); }
     finally { setSaving(false); }
   }

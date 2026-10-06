@@ -80,6 +80,7 @@ async function consume(event) {
         ),
       );
     } catch (commentError) {
+      if (commentError instanceof ConnectionChangedError) throw commentError;
       await kvs.set(`job:${requestId}:comment-warning`, safeError(commentError));
     }
 
@@ -95,6 +96,7 @@ async function consume(event) {
           failureComment(submission, config),
         );
       } catch (commentError) {
+        if (commentError instanceof ConnectionChangedError) throw commentError;
         await kvs.set(`job:${requestId}:comment-warning`, safeError(commentError));
       }
       await kvs.set(`job:${requestId}`, {

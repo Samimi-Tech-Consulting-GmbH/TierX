@@ -20,6 +20,23 @@ function fixture(verify = async () => ({ jira_cloud_id: "cloud-a", name: "Test",
 }
 const candidate = { baseUrl: "https://customer.example", integrationId: "connection-a", secret: "test-only-secret" };
 
+test("claim cleanup failures are sanitized and tell operators to reload before retrying", async () => {
+  for (const operationFails of [false, true]) {
+    const { store, storage, records } = fixture();
+    const set = storage.setSecret;
+    storage.setSecret = async (...args) => {
+      if (operationFails && args[0] === CONNECTION_KEY) throw new Error("private operation detail");
+      return set(...args);
+    };
+    storage.deleteSecret = async () => { throw new Error("private storage credential"); };
+    await assert.rejects(store.save(candidate, "cloud-a"), {
+      message: "Connection change outcome is uncertain. Reload configuration before retrying; contact the operator if changes remain locked.",
+    });
+    assert.equal(records.has(CONNECTION_MUTATION_KEY), true);
+    assert.equal(records.has(CONNECTION_KEY), !operationFails);
+  }
+});
+
 test("connection changes produce the same terminal cancellation for queued and pending work", async () => {
   const writes = [];
   await cancelConnectionJob({ set: async (...args) => writes.push(args) }, { requestId: "request-a", issueKey: "TEST-1" });

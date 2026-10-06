@@ -26,7 +26,12 @@ export function createConnectionStore(storage, verify) {
       throw new Error("TierX connection storage is unavailable. Retry later; contact the operator if it persists.");
     }
     try { return await operation(); }
-    finally { await storage.deleteSecret(CONNECTION_MUTATION_KEY); }
+    finally {
+      try { await storage.deleteSecret(CONNECTION_MUTATION_KEY); }
+      catch {
+        throw new Error("Connection change outcome is uncertain. Reload configuration before retrying; contact the operator if changes remain locked.");
+      }
+    }
   }
   return {
     async read(identity) {

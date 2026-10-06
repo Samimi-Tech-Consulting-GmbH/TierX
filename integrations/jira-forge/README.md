@@ -50,6 +50,12 @@ creation time is never substituted.
   visits ten pending submissions per page with at most five concurrent workers,
   retaining the cursor for subsequent five-minute invocations.
 - The integration credential is stored with Forge `kvs.setSecret`.
+- Submission status is available to any authenticated Jira user who can view
+  the associated issue; knowing a request ID does not bypass Jira permissions.
+- Replacement and disconnect never automatically delete egress groups. Review
+  unused TierX destinations in Atlassian Administration → Connected Apps and
+  remove them manually after checking the current connection. Disconnect removes
+  local credentials and stops new sending/polling, not the egress grant itself.
 - Exactly one JSON object is accepted from the description or one UTF-8
   `.json`/`.txt` attachment up to 1 MiB.
 - Unrelated attachments, comments, children, and changelog data are not sent to
