@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
@@ -159,6 +160,8 @@ def as_utc(value: datetime | None, *, fallback: datetime | None = None) -> datet
 
 
 def parse_severity(value: Any) -> int:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Non-finite severity is not supported")
     if isinstance(value, bool):
         raise ValueError("Boolean severity is not supported")
     if isinstance(value, (int, float)) and int(value) == value:
@@ -503,7 +506,22 @@ class CorrelationClusteringWorker(BaseWorker):
                 )
                 return pending_request
 
-            severity = parse_severity(_resolve(msg.normalized_payload, "event.severity"))
+            async def traced_severity(value: Any) -> int:
+                try:
+                    return parse_severity(value)
+                except (ValueError, OverflowError) as exc:
+                    await trace.finish(
+                        "FAILED",
+                        error={
+                            "type": "CORRELATION_EXCEPTION",
+                            "detail": str(exc),
+                            "failed_fields": ["event.severity"],
+                        },
+                        checks=[{"name": "event.severity", "outcome": "FAILED"}],
+                    )
+                    raise ValueError(str(exc)) from exc
+
+            severity = await traced_severity(_resolve(msg.normalized_payload, "event.severity"))
             delay_ms = debounce_ms(severity, tenant.get("settings") or {})
             incoming_entities, incoming_techniques = extract_correlation_values(
                 msg.normalized_payload
@@ -568,7 +586,7 @@ class CorrelationClusteringWorker(BaseWorker):
                 severity_values = [severity]
                 for candidate in member_candidates:
                     severity_values.append(
-                        parse_severity(
+                        await traced_severity(
                             _resolve(
                                 candidate.get("normalized_payload") or {},
                                 "event.severity",
@@ -672,7 +690,7 @@ class CorrelationClusteringWorker(BaseWorker):
                      (cluster.get("severity", {}).get("distribution") or {}).items()}
                 )
                 for candidate in add_candidates:
-                    candidate_severity = parse_severity(
+                    candidate_severity = await traced_severity(
                         _resolve(
                             candidate.get("normalized_payload") or {},
                             "event.severity",
