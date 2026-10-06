@@ -9,14 +9,16 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@alloc/quick-lru` | `5.2.0` | MIT | `frontend/package-lock.json` |
 | `@asamuzakjp/css-color` | `3.2.0` | MIT | `frontend/package-lock.json` |
 | `@atlaskit/adf-schema` | `56.7.3` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `@atlaskit/adf-schema` | `57.4.9` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `@atlaskit/adf-schema` | `57.4.9` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `@atlaskit/adf-schema-generator` | `4.0.3` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `@atlaskit/adf-utils` | `20.9.15` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/adf-schema` | `57.6.24` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/adf-schema` | `57.6.24` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/adf-schema-generator` | `4.0.4` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/adf-utils` | `20.9.57` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/analytics-next` | `12.5.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/analytics-next-stable-react-context` | `1.0.1` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/app-provider` | `5.5.1` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/atlassian-context` | `1.1.1` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/atlassian-context` | `2.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/atlassian-context` | `2.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/avatar` | `28.0.1` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/badge` | `21.2.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/banner` | `15.3.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
@@ -85,7 +87,14 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@atlaskit/ds-lib` | `8.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/dynamic-table` | `19.3.2` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/editor-prosemirror` | `8.0.3` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/editor-prosemirror` | `9.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/editor-prosemirror` | `9.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/editor-prosemirror` | `9.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/feature-gate-js-client` | `6.0.2` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/feature-gate-js-client` | `7.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/feature-gate-js-client` | `7.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/feature-gate-js-client` | `7.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/feature-gate-js-client` | `7.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/focus-ring` | `5.2.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/forge-react-types` | `2.8.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/form` | `17.2.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
@@ -185,6 +194,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@atlaskit/react-compiler-gating` | `0.2.3` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/react-select` | `4.9.4` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/react-ufo` | `7.10.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/react-ufo` | `8.0.1` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/react-ufo` | `8.0.1` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/section-message` | `10.2.2` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/select` | `22.11.2` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/side-nav-items` | `2.4.3` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
@@ -199,8 +210,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@atlaskit/theme` | `28.2.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/tile` | `4.1.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/tmp-editor-statsig` | `147.1.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `@atlaskit/tmp-editor-statsig` | `188.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `@atlaskit/tmp-editor-statsig` | `188.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/tmp-editor-statsig` | `224.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
+| `@atlaskit/tmp-editor-statsig` | `224.0.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/toggle` | `17.3.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/tokens` | `1.61.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
 | `@atlaskit/tokens` | `16.12.0` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
@@ -289,7 +300,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@babel/plugin-syntax-jsx` | `7.29.7` | MIT | `frontend/package-lock.json` |
 | `@babel/plugin-syntax-typescript` | `7.29.7` | MIT | `frontend/package-lock.json` |
 | `@babel/plugin-transform-modules-commonjs` | `7.29.7` | MIT | `frontend/package-lock.json` |
-| `@babel/plugin-transform-typescript` | `7.29.7` | MIT | `frontend/package-lock.json` |
+| `@babel/plugin-transform-typescript` | `7.29.9` | MIT | `frontend/package-lock.json` |
 | `@babel/preset-typescript` | `7.29.7` | MIT | `frontend/package-lock.json` |
 | `@babel/runtime` | `7.29.2` | MIT | `frontend/package-lock.json` |
 | `@babel/runtime` | `7.29.7` | MIT | `integrations/jira-forge/package-lock.json` |
@@ -447,7 +458,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@sentry/node` | `7.106.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `@sentry/types` | `7.106.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `@sentry/utils` | `7.106.0` | MIT | `integrations/jira-forge/package-lock.json` |
-| `@shadcn/registry` | `0.1.1` | MIT | `frontend/package-lock.json` |
+| `@shadcn/registry` | `0.1.2` | MIT | `frontend/package-lock.json` |
 | `@sindresorhus/merge-streams` | `4.0.0` | MIT | `frontend/package-lock.json` |
 | `@statsig/client-core` | `3.30.2` | ISC | `integrations/jira-forge/package-lock.json` |
 | `@statsig/js-client` | `3.30.2` | ISC | `integrations/jira-forge/package-lock.json` |
@@ -561,8 +572,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `ajv-formats` | `3.0.1` | MIT | `frontend/package-lock.json` |
 | `ansi-colors` | `4.1.3` | MIT | `frontend/package-lock.json` |
 | `ansi-regex` | `5.0.1` | MIT | `frontend/package-lock.json` |
-| `ansi-regex` | `6.3.0` | MIT | `frontend/package-lock.json` |
-| `ansi-regex` | `6.3.0` | MIT | `frontend/package-lock.json` |
+| `ansi-regex` | `6.4.0` | MIT | `frontend/package-lock.json` |
+| `ansi-regex` | `6.4.0` | MIT | `frontend/package-lock.json` |
 | `ansi-styles` | `4.3.0` | MIT | `frontend/package-lock.json` |
 | `ansi-styles` | `5.2.0` | MIT | `frontend/package-lock.json` |
 | `argparse` | `2.0.1` | Python-2.0 | `frontend/package-lock.json` |
@@ -790,7 +801,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `for-each` | `0.3.5` | MIT | `frontend/package-lock.json` |
 | `forwarded` | `0.2.0` | MIT | `frontend/package-lock.json` |
 | `fresh` | `2.0.0` | MIT | `frontend/package-lock.json` |
-| `fs-extra` | `11.4.0` | MIT | `frontend/package-lock.json` |
+| `fs-extra` | `11.4.1` | MIT | `frontend/package-lock.json` |
 | `fsevents` | `2.3.3` | MIT | `frontend/package-lock.json` |
 | `function-bind` | `1.1.2` | MIT | `frontend/package-lock.json` |
 | `function-bind` | `1.1.2` | MIT | `integrations/jira-forge/package-lock.json` |
@@ -800,7 +811,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `generator-function` | `2.0.1` | MIT | `frontend/package-lock.json` |
 | `gensync` | `1.0.0-beta.2` | MIT | `frontend/package-lock.json` |
 | `get-caller-file` | `2.0.5` | ISC | `frontend/package-lock.json` |
-| `get-east-asian-width` | `1.6.0` | MIT | `frontend/package-lock.json` |
+| `get-east-asian-width` | `1.7.0` | MIT | `frontend/package-lock.json` |
 | `get-intrinsic` | `1.3.0` | MIT | `frontend/package-lock.json` |
 | `get-own-enumerable-keys` | `1.0.0` | MIT | `frontend/package-lock.json` |
 | `get-proto` | `1.0.1` | MIT | `frontend/package-lock.json` |
@@ -1099,12 +1110,13 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `prosemirror-history` | `1.5.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `prosemirror-keymap` | `1.2.3` | MIT | `integrations/jira-forge/package-lock.json` |
 | `prosemirror-markdown` | `1.13.2` | MIT | `integrations/jira-forge/package-lock.json` |
+| `prosemirror-model` | `1.25.12` | MIT | `integrations/jira-forge/package-lock.json` |
 | `prosemirror-model` | `1.25.4` | MIT | `integrations/jira-forge/package-lock.json` |
 | `prosemirror-state` | `1.4.4` | MIT | `integrations/jira-forge/package-lock.json` |
 | `prosemirror-transform` | `1.10.5` | MIT | `integrations/jira-forge/package-lock.json` |
 | `prosemirror-utils` | `1.2.2` | Apache-2.0 | `integrations/jira-forge/package-lock.json` |
-| `prosemirror-view` | `1.41.5` | MIT | `integrations/jira-forge/package-lock.json` |
-| `proxy-addr` | `2.0.7` | MIT | `frontend/package-lock.json` |
+| `prosemirror-view` | `1.42.3` | MIT | `integrations/jira-forge/package-lock.json` |
+| `proxy-addr` | `2.0.8` | MIT | `frontend/package-lock.json` |
 | `punycode` | `2.3.1` | MIT | `frontend/package-lock.json` |
 | `punycode.js` | `2.3.1` | MIT | `integrations/jira-forge/package-lock.json` |
 | `pydantic` | `Not resolved` | MIT | `backend/requirements.txt` |
@@ -1191,7 +1203,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `set-function-name` | `2.0.2` | MIT | `frontend/package-lock.json` |
 | `set-proto` | `1.0.0` | MIT | `frontend/package-lock.json` |
 | `setprototypeof` | `1.2.0` | ISC | `frontend/package-lock.json` |
-| `shadcn` | `4.21.2` | MIT | `frontend/package-lock.json` |
+| `shadcn` | `4.21.3` | MIT | `frontend/package-lock.json` |
 | `shallow-equal` | `3.1.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `sharp` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
 | `shebang-command` | `2.0.0` | MIT | `frontend/package-lock.json` |
@@ -1209,7 +1221,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `sonner` | `2.0.7` | MIT | `frontend/package-lock.json` |
 | `source-map` | `0.5.7` | BSD-3-Clause | `integrations/jira-forge/package-lock.json` |
 | `source-map` | `0.6.1` | BSD-3-Clause | `frontend/package-lock.json` |
-| `source-map-js` | `1.2.1` | BSD-3-Clause | `frontend/package-lock.json` |
+| `source-map-js` | `1.2.2` | BSD-3-Clause | `frontend/package-lock.json` |
 | `stable-hash` | `0.0.5` | MIT | `frontend/package-lock.json` |
 | `stackback` | `0.0.2` | MIT | `frontend/package-lock.json` |
 | `statuses` | `2.0.2` | MIT | `frontend/package-lock.json` |
@@ -1242,7 +1254,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `supports-preserve-symlinks-flag` | `1.0.0` | MIT | `frontend/package-lock.json` |
 | `supports-preserve-symlinks-flag` | `1.0.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `symbol-tree` | `3.2.4` | MIT | `frontend/package-lock.json` |
-| `systeminformation` | `5.33.10` | MIT | `frontend/package-lock.json` |
+| `systeminformation` | `5.33.15` | MIT | `frontend/package-lock.json` |
 | `tabbable` | `1.1.3` | MIT | `integrations/jira-forge/package-lock.json` |
 | `tagged-tag` | `1.0.0` | MIT | `frontend/package-lock.json` |
 | `tailwind-merge` | `3.5.0` | MIT | `frontend/package-lock.json` |
@@ -1285,8 +1297,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `typescript-eslint` | `8.59.2` | MIT | `frontend/package-lock.json` |
 | `uc.micro` | `2.1.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `unbox-primitive` | `1.1.0` | MIT | `frontend/package-lock.json` |
-| `undici` | `7.29.1` | MIT | `frontend/package-lock.json` |
 | `undici` | `7.29.1` | MIT | `integrations/jira-forge/package-lock.json` |
+| `undici` | `7.30.0` | MIT | `frontend/package-lock.json` |
 | `undici-types` | `6.21.0` | MIT | `frontend/package-lock.json` |
 | `unicorn-magic` | `0.3.0` | MIT | `frontend/package-lock.json` |
 | `universalify` | `2.0.1` | MIT | `frontend/package-lock.json` |
