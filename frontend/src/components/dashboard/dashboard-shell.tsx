@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { PlatformHealthProvider } from "@/lib/use-platform-health";
+import { LatestReleaseProvider } from "@/lib/use-latest-release";
 import { SelectedTenantProvider } from "@/lib/selected-tenant";
 
 import { DashboardHeader } from "./dashboard-header";
@@ -19,6 +20,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <PlatformHealthProvider>
+      <LatestReleaseProvider>
       <SelectedTenantProvider>
         <div className="dark brand-dark flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
           <DashboardHeader onMenuClick={() => setNavOpen(true)} />
@@ -70,6 +72,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </SelectedTenantProvider>
+      </LatestReleaseProvider>
     </PlatformHealthProvider>
   );
 }

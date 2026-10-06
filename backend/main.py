@@ -31,6 +31,7 @@ from app.api.v1.admin.enrichment_actions import (
     router as admin_enrichment_actions_router,
 )
 from app.api.v1.auth import router as auth_router
+from app.api.v1.releases import router as releases_router
 from app.api.v1.tenant_users import router as tenant_users_router
 from app.api.v1.tenant_info import router as tenant_info_router
 from app.api.v1.playbooks import router as playbooks_router
@@ -177,6 +178,7 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(releases_router, prefix="/api/v1")
 app.include_router(playbooks_router, prefix="/api/v1")
 app.include_router(schema_registry_router, prefix="/api/v1")
 app.include_router(admin_tenants_router, prefix="/api/v1/admin")

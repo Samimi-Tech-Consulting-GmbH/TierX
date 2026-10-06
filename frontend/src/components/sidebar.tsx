@@ -10,6 +10,7 @@ import {
   useSelectedTenant,
 } from "@/lib/selected-tenant";
 import { TenantSwitcher } from "@/components/dashboard/tenant-switcher";
+import { ReleaseStatus } from "@/components/release-status";
 import {
   SettingsMenu,
   type SettingsMenuItem,
@@ -287,6 +288,7 @@ export function Sidebar({
           <SettingsMenu items={settingsItems} onNavigate={onNavigate} />
 
           <div className="mt-3 px-3 pb-2 font-mono text-[10px] text-muted-foreground">
+            <div className="mb-1"><ReleaseStatus installed={releaseVersion} /></div>
             <div>
               {releaseVersion === "development"
                 ? releaseVersion
