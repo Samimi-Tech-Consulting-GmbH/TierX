@@ -1,15 +1,32 @@
 import { kvs, WhereConditions } from "@forge/kvs";
 
 import { addAppComment, commentMarker, failureComment, finalComment } from "./lib/comments.js";
-import { getConfig, tierxRequest } from "./lib/tierx.js";
+import { getConfig, tierxRequest, withConnection, TierXRequestError } from "./lib/tierx.js";
+import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
 const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
+
+export function safePollFailure(error) {
+  if (error instanceof TierXRequestError) {
+    return { error_type: "TIERX_REQUEST_FAILED", http_status:
+      Number.isInteger(error.status) && error.status >= 100 && error.status <= 599
+        ? error.status : null, retryable: Boolean(error.retryable) };
+  }
+  // Known local validation messages only; never persist arbitrary upstream text.
+  if (error?.message === "TierX destination could not be resolved.") {
+    return { error_type: "DESTINATION_DNS_FAILURE" };
+  }
+  if (error?.message === "TierX destination must resolve only to public addresses.") {
+    return { error_type: "DESTINATION_NOT_PUBLIC" };
+  }
+  return { error_type: "POLLING_FAILURE" };
+}
 
 function pendingQuery(storage, cursor) {
   let query = storage
     .query()
     .where("key", WhereConditions.beginsWith("pending:"))
-    .limit(100);
+    .limit(10);
   if (cursor) query = query.cursor(cursor);
   return query;
 }
@@ -70,11 +87,12 @@ export async function refreshPendingSubmission(pending, request = tierxRequest) 
 }
 
 export async function handler() {
-  const config = await getConfig({ includeSecret: true });
   const page = await getPendingPage();
-  for (const item of page.results) {
+  await forEachPending(page.results, async item => {
     const pending = item.value;
+    await withConnection(pending.connectionIdentity, async () => {
     try {
+      const config = await getConfig();
       let submission = await refreshPendingSubmission(pending);
       await kvs.set(`job:${pending.requestId}`, {
         requestId: pending.requestId,
@@ -89,12 +107,31 @@ export async function handler() {
         await kvs.delete(item.key);
       }
     } catch (error) {
+      if (error instanceof ConnectionChangedError) {
+        await cancelConnectionJob(kvs, pending);
+        await kvs.delete(item.key);
+        return;
+      }
       // Scheduled triggers do not retry automatically. Keeping the pending key
       // makes the next five-minute invocation retry without resubmitting Jira.
       await kvs.set(`poll-error:${pending.submissionId}`, {
         at: new Date().toISOString(),
-        message: String(error?.message || error).slice(0, 1000),
+        message: "TierX polling failed. Check the connection and outbound permissions.",
+        ...safePollFailure(error),
       });
     }
-  }
+    });
+  });
+}
+
+// Small pages and bounded parallelism prevent 100 sequential five-second DNS
+// checks from overrunning the scheduled trigger. The cursor preserves fairness.
+export async function forEachPending(items, operation) {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(5, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await operation(item);
+    }
+  }));
 }

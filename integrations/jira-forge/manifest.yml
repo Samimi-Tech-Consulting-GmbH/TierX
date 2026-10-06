@@ -60,5 +60,6 @@ permissions:
   external:
     fetch:
       backend:
-        - address: https://tierx.example.com
-          inScopeEUD: true
+        - address: https://cloudflare-dns.com
+    configurable:
+      enabled: true

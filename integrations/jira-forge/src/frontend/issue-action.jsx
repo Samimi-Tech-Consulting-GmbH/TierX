@@ -9,12 +9,7 @@ import ForgeReconciler, {
 } from "@forge/react";
 import { invoke, view } from "@forge/bridge";
 
-const TERMINAL_UI_STATES = new Set([
-  "PROCESSING",
-  "CLUSTERED",
-  "ANALYZED",
-  "FAILED",
-]);
+import { TERMINAL_UI_STATES, watchSubmission } from "../lib/ui-state.js";
 
 function App() {
   const started = useRef(false);
@@ -24,20 +19,7 @@ function App() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    let timer;
-    invoke("enqueueIssue")
-      .then((queued) => {
-        setJob(queued);
-        timer = setInterval(async () => {
-          const current = await invoke("getActionStatus", {
-            requestId: queued.requestId,
-          });
-          setJob(current);
-          if (TERMINAL_UI_STATES.has(current.state)) clearInterval(timer);
-        }, 2000);
-      })
-      .catch((reason) => setError(String(reason?.message || reason)));
-    return () => timer && clearInterval(timer);
+    return watchSubmission(invoke, setJob, setError);
   }, []);
 
   const done = TERMINAL_UI_STATES.has(job.state);
@@ -45,11 +27,11 @@ function App() {
     <Stack space="space.200">
       <Heading as="h2">Send to TierX</Heading>
       {error ? (
-        <SectionMessage appearance="error" title="Submission could not start">
+        <SectionMessage appearance="error" title="Submission status unavailable">
           <Text>{error}</Text>
         </SectionMessage>
-      ) : job.state === "FAILED" ? (
-        <SectionMessage appearance="error" title="TierX submission failed">
+      ) : job.state === "FAILED" || job.state === "CANCELLED" ? (
+        <SectionMessage appearance="error" title={job.state === "CANCELLED" ? "TierX observation cancelled" : "TierX submission failed"}>
           <Text>{job.failure?.error_detail || "Open TierX traces for details."}</Text>
         </SectionMessage>
       ) : done ? (

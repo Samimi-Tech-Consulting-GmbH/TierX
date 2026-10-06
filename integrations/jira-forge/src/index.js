@@ -5,13 +5,14 @@ import { makeResolver } from "@forge/resolver";
 import { Queue } from "@forge/events";
 import { kvs } from "@forge/kvs";
 
-import { publicConfig, saveConfig } from "./lib/tierx.js";
+import { publicConfig, saveConfig, testConnection, disconnect, prepareConnection } from "./lib/tierx.js";
+import { requireIssueViewer } from "./lib/jira.js";
 
 const queue = new Queue({ key: "soc-mind-jira-submit" });
 
-async function requireJiraAdministrator(accountId) {
+export async function requireJiraAdministrator(accountId, client = api) {
   if (!accountId) throw new Error("Jira administrator context is unavailable.");
-  const response = await api
+  const response = await client
     .asUser(accountId)
     .requestJira(route`/rest/api/3/mypermissions?permissions=ADMINISTER`, {
       headers: { Accept: "application/json" },
@@ -24,6 +25,18 @@ async function requireJiraAdministrator(accountId) {
 }
 
 export const handler = makeResolver({
+  prepareConnection: async ({ payload, context }) => {
+    await requireJiraAdministrator(context.accountId);
+    return prepareConnection(payload.baseUrl);
+  },
+  testConnection: async ({ context }) => {
+    await requireJiraAdministrator(context.accountId);
+    return testConnection(context.cloudId);
+  },
+  disconnect: async ({ context }) => {
+    await requireJiraAdministrator(context.accountId);
+    return disconnect();
+  },
   getConfig: async ({ context }) => {
     await requireJiraAdministrator(context.accountId);
     return publicConfig();
@@ -40,9 +53,8 @@ export const handler = makeResolver({
     if (!issueKey || !context.accountId || !context.cloudId) {
       throw new Error("Jira issue or user context is unavailable.");
     }
-    await publicConfig().then((config) => {
-      if (!config.configured) throw new Error("TierX is not configured.");
-    });
+    const config = await publicConfig();
+    if (!config.configured) throw new Error("TierX is not configured.");
     const requestId = crypto.randomUUID();
     await kvs.set(`job:${requestId}`, {
       requestId,
@@ -56,16 +68,20 @@ export const handler = makeResolver({
         issueKey,
         accountId: context.accountId,
         cloudId: context.cloudId,
+        connectionIdentity: config.identity,
       },
       concurrency: { key: "soc-mind-jira-submit", limit: 2 },
     });
     return { requestId, issueKey, state: "QUEUED" };
   },
 
-  getActionStatus: async ({ payload }) => {
-    return (await kvs.get(`job:${payload.requestId}`)) || {
+  getActionStatus: async ({ payload, context }) => {
+    const job = await kvs.get(`job:${payload.requestId}`);
+    if (!job) return {
       requestId: payload.requestId,
       state: "UNKNOWN",
     };
+    await requireIssueViewer(context.accountId, job.issueKey);
+    return job;
   },
 });
