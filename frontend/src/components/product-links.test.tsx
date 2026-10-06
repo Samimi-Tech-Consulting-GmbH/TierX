@@ -23,6 +23,14 @@ describe("ProductLinks", () => {
     expect(link).toHaveAttribute("href", "https://github.com/Samimi-Tech-Consulting-GmbH/TierX/releases");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
+  it.each(["01.2.0", "0.02.0", "0.2.00", "invalid"])(
+    "uses the release list for invalid semantic version %s", version => {
+      render(<ProductLinks version={version} sha="development" />);
+      expect(screen.getByRole("link", { name: `v${version}` })).toHaveAttribute(
+        "href", "https://github.com/Samimi-Tech-Consulting-GmbH/TierX/releases",
+      );
+    },
+  );
 
   it.each(["", "   "])(
     "falls back for empty repository setting %s",
