@@ -22,6 +22,7 @@ import {
   Building2,
   CircleArrowRight,
   Database,
+  FileCode2,
   LayoutDashboard,
   Network,
   LibraryBig,
