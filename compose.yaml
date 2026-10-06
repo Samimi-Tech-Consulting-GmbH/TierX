@@ -181,8 +181,8 @@ services:
 
   ingestion-proxy:
     build:
-      context: ./ingestion-proxy
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ingestion-proxy/Dockerfile
     container_name: socmind_ingestion_proxy
     restart: always
     environment:

@@ -3,7 +3,8 @@ import logging
 import signal
 
 from app.core.config import settings
-from app.db.mongodb import close_client
+from app.db.mongodb import close_client, get_database
+from tierx_runtime import COLLECTION, IDENTITY, effective, installed, heartbeat
 from app.workers.dead_letter_worker import DeadLetterWorker
 from app.workers.enrichment_worker import EnrichmentWorker
 from app.workers.fingerprint_worker import FingerprintWorker
@@ -23,35 +24,58 @@ logger = logging.getLogger("pipeline")
 async def main():
     logger.info("Pipeline service starting")
     logger.info("Kafka: %s", settings.kafka_bootstrap_servers)
-    logger.info("MongoDB: %s", settings.mongo_url.split("@")[-1])
-
-    workers = [
-        ValidationWorker(),
-        NormalizationWorker(),
-        FingerprintWorker(),
-        EnrichmentWorker(),
-        DeadLetterWorker(),
-    ]
-    if settings.debug_trace_enabled:
-        workers.append(TraceWorker())
-    if settings.correlation_enabled:
-        workers.append(CorrelationClusteringWorker())
-    if settings.llm_analysis_enabled:
-        workers.append(AgenticAnalysisWorker())
-
-    for w in workers:
-        await w.start()
+    logger.info("MongoDB deployment configured through environment")
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
 
-    logger.info("Pipeline service ready — %d worker(s) running", len(workers))
-    await stop.wait()
+    workers = []
+    optional = {}
+    while not stop.is_set():
+        try:
+            db = get_database()
+            document = await db[COLLECTION].find_one({"_id": IDENTITY})
+            if installed(document):
+                values, _ = effective(document.get("values"))
+                # Core consumers stay alive: their per-message snapshots isolate active
+                # work. Only disabled optional workers drain and stop claiming work.
+                desired = {"correlation": values["correlation_enabled"],
+                           "analysis": values["llm_analysis_enabled"]}
+                for name in list(optional):
+                    if not desired[name]:
+                        await optional.pop(name).stop()
+                settings.values, settings.revision = values, document["revision"]
+                if not workers:
+                    workers = [ValidationWorker(), NormalizationWorker(), FingerprintWorker(),
+                               EnrichmentWorker(), DeadLetterWorker()]
+                    if settings.debug_trace_enabled:
+                        workers.append(TraceWorker())
+                    for worker in workers:
+                        await worker.start()
+                for name, factory in (("correlation", CorrelationClusteringWorker),
+                                      ("analysis", AgenticAnalysisWorker)):
+                    if desired[name] and name not in optional:
+                        worker = factory()
+                        await worker.start()
+                        optional[name] = worker
+            await db.service_heartbeats.update_one({"service": "pipeline"}, {
+                "$set": heartbeat("pipeline", settings.revision)}, upsert=True)
+        except Exception:
+            logger.warning("Settings refresh failed; retaining last valid configuration")
+            try:
+                await get_database().service_heartbeats.update_one({"service": "pipeline"}, {
+                    "$set": heartbeat("pipeline", settings.revision, "SETTINGS_REFRESH_FAILED")}, upsert=True)
+            except Exception:
+                pass
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            pass
 
     logger.info("Shutting down workers …")
-    for w in workers:
+    for w in [*optional.values(), *workers]:
         await w.stop()
 
     await close_client()

@@ -5,6 +5,7 @@ pydantic-settings>=2.0.0
 faststream[kafka]>=0.5.0
 aiokafka>=0.10.0
 motor>=3.3.0
+-e ../kb_shared
 
 pytest>=7.0.0
 pytest-asyncio>=0.21.0

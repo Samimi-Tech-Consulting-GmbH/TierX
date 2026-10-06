@@ -1,0 +1,4 @@
+include: [compose.common.yaml]
+# Choose the external Ollama origin in the installation page, or set
+# TIERX_OLLAMA_URL in .env to lock it as deployment-managed configuration.
+services: {}

@@ -1,0 +1,25 @@
+include: [compose.common.yaml]
+services:
+  ollama:
+    image: ollama/ollama:0.32.4@sha256:10c13eb515db310990527d36ca14a136da4bcc0fbf2bf3b15e9c1f111e9d3cd4
+    restart: unless-stopped
+    networks: [private, outbound]
+    volumes: ["ollama_data:/root/.ollama"]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+  model-init:
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-init:${TIERX_RELEASE}
+    environment:
+      OLLAMA_MODEL: ${TIERX_OLLAMA_MODEL:-phi3:latest}
+    networks: [private]
+    depends_on:
+      ollama: {condition: service_healthy}
+    restart: "no"
+networks:
+  private: {internal: true}
+  outbound: {}
+volumes:
+  ollama_data: {}

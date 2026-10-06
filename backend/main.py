@@ -4,7 +4,7 @@ import os
 # Canonical TierX environment variables override current unprefixed names;
 # legacy SOC_MIND_* aliases remain permanent for existing deployments.
 for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("TIERX_"):
+    if _key.startswith("TIERX_") and _value:
         os.environ[_key.removeprefix("TIERX_")] = _value
 for _key, _value in tuple(os.environ.items()):
     if _key.startswith("SOC_MIND_"):
@@ -21,6 +21,9 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
 from app.db.mongodb import DatabaseManager
+from tierx_runtime import installed, effective, heartbeat
+from app.services.platform_configuration_service import PlatformConfigurationService
+from app.api.v1.platform_configuration import router as platform_configuration_router
 from app.api.v1.admin.tenants import router as admin_tenants_router
 from app.api.v1.admin.users import router as admin_users_router
 from app.api.v1.admin.debug import router as admin_debug_router
@@ -66,8 +69,6 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 required = (
     "MONGO_URL",
     "JWT_SECRET_KEY",
-    "PLATFORM_ADMIN_EMAIL",
-    "PLATFORM_ADMIN_PASSWORD",
 )
 missing = [name for name in required if not os.getenv(name)]
 if missing:
@@ -82,13 +83,15 @@ EnrichmentActionService.validate_configuration()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     jira_cleanup_task = None
+    settings_task = None
     try:
         DatabaseManager.initialize()
         TenantService.initialize_schema()
-        UserService.seed_platform_admin(
-            email=os.environ["PLATFORM_ADMIN_EMAIL"],
-            password=os.environ["PLATFORM_ADMIN_PASSWORD"],
-        )
+        from app.models.user import User
+        User.ensure_indexes()
+        PlatformConfigurationService.initialize()
+        app.state.configuration_ready = True
+        settings_task = asyncio.create_task(refresh_platform_settings(), name="platform-settings")
         AnalysisService.ensure_system_prompt()
         PlatformDashboardService.ensure_indexes()
         PlatformListService.ensure_indexes()
@@ -108,14 +111,21 @@ async def lifespan(app: FastAPI):
 
             DebugTraceService.ensure_indexes()
     except Exception as e:
-        print(f"Failed to initialize database or schema: {e}")
+        raise RuntimeError("Failed to initialize TierX platform configuration") from e
     yield
+    if settings_task:
+        settings_task.cancel()
+        try:
+            await settings_task
+        except asyncio.CancelledError:
+            pass
     if jira_cleanup_task:
         jira_cleanup_task.cancel()
         try:
             await jira_cleanup_task
         except asyncio.CancelledError:
             pass
+    app.state.configuration_ready = False
 
 
 app = FastAPI(
@@ -124,6 +134,44 @@ app = FastAPI(
     version=os.getenv("APP_RELEASE_VERSION", "development"),
     lifespan=lifespan,
 )
+app.include_router(platform_configuration_router, prefix="/api/v1")
+
+
+@app.middleware("http")
+async def installation_gate(request: Request, call_next):
+    if getattr(app.state, "configuration_ready", False):
+        allowed = {"/api/v1/health", "/api/v1/installation/status", "/api/v1/installation/test", "/api/v1/installation/complete"}
+        if request.url.path not in allowed and not installed(PlatformConfigurationService.document()):
+            return JSONResponse(status_code=503, content={"detail": "INSTALLATION_REQUIRED"})
+    response = await call_next(request)
+    if request.url.path.startswith("/api/v1/installation"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+async def refresh_platform_settings():
+    global OLLAMA_URL, OLLAMA_MODEL, LLM_ANALYSIS_ENABLED
+    global KNOWLEDGE_BASE_PROCESSING_ENABLED, KNOWLEDGE_BASE_RETRIEVAL_ENABLED
+    while True:
+        try:
+            doc = PlatformConfigurationService.document() or {}
+            values, _ = effective(doc.get("values"))
+            OLLAMA_URL, OLLAMA_MODEL = values["ollama_url"], values["ollama_model"]
+            LLM_ANALYSIS_ENABLED = values["llm_analysis_enabled"]
+            KNOWLEDGE_BASE_PROCESSING_ENABLED = values["knowledge_base_processing_enabled"]
+            KNOWLEDGE_BASE_RETRIEVAL_ENABLED = values["knowledge_base_retrieval_enabled"]
+            from app.services import debug_trace_service
+            debug_trace_service.CORRELATION_ENABLED = values["correlation_enabled"]
+            debug_trace_service.LLM_ANALYSIS_ENABLED = values["llm_analysis_enabled"]
+            PlatformConfigurationService.db().service_heartbeats.update_one(
+                {"service": "backend"}, {"$set": heartbeat("backend", doc.get("revision", 0))}, upsert=True)
+        except Exception:
+            try:
+                PlatformConfigurationService.db().service_heartbeats.update_one(
+                    {"service": "backend"}, {"$set": {"configuration_error": "SETTINGS_REFRESH_FAILED"}}, upsert=True)
+            except Exception:
+                pass
+        await asyncio.sleep(5)
 
 app.add_middleware(
     CORSMiddleware,
@@ -233,6 +281,11 @@ KNOWLEDGE_BASE_RETRIEVAL_ENABLED = os.getenv(
 
 @app.get("/api/v1/health")
 async def health_check():
+    if getattr(app.state, "configuration_ready", False):
+        doc = PlatformConfigurationService.document()
+        if not installed(doc):
+            return {"status": "INSTALLATION_REQUIRED", "installation_completed": False,
+                    "release_version": APP_RELEASE_VERSION, "release_sha": APP_RELEASE_SHA}
     components = {}
     overall_status = "HEALTHY"
 
@@ -285,6 +338,10 @@ async def health_check():
         components["ollama"] = "red"
         overall_status = "UNHEALTHY"
 
+    if not LLM_ANALYSIS_ENABLED:
+        components["ollama"] = "optional" if components.get("ollama") == "red" else components.get("ollama")
+        overall_status = "HEALTHY" if all(value != "red" for key, value in components.items() if key != "ollama_model") else "UNHEALTHY"
+    configuration = PlatformConfigurationService.read() if getattr(app.state, "configuration_ready", False) else None
     return {
         "status": overall_status,
         "components": components,
@@ -295,4 +352,6 @@ async def health_check():
         "knowledge_base_retrieval_enabled": KNOWLEDGE_BASE_RETRIEVAL_ENABLED,
         "release_version": APP_RELEASE_VERSION,
         "release_sha": APP_RELEASE_SHA,
+        "installation_completed": True,
+        "configuration": configuration,
     }
