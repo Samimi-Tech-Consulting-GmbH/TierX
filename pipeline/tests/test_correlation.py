@@ -120,6 +120,8 @@ async def test_invalid_severity_trace_matches_dead_letter_classification(monkeyp
     assert terminal["error"]["failed_fields"] == ["event.severity"]
     assert publisher.call_count == 2
     assert worker.produce_dead_letter.call_args.kwargs["error_type"] == "CORRELATION_EXCEPTION"
+    assert terminal["error"]["detail"] == worker.produce_dead_letter.call_args.kwargs["error_detail"]
+    assert terminal["error"]["detail"]
     clusters.insert_one.assert_not_called()
 
 
