@@ -160,6 +160,11 @@ supported. Forge's DNS/connection enforcement must be verified before claiming
 protection against DNS rebinding; application DNS prechecks alone do not pin the
 connection address.
 
+The connector sends only `X-TierX-Integration-ID`; legacy Jira headers and
+prototype pairing are intentionally unsupported. Polling diagnostics retain
+only fixed error categories and HTTP status codes, not upstream response bodies,
+credentials, or arbitrary exception messages.
+
 The app identity must have **Browse Projects** and **Add Comments** in each Jira
 project where acknowledgement or result comments are expected. A missing
 comment permission does not resend or duplicate the TierX alert.

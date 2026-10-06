@@ -13,8 +13,14 @@ test("customer HTTPS origins are accepted without paths or credentials", () => {
   assert.equal(normalizeBaseUrl("https://tierx.example.com/"), "https://tierx.example.com");
   assert.equal(normalizeBaseUrl("https://customer.example"), "https://customer.example");
   for (const url of ["http://customer.example", "https://customer.example/api", "https://x:y@customer.example", "https://customer.example?x=1", "https://customer.example#x", "https://customer.example:8443", "https://localhost", "https://host.internal"]) {
-    assert.throws(() => normalizeBaseUrl(url));
+    assert.throws(() => normalizeBaseUrl(url), {
+      name: "Error",
+      message: "Enter a public HTTPS origin on port 443 without a path, credentials, query, or fragment.",
+    });
   }
+  assert.throws(() => normalizeBaseUrl("not a URL"), {
+    name: "Error", message: "Enter a public HTTPS origin.",
+  });
 });
 
 test("Jira priorities map deterministically to pipeline severity", () => {

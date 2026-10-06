@@ -1,10 +1,26 @@
 import { kvs, WhereConditions } from "@forge/kvs";
 
 import { addAppComment, commentMarker, failureComment, finalComment } from "./lib/comments.js";
-import { getConfig, tierxRequest, withConnection } from "./lib/tierx.js";
+import { getConfig, tierxRequest, withConnection, TierXRequestError } from "./lib/tierx.js";
 import { ConnectionChangedError } from "./lib/connection-store.js";
 
 const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
+
+export function safePollFailure(error) {
+  if (error instanceof TierXRequestError) {
+    return { error_type: "TIERX_REQUEST_FAILED", http_status:
+      Number.isInteger(error.status) && error.status >= 100 && error.status <= 599
+        ? error.status : null, retryable: Boolean(error.retryable) };
+  }
+  // Known local validation messages only; never persist arbitrary upstream text.
+  if (error?.message === "TierX destination could not be resolved.") {
+    return { error_type: "DESTINATION_DNS_FAILURE" };
+  }
+  if (error?.message === "TierX destination must resolve only to public addresses.") {
+    return { error_type: "DESTINATION_NOT_PUBLIC" };
+  }
+  return { error_type: "POLLING_FAILURE" };
+}
 
 function pendingQuery(storage, cursor) {
   let query = storage
@@ -101,6 +117,7 @@ export async function handler() {
       await kvs.set(`poll-error:${pending.submissionId}`, {
         at: new Date().toISOString(),
         message: "TierX polling failed. Check the connection and outbound permissions.",
+        ...safePollFailure(error),
       });
     }
     });

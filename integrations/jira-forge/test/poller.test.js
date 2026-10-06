@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getPendingPage, refreshPendingSubmission } from "../src/poller.js";
+import { getPendingPage, refreshPendingSubmission, safePollFailure } from "../src/poller.js";
+import { TierXRequestError } from "../src/lib/tierx.js";
+
+test("polling diagnostics distinguish HTTP and DNS failures without reflecting secrets", () => {
+  for (const status of [401, 502]) {
+    assert.deepEqual(safePollFailure(new TierXRequestError("Bearer must-not-persist", status)), {
+      error_type: "TIERX_REQUEST_FAILED", http_status: status, retryable: status === 502,
+    });
+  }
+  assert.deepEqual(safePollFailure(new Error("TierX destination could not be resolved.")), {
+    error_type: "DESTINATION_DNS_FAILURE",
+  });
+  assert.deepEqual(safePollFailure(new Error("TierX destination must resolve only to public addresses.")), {
+    error_type: "DESTINATION_NOT_PUBLIC",
+  });
+  assert.deepEqual(safePollFailure(new Error("secret=must-not-persist")), { error_type: "POLLING_FAILURE" });
+});
 
 function storageWithPages({ cursor = null, pages = [] } = {}) {
   const calls = [];
