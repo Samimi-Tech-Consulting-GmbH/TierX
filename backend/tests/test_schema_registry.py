@@ -225,6 +225,31 @@ def test_activate_replaces_active(sample_tenant):
     assert active["version"] == "1.1.0"
 
 
+def test_incomplete_draft_cannot_replace_active_schema(sample_tenant):
+    tid = sample_tenant["tenant_id"]
+    base = f"/api/v1/tenants/{tid}/schema-registry"
+    headers = get_platform_headers()
+    valid = client.post(base, headers=headers, files={
+        "file": ("valid.yaml", VALID_SCHEMA_YAML.encode(), "application/x-yaml")
+    }).json()
+    active_url = f"{base}/{valid['alert_type']}/{valid['schema_id']}/activate"
+    assert client.post(active_url, headers=headers).status_code == 200
+    invalid = SCHEMA_YAML_V2.replace("host.hostname: result.host", "result.host: host.hostname")
+    draft_response = client.post(base, headers=headers, files={
+        "file": ("draft.yaml", invalid.encode(), "application/x-yaml")
+    })
+    assert draft_response.status_code == 201
+    draft = draft_response.json()
+    response = client.post(
+        f"{base}/{draft['alert_type']}/{draft['schema_id']}/activate", headers=headers
+    )
+    assert response.status_code == 422
+    assert "host.hostname" in response.text
+    assert "source mapping" in response.text
+    active = client.get(f"{base}/{valid['alert_type']}", headers=headers).json()
+    assert active["schema_id"] == valid["schema_id"]
+
+
 def test_yaml_validation_error(sample_tenant):
     tid = sample_tenant["tenant_id"]
     bad = "not: [ broken"

@@ -91,7 +91,7 @@ jq -c . <file>.json | docker exec -i socmind_kafka \
 | `schemas/schema-invalid-duplicate-source.yaml` | rejected — same source path mapped to two ECS fields |
 | `schemas/schema-invalid-bad-version.yaml` | rejected — version must be full semver |
 | `schemas/schema-invalid-syntax.yaml` | rejected — YAML parser error |
-| `schemas/schema-invalid-critical-not-mapped.yaml` | **accepted at upload**, but every alert of the type dies at validation with `MISSING_REQUIRED_FIELD` — upload-vs-runtime gap demo |
+| `schemas/schema-invalid-critical-not-mapped.yaml` | accepted as a draft; activation returns HTTP `422` because `destination.ip` has no source mapping. The existing active schema remains unchanged. |
 
 ### Playbooks — upload via `POST /api/v1/tenants/{id}/playbooks` (multipart, YAML only)
 
