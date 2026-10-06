@@ -603,7 +603,10 @@ export function ClusterDetailView({
 
           <div className="mt-4 space-y-5">
             <div className="space-y-2">
-              <span className="text-xs text-[#a3a3a3]">Status</span>
+              <p className="text-xs text-[#a3a3a3]">
+                Current workflow status: {titleCase(cluster.status)}
+              </p>
+              <span className="text-xs text-[#a3a3a3]">Change workflow status</span>
               <div className="flex flex-wrap gap-2">
                 {(TRANSITIONS[cluster.status] ?? []).length === 0 && (
                   <span className="text-sm text-muted-foreground">
@@ -622,7 +625,7 @@ export function ClusterDetailView({
                     }
                     className={cn(ACTION, "bg-[#404040] hover:bg-[#4a4a4a]")}
                   >
-                    {titleCase(status)}
+                    {status === "OPEN" ? "Reopen investigation" : `Move to ${titleCase(status)}`}
                   </button>
                 ))}
               </div>
