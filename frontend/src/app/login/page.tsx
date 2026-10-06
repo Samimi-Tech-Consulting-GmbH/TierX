@@ -39,6 +39,15 @@ export default function LoginPage() {
     if (user) router.replace(getPostLoginRoute(user));
   }, [user, router]);
 
+  useEffect(() => {
+    const base = process.env.NEXT_PUBLIC_TIERX_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "";
+    let active = true;
+    fetch(`${base}/api/v1/installation/status`, { cache: "no-store" }).then((response) => response.json())
+      .then((status) => { if (active && status.wizard_available) router.replace("/installation"); })
+      .catch(() => { /* Existing login error handling reports API connectivity errors. */ });
+    return () => { active = false; };
+  }, [router]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     // Read the displayed values, including autofill without React change events.

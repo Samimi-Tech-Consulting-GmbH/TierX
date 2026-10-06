@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 
 for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("TIERX_"):
+    if _key.startswith("TIERX_") and _value:
         os.environ[_key.removeprefix("TIERX_")] = _value
 for _key, _value in tuple(os.environ.items()):
     if _key.startswith("SOC_MIND_"):
@@ -16,6 +16,7 @@ for _key, _value in tuple(os.environ.items()):
 from app.db.mongodb import DatabaseManager
 from app.models.tenant import Tenant
 from app.services.knowledge_base_service import KnowledgeBaseService
+from tierx_runtime import COLLECTION, IDENTITY, effective, installed, heartbeat
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,17 +32,6 @@ def stop(*_args):
 
 
 def main() -> None:
-    if os.getenv("KNOWLEDGE_BASE_PROCESSING_ENABLED", "false").lower() not in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        logger.info("Knowledge Base processing is disabled")
-        while running:
-            time.sleep(5)
-        return
-
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     DatabaseManager.initialize()
@@ -52,6 +42,13 @@ def main() -> None:
     while running:
         processed = False
         try:
+            configuration = platform_db[COLLECTION].find_one({"_id": IDENTITY})
+            values, _ = effective((configuration or {}).get("values"))
+            platform_db.service_heartbeats.update_one({"service": "knowledge-base-processor"}, {
+                "$set": heartbeat("knowledge-base-processor", (configuration or {}).get("revision", 0))}, upsert=True)
+            if not installed(configuration) or not values["knowledge_base_processing_enabled"]:
+                time.sleep(5)
+                continue
             platform_db.service_heartbeats.update_one(
                 {"service": "knowledge-base-processor"},
                 {
@@ -79,7 +76,12 @@ def main() -> None:
                 except Exception:
                     logger.exception("Failed document_id=%s", document["document_id"])
         except Exception:
-            logger.exception("Processor iteration failed")
+            logger.warning("Processor iteration failed; retaining last valid configuration")
+            try:
+                platform_db.service_heartbeats.update_one({"service": "knowledge-base-processor"}, {
+                    "$set": {"configuration_error": "SETTINGS_REFRESH_FAILED"}}, upsert=True)
+            except Exception:
+                pass
         if not processed:
             time.sleep(interval)
 

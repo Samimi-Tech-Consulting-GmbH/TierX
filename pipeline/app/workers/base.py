@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka.structs import TopicPartition
 
 from app.core.config import settings
 from app.services.trace import TraceSpan
@@ -50,11 +51,14 @@ class BaseWorker(abc.ABC):
     # ------------------------------------------------------------------
 
     async def start(self):
+        self._draining = False
+        self._processing = False
         self._consumer = AIOKafkaConsumer(
             self.input_topic,
             bootstrap_servers=settings.kafka_bootstrap_servers,
             group_id=self.consumer_group,
             auto_offset_reset=self.auto_offset_reset,
+            enable_auto_commit=False,
             value_deserializer=lambda raw: json.loads(raw.decode("utf-8")),
         )
         self._producer = AIOKafkaProducer(
@@ -68,6 +72,9 @@ class BaseWorker(abc.ABC):
         self.logger.info("Started  [%s] → [%s]", self.input_topic, self.output_topic)
 
     async def stop(self):
+        self._draining = True
+        while getattr(self, "_processing", False):
+            await asyncio.sleep(0.1)
         if self._task and not self._task.done():
             self._task.cancel()
             try:
@@ -90,7 +97,19 @@ class BaseWorker(abc.ABC):
         assert self._consumer is not None
         try:
             async for msg in self._consumer:
-                await self._handle(msg)
+                if self._draining:
+                    break
+                self._processing = True
+                try:
+                    with settings.capture():
+                        await self._handle(msg)
+                    await self._consumer.commit()
+                except Exception:
+                    self.logger.warning("Processing/publication failed; retaining the message for replay")
+                    self._consumer.seek(TopicPartition(msg.topic, msg.partition), msg.offset)
+                    await asyncio.sleep(5)
+                finally:
+                    self._processing = False
         except asyncio.CancelledError:
             raise
 

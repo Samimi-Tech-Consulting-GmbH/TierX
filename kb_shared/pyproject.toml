@@ -11,7 +11,7 @@ dependencies = ["markdown-it-py==3.0.0", "httpx==0.28.1"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["tierx_kb*", "soc_mind_kb*"]
+include = ["tierx_kb*", "soc_mind_kb*", "tierx_runtime*"]
 
 [tool.setuptools.package-data]
 tierx_kb = ["synonyms-v1.json"]

@@ -226,6 +226,9 @@ class CorrelationClusteringWorker(BaseWorker):
         )
 
     async def stop(self):
+        self._draining = True
+        while getattr(self, "_scheduling", False):
+            await asyncio.sleep(0.1)
         if self._scheduler_task and not self._scheduler_task.done():
             self._scheduler_task.cancel()
             try:
@@ -885,11 +888,17 @@ class CorrelationClusteringWorker(BaseWorker):
     async def _scheduler_loop(self):
         while True:
             try:
-                await self._scheduler_tick()
+                if getattr(self, "_draining", False):
+                    return
+                self._scheduling = True
+                with settings.capture():
+                    await self._scheduler_tick()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 self.logger.exception("Correlation scheduler tick failed")
+            finally:
+                self._scheduling = False
             await asyncio.sleep(settings.correlation_scheduler_interval_seconds)
 
     async def _scheduler_tick(self):

@@ -19,6 +19,7 @@ class AnalysisRun(BaseModel):
     analysis_scope_id: str
     requested_analysis_version: int
     state: AnalysisRunState
+    configuration_revision: Optional[int] = None
     retry_cycle: int = 0
     attempts_total: int = 0
     attempts_in_cycle: int = 0

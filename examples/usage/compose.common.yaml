@@ -1,0 +1,144 @@
+name: tierx
+
+x-runtime: &runtime
+  TIERX_MONGO_URL: ${TIERX_MONGO_URL:-mongodb://${TIERX_MONGO_ROOT_USER}:${TIERX_MONGO_ROOT_PASSWORD}@mongodb:27017/}
+  TIERX_JWT_SECRET_KEY: ${TIERX_JWT_SECRET_KEY:?Run node setup.mjs --release vX.Y.Z first}
+  TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY: ${TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY:?Run setup.mjs first}
+  TIERX_INSTALLATION_ENABLED: ${TIERX_INSTALLATION_ENABLED:-true}
+  TIERX_INSTALLATION_TOKEN: ${TIERX_INSTALLATION_TOKEN:-}
+  TIERX_BOOTSTRAP_CONFIGURED: ${TIERX_BOOTSTRAP_CONFIGURED:-false}
+  TIERX_PLATFORM_ADMIN_EMAIL: ${TIERX_PLATFORM_ADMIN_EMAIL:-}
+  TIERX_PLATFORM_ADMIN_PASSWORD: ${TIERX_PLATFORM_ADMIN_PASSWORD:-}
+  TIERX_PUBLIC_URL: ${TIERX_PUBLIC_URL:-}
+  TIERX_OLLAMA_URL: ${TIERX_OLLAMA_URL:-}
+  TIERX_OLLAMA_MODEL: ${TIERX_OLLAMA_MODEL:-}
+  TIERX_APP_RELEASE_VERSION: ${TIERX_RELEASE}
+  TIERX_APP_RELEASE_SHA: ${TIERX_APP_RELEASE_SHA:-}
+  TIERX_DEBUG_TRACE_ENABLED: ${TIERX_DEBUG_TRACE_ENABLED:-false}
+  TIERX_ENRICHMENT_ACTIONS_ENABLED: ${TIERX_ENRICHMENT_ACTIONS_ENABLED:-false}
+  TIERX_LLM_ANALYSIS_ENABLED: ${TIERX_LLM_ANALYSIS_ENABLED:-}
+  TIERX_CORRELATION_ENABLED: ${TIERX_CORRELATION_ENABLED:-}
+  TIERX_KNOWLEDGE_BASE_PROCESSING_ENABLED: ${TIERX_KNOWLEDGE_BASE_PROCESSING_ENABLED:-}
+  TIERX_KNOWLEDGE_BASE_RETRIEVAL_ENABLED: ${TIERX_KNOWLEDGE_BASE_RETRIEVAL_ENABLED:-}
+  TIERX_KB_SEMANTIC_INDEXING_ENABLED: ${TIERX_KB_SEMANTIC_INDEXING_ENABLED:-false}
+  TIERX_KB_SEMANTIC_RETRIEVAL_ENABLED: ${TIERX_KB_SEMANTIC_RETRIEVAL_ENABLED:-false}
+  TIERX_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  TIERX_INGESTION_PROXY_URL: http://ingestion-proxy:8000
+  PYTHON_ENV: production
+
+x-app: &app
+  restart: unless-stopped
+  environment: *runtime
+  networks: [private, outbound]
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+  depends_on:
+    mongodb: {condition: service_healthy}
+    kafka-init: {condition: service_completed_successfully}
+
+services:
+  proxy:
+    image: nginx:1.28.0-alpine
+    restart: unless-stopped
+    ports: ["${TIERX_BIND_ADDRESS:-127.0.0.1}:${TIERX_HTTP_PORT:-8080}:80"]
+    volumes: ["./nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    networks: [private, outbound]
+    depends_on: [backend, frontend]
+  frontend:
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-frontend:${TIERX_RELEASE:?Choose a release containing installation support}
+    restart: unless-stopped
+    networks: [private]
+  backend:
+    <<: *app
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-backend:${TIERX_RELEASE}
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:8000/api/v1/health]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  ingestion-proxy:
+    <<: *app
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-ingestion-proxy:${TIERX_RELEASE}
+  pipeline:
+    <<: *app
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-pipeline:${TIERX_RELEASE}
+  knowledge-base-processor:
+    <<: *app
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-backend:${TIERX_RELEASE}
+    command: [python, kb_processor.py]
+  mongodb:
+    image: mongo:7.0.5
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${TIERX_MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${TIERX_MONGO_ROOT_PASSWORD}
+    volumes: ["mongodb_data:/data/db"]
+    networks: [private]
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand({ping:1}).ok ? 0 : 2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+  kafka:
+    image: apache/kafka:3.7.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    networks: [private]
+    volumes: ["kafka_data:/var/lib/kafka/data"]
+    healthcheck:
+      test: [CMD-SHELL, /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+  kafka-init:
+    image: apache/kafka:3.7.0
+    networks: [private]
+    depends_on:
+      kafka: {condition: service_healthy}
+    command:
+      - /bin/bash
+      - -ec
+      - |
+        for topic in received validated normalized distinct enriched clustered dead_letter_queue alert_processing_events; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$topic"
+        done
+    restart: "no"
+  qdrant:
+    image: qdrant/qdrant:v1.17.0@sha256:f1c7272cdac52b38c1a0e89313922d940ba50afd90d593a1605dbbc214e66ffb
+    profiles: [semantic]
+    environment: {QDRANT__TELEMETRY_DISABLED: "true"}
+    networks: [private]
+    volumes: ["kb_vectors:/qdrant/storage"]
+    mem_limit: 512m
+  kb-semantic:
+    <<: *app
+    image: ghcr.io/samimi-tech-consulting-gmbh/tierx-kb-semantic:${TIERX_RELEASE}
+    profiles: [semantic]
+    environment:
+      <<: *runtime
+      OLLAMA_URL: ${TIERX_EMBEDDING_OLLAMA_URL:-http://ollama:11434}
+      QDRANT_HOST: qdrant
+      TIERX_KB_SEMANTIC_INDEXING_ENABLED: ${TIERX_KB_SEMANTIC_INDEXING_ENABLED:-false}
+      TIERX_KB_SEMANTIC_RETRIEVAL_ENABLED: ${TIERX_KB_SEMANTIC_RETRIEVAL_ENABLED:-false}
+    volumes: ["semantic_history:/data"]
+    mem_limit: 512m
+
+networks:
+  private: {internal: true}
+  outbound: {}
+volumes:
+  mongodb_data: {}
+  kafka_data: {}
+  kb_vectors: {}
+  semantic_history: {}
