@@ -15,6 +15,7 @@ import ForgeReconciler, {
 } from "@forge/react";
 import { invoke, permissions } from "@forge/bridge";
 import { approveDestination } from "../lib/egress.js";
+import { cleanupPreviousDestination } from "../lib/ui-state.js";
 
 function App() {
   const [baseUrl, setBaseUrl] = useState("");
@@ -23,6 +24,7 @@ function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [warning, setWarning] = useState(null);
 
   useEffect(() => {
     invoke("getConfig").then((config) => {
@@ -37,13 +39,16 @@ function App() {
   async function submit() {
     setSaving(true);
     setError(null);
+    setWarning(null);
     try {
       if (!integrationId.trim() || !secret.trim()) throw new Error("Connection ID and secret are required.");
       const destination = await invoke("prepareConnection", { baseUrl });
       await approveDestination(permissions.egress, destination);
       const info = await invoke("saveConfig", { baseUrl: destination.baseUrl, integrationId, secret });
+      const previousKey = result?.egressKey;
       setResult(info);
       setBaseUrl(info.baseUrl);
+      setWarning(await cleanupPreviousDestination(permissions.egress, previousKey, info.egressKey));
     } catch (reason) {
       setError(String(reason?.message || reason));
     } finally {
@@ -85,6 +90,7 @@ function App() {
           <Text>{error}</Text>
         </SectionMessage>
       )}
+      {warning && <SectionMessage appearance="warning" title="Outbound permission cleanup required"><Text>{warning}</Text></SectionMessage>}
       {result && (
         <SectionMessage appearance="success" title="Connected">
           <Text>Site connection: {result.connectionName || "Configured Jira site"}</Text>

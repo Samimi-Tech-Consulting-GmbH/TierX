@@ -52,6 +52,14 @@ creation time is never substituted.
 
 ## Register and deploy
 
+Connection mutations use an installation-local encrypted exclusive claim with
+`FAIL_IF_EXISTS`. The claim intentionally has no TTL: expiring a lock while a
+write is still running could resurrect a disconnected connection. A process
+crash during the short commit section fails subsequent changes closed. Operator
+recovery must first establish that all previous mutation invocations have ended,
+then remove only `tierx:connection-mutation:v1` through an authorized maintenance
+invocation. Never clear an active claim or remove the connection record itself.
+
 Run these commands from the application worktree root (the directory containing
 this repository's `Makefile`):
 

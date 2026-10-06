@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createConnectionStore, CONNECTION_KEY } from "../src/lib/connection-store.js";
+import { createConnectionStore, CONNECTION_KEY, CONNECTION_MUTATION_KEY } from "../src/lib/connection-store.js";
 import { validateDestination } from "../src/lib/destination.js";
 
 function fixture(verify = async () => ({ jira_cloud_id: "cloud-a", name: "Test", route_count: 1 })) {
   const records = new Map();
   const storage = {
     getSecret: async key => records.get(key),
-    setSecret: async (key, value) => records.set(key, structuredClone(value)),
+    setSecret: async (key, value, options) => {
+      if (options?.keyPolicy === "FAIL_IF_EXISTS" && records.has(key)) throw new Error("KEY_ALREADY_EXISTS");
+      records.set(key, structuredClone(value));
+    },
     deleteSecret: async key => records.delete(key),
     delete: async key => records.delete(key),
   };
-  return { records, store: createConnectionStore(storage, verify) };
+  return { records, storage, store: createConnectionStore(storage, verify) };
 }
 const candidate = { baseUrl: "https://customer.example", integrationId: "connection-a", secret: "test-only-secret" };
 
@@ -81,6 +84,38 @@ test("DNS validation rejects every non-public answer, including mixed and mapped
   }
   assert.equal(await validateDestination(candidate.baseUrl, async () => [{ address: "8.8.8.8" }]), candidate.baseUrl);
   await assert.rejects(validateDestination(candidate.baseUrl, async () => []), /public/);
+});
+
+test("disconnect cannot race between the revision check and final encrypted write", async () => {
+  const { store, storage, records } = fixture();
+  await store.save(candidate, "cloud-a");
+  const write = storage.setSecret;
+  let release, entered;
+  const writing = new Promise(resolve => { entered = resolve; });
+  storage.setSecret = async (key, ...args) => {
+    if (key === CONNECTION_KEY) {
+      entered();
+      await new Promise(resolve => { release = resolve; });
+    }
+    return write(key, ...args);
+  };
+  const save = store.save(candidate, "cloud-a");
+  await writing;
+  await assert.rejects(store.disconnect(), /Another connection change/);
+  release();
+  await save;
+  storage.setSecret = write;
+  await store.disconnect();
+  assert.equal((await store.public()).configured, false);
+  assert.equal(records.has(CONNECTION_MUTATION_KEY), false);
+});
+
+test("abandoned mutation claims fail closed and are never automatically expired", async () => {
+  const { store, records } = fixture();
+  records.set(CONNECTION_MUTATION_KEY, { owner: "abandoned" });
+  await assert.rejects(store.save(candidate, "cloud-a"), /Another connection change/);
+  await assert.rejects(store.disconnect(), /Another connection change/);
+  assert.equal(records.has(CONNECTION_KEY), false);
 });
 
 test("DNS diagnostics contain only allowlisted error codes", async () => {

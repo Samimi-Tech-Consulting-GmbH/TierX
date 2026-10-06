@@ -9,12 +9,7 @@ import ForgeReconciler, {
 } from "@forge/react";
 import { invoke, view } from "@forge/bridge";
 
-const TERMINAL_UI_STATES = new Set([
-  "PROCESSING",
-  "CLUSTERED",
-  "ANALYZED",
-  "FAILED",
-]);
+import { TERMINAL_UI_STATES } from "../lib/ui-state.js";
 
 function App() {
   const started = useRef(false);
@@ -48,8 +43,8 @@ function App() {
         <SectionMessage appearance="error" title="Submission could not start">
           <Text>{error}</Text>
         </SectionMessage>
-      ) : job.state === "FAILED" ? (
-        <SectionMessage appearance="error" title="TierX submission failed">
+      ) : job.state === "FAILED" || job.state === "CANCELLED" ? (
+        <SectionMessage appearance="error" title={job.state === "CANCELLED" ? "TierX observation cancelled" : "TierX submission failed"}>
           <Text>{job.failure?.error_detail || "Open TierX traces for details."}</Text>
         </SectionMessage>
       ) : done ? (
