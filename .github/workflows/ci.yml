@@ -78,7 +78,9 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build
-      - run: npm audit
+      - run: node --test ../tools/test-npm-audit.mjs
+      - run: npm audit --omit=dev
+      - run: node ../tools/check-npm-audit.mjs
 
   ingestion:
     runs-on: ubuntu-latest
