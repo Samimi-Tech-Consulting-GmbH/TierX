@@ -8,7 +8,9 @@ function fixture(verify = async () => ({ jira_cloud_id: "cloud-a", name: "Test",
   const storage = {
     getSecret: async key => records.get(key),
     setSecret: async (key, value, options) => {
-      if (options?.keyPolicy === "FAIL_IF_EXISTS" && records.has(key)) throw new Error("KEY_ALREADY_EXISTS");
+      if (options?.keyPolicy === "FAIL_IF_EXISTS" && records.has(key)) {
+        throw Object.assign(new Error("KEY_ALREADY_EXISTS"), { code: "KEY_ALREADY_EXISTS" });
+      }
       records.set(key, structuredClone(value));
     },
     deleteSecret: async key => records.delete(key),
@@ -17,6 +19,20 @@ function fixture(verify = async () => ({ jira_cloud_id: "cloud-a", name: "Test",
   return { records, storage, store: createConnectionStore(storage, verify) };
 }
 const candidate = { baseUrl: "https://customer.example", integrationId: "connection-a", secret: "test-only-secret" };
+
+test("storage failures do not masquerade as abandoned mutation claims", async () => {
+  const { store, storage } = fixture();
+  storage.setSecret = async () => { throw Object.assign(new Error("private storage detail"), { code: "RATE_LIMIT_EXCEEDED" }); };
+  await assert.rejects(store.save(candidate, "cloud-a"), {
+    message: "TierX connection storage is unavailable. Retry later; contact the operator if it persists.",
+  });
+});
+test("disconnect returns the current stored destination rather than a stale page key", async () => {
+  const { store } = fixture();
+  await store.save({ ...candidate, egressKey: "first-key" }, "cloud-a");
+  await store.save({ ...candidate, baseUrl: "https://other.example", egressKey: "current-key" }, "cloud-a");
+  assert.equal((await store.disconnect()).egressKey, "current-key");
+});
 
 test("connection reads never disclose secrets and installations remain isolated", async () => {
   const a = fixture(), b = fixture();

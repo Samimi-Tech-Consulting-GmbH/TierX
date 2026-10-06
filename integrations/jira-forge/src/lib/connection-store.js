@@ -13,8 +13,11 @@ export function createConnectionStore(storage, verify) {
   async function serializeMutation(operation) {
     try {
       await storage.setSecret(CONNECTION_MUTATION_KEY, { owner: randomUUID() }, { keyPolicy: "FAIL_IF_EXISTS" });
-    } catch {
-      throw new Error("Another connection change is active. Retry shortly; contact the operator if it persists.");
+    } catch (error) {
+      if (error?.code === "KEY_ALREADY_EXISTS") {
+        throw new Error("Another connection change is active. Retry shortly; contact the operator if it persists.");
+      }
+      throw new Error("TierX connection storage is unavailable. Retry later; contact the operator if it persists.");
     }
     try { return await operation(); }
     finally { await storage.deleteSecret(CONNECTION_MUTATION_KEY); }
@@ -47,11 +50,12 @@ export function createConnectionStore(storage, verify) {
     },
     async disconnect() {
       return serializeMutation(async () => {
+      const current = await storage.getSecret(CONNECTION_KEY);
       // A non-secret tombstone invalidates in-progress first-time pairing too.
       await storage.setSecret(CONNECTION_KEY, { revision: randomUUID(), baseUrl: "" });
       await storage.deleteSecret("soc-mind:integration-secret");
       await storage.delete("soc-mind:config");
-      return { configured: false, baseUrl: "" };
+      return { configured: false, baseUrl: "", egressKey: current?.egressKey };
       });
     },
   };

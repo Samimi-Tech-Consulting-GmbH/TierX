@@ -67,8 +67,7 @@ function App() {
   async function disconnectSaved() {
     setSaving(true); setError(null);
     try {
-      const egressKey = result?.egressKey;
-      await invoke("disconnect");
+      const { egressKey } = await invoke("disconnect");
       setResult(null); setSecret(""); setBaseUrl(""); setIntegrationId("");
       if (egressKey) await permissions.egress.deleteGroup({ key: egressKey });
     } catch { setError("Check connection status. If disconnected, remove any remaining TierX outbound permissions in Connected Apps."); }
