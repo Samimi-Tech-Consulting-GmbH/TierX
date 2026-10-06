@@ -93,9 +93,13 @@ test("DNS diagnostics contain only allowlisted error codes", async () => {
         throw Object.assign(new Error("secret-bearing-message"), { code });
       }), { message: "TierX destination could not be resolved." });
     }
+    await assert.rejects(validateDestination(candidate.baseUrl, async () => {
+      throw new TypeError("lookup is not a function");
+    }), { message: "TierX destination could not be resolved." });
     assert.deepEqual(messages, [
-      ["TierX destination validation failed", { error_type: "ENOTFOUND" }],
-      ["TierX destination validation failed", { error_type: "DNS_LOOKUP_FAILED" }],
+      ["TierX destination validation failed", { error_type: "ENOTFOUND", error_name: "Error" }],
+      ["TierX destination validation failed", { error_type: "DNS_LOOKUP_FAILED", error_name: "Error" }],
+      ["TierX destination validation failed", { error_type: "DNS_API_UNAVAILABLE", error_name: "TypeError" }],
     ]);
   } finally {
     console.warn = original;

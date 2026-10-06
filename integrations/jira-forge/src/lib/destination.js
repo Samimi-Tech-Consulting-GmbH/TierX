@@ -10,7 +10,11 @@ export async function validateDestination(value, resolve = lookup) {
   catch (error) {
     const code = ["ENOTFOUND", "EAI_AGAIN", "ETIMEOUT", "ECONNREFUSED", "EPERM", "EACCES"].includes(error?.code)
       ? error.code : "DNS_LOOKUP_FAILED";
-    console.warn("TierX destination validation failed", { error_type: code });
+    const unavailable = /not (?:supported|implemented)|is not a function/i.test(String(error?.message || ""));
+    console.warn("TierX destination validation failed", {
+      error_type: unavailable ? "DNS_API_UNAVAILABLE" : code,
+      error_name: ["Error", "TypeError", "ReferenceError"].includes(error?.name) ? error.name : "Error",
+    });
     throw new Error("TierX destination could not be resolved.");
   }
   if (!addresses.length || addresses.some(({ address }) => {
