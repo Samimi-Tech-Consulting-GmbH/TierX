@@ -82,3 +82,22 @@ test("DNS validation rejects every non-public answer, including mixed and mapped
   assert.equal(await validateDestination(candidate.baseUrl, async () => [{ address: "8.8.8.8" }]), candidate.baseUrl);
   await assert.rejects(validateDestination(candidate.baseUrl, async () => []), /public/);
 });
+
+test("DNS diagnostics contain only allowlisted error codes", async () => {
+  const messages = [];
+  const original = console.warn;
+  console.warn = (...args) => messages.push(args);
+  try {
+    for (const code of ["ENOTFOUND", "secret-bearing-code"]) {
+      await assert.rejects(validateDestination(candidate.baseUrl, async () => {
+        throw Object.assign(new Error("secret-bearing-message"), { code });
+      }), { message: "TierX destination could not be resolved." });
+    }
+    assert.deepEqual(messages, [
+      ["TierX destination validation failed", { error_type: "ENOTFOUND" }],
+      ["TierX destination validation failed", { error_type: "DNS_LOOKUP_FAILED" }],
+    ]);
+  } finally {
+    console.warn = original;
+  }
+});
