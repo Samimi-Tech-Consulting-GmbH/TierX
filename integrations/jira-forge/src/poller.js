@@ -2,7 +2,7 @@ import { kvs, WhereConditions } from "@forge/kvs";
 
 import { addAppComment, commentMarker, failureComment, finalComment } from "./lib/comments.js";
 import { getConfig, tierxRequest, withConnection, TierXRequestError } from "./lib/tierx.js";
-import { ConnectionChangedError } from "./lib/connection-store.js";
+import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
 const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
 
@@ -26,7 +26,7 @@ function pendingQuery(storage, cursor) {
   let query = storage
     .query()
     .where("key", WhereConditions.beginsWith("pending:"))
-    .limit(100);
+    .limit(10);
   if (cursor) query = query.cursor(cursor);
   return query;
 }
@@ -88,7 +88,7 @@ export async function refreshPendingSubmission(pending, request = tierxRequest) 
 
 export async function handler() {
   const page = await getPendingPage();
-  for (const item of page.results) {
+  await forEachPending(page.results, async item => {
     const pending = item.value;
     await withConnection(pending.connectionIdentity, async () => {
     try {
@@ -108,7 +108,7 @@ export async function handler() {
       }
     } catch (error) {
       if (error instanceof ConnectionChangedError) {
-        await kvs.set(`job:${pending.requestId}`, { requestId: pending.requestId, issueKey: pending.issueKey, state: "CANCELLED", failure: { error_detail: error.message } });
+        await cancelConnectionJob(kvs, pending);
         await kvs.delete(item.key);
         return;
       }
@@ -121,5 +121,17 @@ export async function handler() {
       });
     }
     });
-  }
+  });
+}
+
+// Small pages and bounded parallelism prevent 100 sequential five-second DNS
+// checks from overrunning the scheduled trigger. The cursor preserves fairness.
+export async function forEachPending(items, operation) {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(5, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await operation(item);
+    }
+  }));
 }

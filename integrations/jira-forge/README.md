@@ -46,6 +46,9 @@ creation time is never substituted.
   Its fixed egress permission is separate from administrator-approved TierX
   destination access. A preflight DNS check does not pin Forge's subsequent
   connection IP; do not claim it eliminates DNS-rebinding races.
+- TierX HTTP requests have a 20-second total deadline. Scheduled result polling
+  visits ten pending submissions per page with at most five concurrent workers,
+  retaining the cursor for subsequent five-minute invocations.
 - The integration credential is stored with Forge `kvs.setSecret`.
 - Exactly one JSON object is accepted from the description or one UTF-8
   `.json`/`.txt` attachment up to 1 MiB.

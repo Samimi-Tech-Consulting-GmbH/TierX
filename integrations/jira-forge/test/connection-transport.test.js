@@ -3,6 +3,15 @@ import test from "node:test";
 import { sendRequest } from "../src/lib/tierx.js";
 const config = { secret: "test-secret-never-log", integrationId: "connection-a" };
 const path = "/api/v1/integrations/jira/connection";
+test("TierX requests have a bounded total deadline, including response parsing", async () => {
+  let signal;
+  await assert.rejects(sendRequest("https://customer.example", path, config, {}, async (_, init) => {
+    signal = init.signal;
+    return { ok: true, status: 200, headers: new Headers({ "content-type": "application/json" }),
+      json: () => new Promise(() => {}) };
+  }, 10), error => error.status === 408 && error.retryable);
+  assert.equal(signal.aborted, true);
+});
 test("credentials go only to the selected origin with redirects disabled", async () => {
   let captured;
   const result = await sendRequest("https://customer.example", path, config, {}, async (url, init) => {

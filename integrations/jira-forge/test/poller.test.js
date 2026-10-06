@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getPendingPage, refreshPendingSubmission, safePollFailure } from "../src/poller.js";
+import { getPendingPage, refreshPendingSubmission, safePollFailure, forEachPending } from "../src/poller.js";
 import { TierXRequestError } from "../src/lib/tierx.js";
 
 test("polling diagnostics distinguish HTTP and DNS failures without reflecting secrets", () => {
@@ -39,7 +39,8 @@ function storageWithPages({ cursor = null, pages = [] } = {}) {
         where() {
           return this;
         },
-        limit() {
+        limit(value) {
+          calls.push(["limit", value]);
           return this;
         },
         cursor(value) {
@@ -66,12 +67,25 @@ test("pending polling advances and persists the next cursor", async () => {
   });
   const page = await getPendingPage(storage);
   assert.equal(page.results[0].key, "pending:101");
+  assert.ok(storage.calls.some(call => call[0] === "limit" && call[1] === 10));
   assert.ok(storage.calls.some((call) => call.join(":") === "cursor:page-2"));
   assert.ok(
     storage.calls.some(
       (call) => call[0] === "set" && call[2] === "page-3",
     ),
   );
+});
+
+test("pending work uses at most five workers and processes every item", async () => {
+  let active = 0, peak = 0;
+  const seen = [];
+  await forEachPending(Array.from({ length: 10 }, (_, i) => i), async i => {
+    active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 1));
+    seen.push(i); active--;
+  });
+  assert.equal(peak, 5);
+  assert.deepEqual(seen.sort((a, b) => a - b), Array.from({ length: 10 }, (_, i) => i));
 });
 
 test("a stale cursor restarts at the first page", async () => {

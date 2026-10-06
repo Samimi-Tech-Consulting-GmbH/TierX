@@ -49,7 +49,23 @@ export async function tierxRequest(path, options = {}) {
   if (!options.candidate) await store.read(config.identity);
   return sendRequest(origin, path, config, options);
 }
-export async function sendRequest(origin, path, config, options = {}, fetch = api.fetch) {
+export async function sendRequest(origin, path, config, options = {}, fetch = api.fetch, timeoutMs = 20000) {
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new TierXRequestError("TierX connection timed out.", 408));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      performRequest(origin, path, config, options, (url, init) => fetch(url, { ...init, signal: controller.signal })),
+      deadline,
+    ]);
+  } finally { clearTimeout(timer); controller.abort(); }
+}
+async function performRequest(origin, path, config, options, fetch) {
   let response;
   try {
     // Forge enforces administrator-approved egress on every request, including jobs.

@@ -60,6 +60,6 @@ permissions:
   external:
     fetch:
       backend:
-        - https://cloudflare-dns.com
+        - address: https://cloudflare-dns.com
     configurable:
       enabled: true

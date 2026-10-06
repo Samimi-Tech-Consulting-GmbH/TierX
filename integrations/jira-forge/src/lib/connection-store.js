@@ -4,6 +4,12 @@ export const CONNECTION_MUTATION_KEY = "tierx:connection-mutation:v1";
 export class ConnectionChangedError extends Error {
   constructor() { super("TierX connection changed or was disconnected. Submit the issue again."); this.name = "ConnectionChangedError"; }
 }
+export async function cancelConnectionJob(storage, { requestId, issueKey }) {
+  await storage.set(`job:${requestId}`, {
+    requestId, issueKey, state: "CANCELLED",
+    failure: { error_detail: new ConnectionChangedError().message },
+  });
+}
 export function publicConnection(record) {
   if (!record) return { baseUrl: "", configured: false };
   const { secret, ...safe } = record;

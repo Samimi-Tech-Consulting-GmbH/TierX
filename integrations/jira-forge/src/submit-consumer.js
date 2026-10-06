@@ -16,7 +16,7 @@ import {
 } from "./lib/embedded-alert.js";
 import { downloadAttachment, readIssueSnapshot } from "./lib/jira.js";
 import { getConfig, TierXRequestError, tierxRequest, withConnection } from "./lib/tierx.js";
-import { ConnectionChangedError } from "./lib/connection-store.js";
+import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
 async function reportComment(submissionId, kind, commentId) {
   return tierxRequest(`/api/v1/integrations/jira/submissions/${submissionId}/comments`, {
@@ -126,6 +126,10 @@ async function consume(event) {
       tracePath: submission.trace_path,
     });
   } catch (error) {
+    if (error instanceof ConnectionChangedError) {
+      await cancelConnectionJob(kvs, { requestId, issueKey });
+      return;
+    }
     const retryCount = Number(event.retryContext?.retryCount || 0);
     const deterministicRequestFailure =
       error instanceof TierXRequestError && !error.retryable;

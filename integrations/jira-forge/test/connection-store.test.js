@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createConnectionStore, CONNECTION_KEY, CONNECTION_MUTATION_KEY } from "../src/lib/connection-store.js";
+import { createConnectionStore, CONNECTION_KEY, CONNECTION_MUTATION_KEY, cancelConnectionJob } from "../src/lib/connection-store.js";
 import { validateDestination } from "../src/lib/destination.js";
 
 function fixture(verify = async () => ({ jira_cloud_id: "cloud-a", name: "Test", route_count: 1 })) {
@@ -19,6 +19,14 @@ function fixture(verify = async () => ({ jira_cloud_id: "cloud-a", name: "Test",
   return { records, storage, store: createConnectionStore(storage, verify) };
 }
 const candidate = { baseUrl: "https://customer.example", integrationId: "connection-a", secret: "test-only-secret" };
+
+test("connection changes produce the same terminal cancellation for queued and pending work", async () => {
+  const writes = [];
+  await cancelConnectionJob({ set: async (...args) => writes.push(args) }, { requestId: "request-a", issueKey: "TEST-1" });
+  assert.equal(writes[0][0], "job:request-a");
+  assert.equal(writes[0][1].state, "CANCELLED");
+  assert.match(writes[0][1].failure.error_detail, /changed or was disconnected/);
+});
 
 test("storage failures do not masquerade as abandoned mutation claims", async () => {
   const { store, storage } = fixture();
