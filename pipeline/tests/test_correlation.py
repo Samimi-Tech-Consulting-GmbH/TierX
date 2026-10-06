@@ -73,19 +73,26 @@ def test_severity_parsing(raw, expected):
     assert parse_severity(raw) == expected
 
 
-@pytest.mark.parametrize("raw", [None, True, 0, 6, "info", ""])
+@pytest.mark.parametrize("raw", [None, True, 0, 6, "info", "", float("inf"), float("-inf"), float("nan")])
 def test_unsupported_severity_fails_closed(raw):
     with pytest.raises(ValueError):
         parse_severity(raw)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("severity", [None, "unsupported"])
-async def test_invalid_severity_trace_matches_dead_letter_classification(monkeypatch, severity):
+@pytest.mark.parametrize("severity", [None, "unsupported", float("inf"), float("nan")])
+@pytest.mark.parametrize("persisted_candidate", [False, True])
+async def test_invalid_severity_trace_matches_dead_letter_classification(monkeypatch, severity, persisted_candidate):
     monkeypatch.setattr(correlation_module.settings, "debug_trace_enabled", True)
     worker = CorrelationClusteringWorker()
     worker._tenant = AsyncMock(return_value={"db_name": "tenant-db", "settings": {}})
     worker._ensure_indexes = AsyncMock()
+    worker._resolve_cluster = AsyncMock(return_value=None)
+    worker._candidates = AsyncMock(return_value=[{
+        "alert_id": "earlier-invalid-alert",
+        "normalized_payload": {"event.severity": severity, "source.ip": "10.0.0.1"},
+        "created_at": datetime.now(timezone.utc),
+    }] if persisted_candidate else [])
     worker.produce_dead_letter = AsyncMock()
     publisher = AsyncMock()
     worker.trace_span = lambda stage, data: TraceSpan(
@@ -99,7 +106,8 @@ async def test_invalid_severity_trace_matches_dead_letter_classification(monkeyp
     payload = {
         "alert_id": "synthetic-alert", "tenant_id": "tenant-1",
         "alert_type": "login", "source_system": "SPLUNK",
-        "normalized_payload": {"event.severity": severity},
+        "normalized_payload": {"event.severity": "medium" if persisted_candidate else severity,
+                               "source.ip": "10.0.0.1"},
         "raw_payload": {}, "fingerprint": "synthetic-fingerprint",
         "kafka_state": "ENRICHED", "status": "ANALYZING",
         "validated": True, "normalized": True, "enriched": True,
