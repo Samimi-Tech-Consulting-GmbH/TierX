@@ -55,13 +55,32 @@ The current released images do not contain this PR. Released-image startup must
 be verified after this branch is merged and its version is published. Local
 candidate images were used to test the new behavior without publishing images.
 
-Full all-in-one model download/inference was not completed locally: Docker
-encountered a storage I/O error while pulling the large pinned Ollama image on a
-host with approximately 3.7 GiB free. No unrelated images or volumes were pruned.
-The current public TierX images target amd64; this local machine is ARM. Compose
-rendering, application Docker builds, external-Ollama topology startup and mocked
-structured preflight are verified, but this does not claim a successful real
-Ollama inference. Complete that check on an adequately provisioned amd64 host.
+## Isolated all-in-one verification — 2026-10-07
+
+The earlier internal-disk limit was resolved by creating an isolated Colima
+runtime on external storage. Docker Desktop and unrelated workloads were left
+unchanged. The test VM used four CPUs, 10 GiB RAM and an 80 GiB data disk.
+
+- All-in-one topology started with candidate application images, the pinned
+  Ollama `0.32.4` image, and the published `tierx-init:0.2.5` image.
+- The model initializer downloaded `phi3:latest`, digest
+  `4f222292793889a9a40a020799cfd28d53f3e01af25d48e06c5e708610fc47e9`.
+  Replaying initialization detected the existing model and skipped downloading.
+- Real structured installation preflight passed in 2.8 seconds. An unavailable
+  model returned `422` without downloading or substituting another model.
+- Installation completed with analysis and correlation enabled. Login and
+  authenticated Platform Settings inference validation passed.
+- Backend, pipeline, ingestion and KB processor applied revision 1; correlation
+  and analysis workers started. The installer closed and rejected later writes.
+- Restarting application services retained installation and enabled settings;
+  health returned `200`, `HEALTHY`, and green MongoDB/Ollama components.
+- Only the reverse proxy published `127.0.0.1:18082`; MongoDB, Kafka, ingestion
+  and Ollama had no public host ports.
+
+The host is ARM: application candidate images and Ollama ran natively; the
+published amd64 initializer used Rosetta. This verifies real CPU inference and
+the Compose topology, but does not replace post-release validation using every
+published application image on an amd64 host. No remote deployment was changed.
 
 ## Screenshots
 
