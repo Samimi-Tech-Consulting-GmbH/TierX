@@ -15,7 +15,8 @@ import {
   resolveRawAlert,
 } from "./lib/embedded-alert.js";
 import { downloadAttachment, readIssueSnapshot } from "./lib/jira.js";
-import { getConfig, TierXRequestError, tierxRequest } from "./lib/tierx.js";
+import { getConfig, TierXRequestError, tierxRequest, withConnection } from "./lib/tierx.js";
+import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
 async function reportComment(submissionId, kind, commentId) {
   return tierxRequest(`/api/v1/integrations/jira/submissions/${submissionId}/comments`, {
@@ -35,12 +36,15 @@ async function postOnce(submission, kind, body) {
 }
 
 export async function handler(event) {
+  return withConnection(event.body.connectionIdentity, () => consume(event));
+}
+async function consume(event) {
   const { requestId, issueKey, accountId, cloudId } = event.body;
   let submission = null;
   let resolvedAlert = null;
   try {
     await kvs.set(`job:${requestId}`, { requestId, issueKey, state: "READING_ISSUE" });
-    const config = await getConfig({ includeSecret: true });
+    const config = await getConfig();
     const snapshot = await readIssueSnapshot({ accountId, issueKey, cloudId });
     await kvs.set(`job:${requestId}`, { requestId, issueKey, state: "READING_ALERT" });
     resolvedAlert = await resolveRawAlert(
@@ -76,6 +80,7 @@ export async function handler(event) {
         ),
       );
     } catch (commentError) {
+      if (commentError instanceof ConnectionChangedError) throw commentError;
       await kvs.set(`job:${requestId}:comment-warning`, safeError(commentError));
     }
 
@@ -91,6 +96,7 @@ export async function handler(event) {
           failureComment(submission, config),
         );
       } catch (commentError) {
+        if (commentError instanceof ConnectionChangedError) throw commentError;
         await kvs.set(`job:${requestId}:comment-warning`, safeError(commentError));
       }
       await kvs.set(`job:${requestId}`, {
@@ -107,6 +113,7 @@ export async function handler(event) {
       submission = await postOnce(submission, "FINAL", finalComment(submission, config));
     } else {
       await kvs.set(`pending:${submission.submission_id}`, {
+        connectionIdentity: config.identity,
         submissionId: submission.submission_id,
         issueKey,
         requestId,
@@ -121,11 +128,16 @@ export async function handler(event) {
       tracePath: submission.trace_path,
     });
   } catch (error) {
+    if (error instanceof ConnectionChangedError) {
+      await cancelConnectionJob(kvs, { requestId, issueKey });
+      return;
+    }
     const retryCount = Number(event.retryContext?.retryCount || 0);
     const deterministicRequestFailure =
       error instanceof TierXRequestError && !error.retryable;
     if (
       !(error instanceof RawAlertValidationError) &&
+      !(error instanceof ConnectionChangedError) &&
       !deterministicRequestFailure &&
       retryCount < 2
     ) {

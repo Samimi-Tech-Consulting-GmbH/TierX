@@ -370,32 +370,32 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@humanwhocodes/module-importer` | `1.0.1` | Apache-2.0 | `frontend/package-lock.json` |
 | `@humanwhocodes/retry` | `0.4.3` | Apache-2.0 | `frontend/package-lock.json` |
 | `@img/colour` | `1.1.0` | MIT | `frontend/package-lock.json` |
-| `@img/sharp-darwin-arm64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-darwin-x64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-freebsd-wasm32` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-libvips-darwin-arm64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-darwin-x64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linux-arm` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linux-arm64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linux-ppc64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linux-riscv64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linux-s390x` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linux-x64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linuxmusl-arm64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-libvips-linuxmusl-x64` | `1.3.3` | LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-linux-arm` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linux-arm64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linux-ppc64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linux-riscv64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linux-s390x` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linux-x64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linuxmusl-arm64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-linuxmusl-x64` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-wasm32` | `0.35.4` | Apache-2.0 AND LGPL-3.0-or-later AND MIT | `frontend/package-lock.json` |
-| `@img/sharp-webcontainers-wasm32` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
-| `@img/sharp-win32-arm64` | `0.35.4` | Apache-2.0 AND LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-win32-ia32` | `0.35.4` | Apache-2.0 AND LGPL-3.0-or-later | `frontend/package-lock.json` |
-| `@img/sharp-win32-x64` | `0.35.4` | Apache-2.0 AND LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-darwin-arm64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-darwin-x64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-freebsd-wasm32` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-libvips-darwin-arm64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-darwin-x64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linux-arm` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linux-arm64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linux-ppc64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linux-riscv64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linux-s390x` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linux-x64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linuxmusl-arm64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-libvips-linuxmusl-x64` | `1.3.4` | LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-linux-arm` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linux-arm64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linux-ppc64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linux-riscv64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linux-s390x` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linux-x64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linuxmusl-arm64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-linuxmusl-x64` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-wasm32` | `0.35.5` | Apache-2.0 AND LGPL-3.0-or-later AND MIT | `frontend/package-lock.json` |
+| `@img/sharp-webcontainers-wasm32` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
+| `@img/sharp-win32-arm64` | `0.35.5` | Apache-2.0 AND LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-win32-ia32` | `0.35.5` | Apache-2.0 AND LGPL-3.0-or-later | `frontend/package-lock.json` |
+| `@img/sharp-win32-x64` | `0.35.5` | Apache-2.0 AND LGPL-3.0-or-later | `frontend/package-lock.json` |
 | `@inquirer/ansi` | `2.0.8` | MIT | `frontend/package-lock.json` |
 | `@inquirer/confirm` | `6.3.2` | MIT | `frontend/package-lock.json` |
 | `@inquirer/core` | `12.0.3` | MIT | `frontend/package-lock.json` |
@@ -410,7 +410,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@jridgewell/sourcemap-codec` | `1.6.0` | MIT | `frontend/package-lock.json` |
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT | `frontend/package-lock.json` |
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT | `integrations/jira-forge/package-lock.json` |
-| `@modelcontextprotocol/sdk` | `1.30.0` | MIT | `frontend/package-lock.json` |
+| `@modelcontextprotocol/sdk` | `1.32.1` | MIT | `frontend/package-lock.json` |
 | `@mswjs/interceptors` | `0.41.9` | MIT | `frontend/package-lock.json` |
 | `@napi-rs/wasm-runtime` | `0.2.12` | MIT | `frontend/package-lock.json` |
 | `@napi-rs/wasm-runtime` | `1.1.1` | MIT | `frontend/package-lock.json` |
@@ -871,6 +871,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `internal-slot` | `1.1.0` | MIT | `frontend/package-lock.json` |
 | `ip-address` | `10.7.3` | MIT | `frontend/package-lock.json` |
 | `ipaddr.js` | `1.9.1` | MIT | `frontend/package-lock.json` |
+| `ipaddr.js` | `2.2.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `is-array-buffer` | `3.0.5` | MIT | `frontend/package-lock.json` |
 | `is-arrayish` | `0.2.1` | MIT | `integrations/jira-forge/package-lock.json` |
 | `is-async-function` | `2.1.1` | MIT | `frontend/package-lock.json` |
@@ -1205,7 +1206,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `setprototypeof` | `1.2.0` | ISC | `frontend/package-lock.json` |
 | `shadcn` | `4.21.3` | MIT | `frontend/package-lock.json` |
 | `shallow-equal` | `3.1.0` | MIT | `integrations/jira-forge/package-lock.json` |
-| `sharp` | `0.35.4` | Apache-2.0 | `frontend/package-lock.json` |
+| `sharp` | `0.35.5` | Apache-2.0 | `frontend/package-lock.json` |
 | `shebang-command` | `2.0.0` | MIT | `frontend/package-lock.json` |
 | `shebang-regex` | `3.0.0` | MIT | `frontend/package-lock.json` |
 | `side-channel` | `1.1.1` | MIT | `frontend/package-lock.json` |

@@ -9,6 +9,14 @@ import { validateAttachmentManifest } from "./constants.js";
 // attachments, so accept the representation Jira provides.
 export const ATTACHMENT_DOWNLOAD_HEADERS = Object.freeze({ Accept: "*/*" });
 
+export async function requireIssueViewer(accountId, issueKey, client = api) {
+  if (!accountId || !issueKey) throw new Error("Jira issue access is required.");
+  const response = await client.asUser(accountId).requestJira(
+    route`/rest/api/3/issue/${issueKey}?fields=key`, { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) throw new Error("Jira issue access is required.");
+}
+
 async function json(response, operation) {
   if (!response.ok) {
     throw new Error(`${operation} failed with Jira HTTP ${response.status}.`);

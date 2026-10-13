@@ -1,14 +1,17 @@
-export const ALLOWED_TIERX_URLS = new Set(["https://tierx.example.com"]);
 export const MAX_ATTACHMENTS = 20;
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
 
 export function normalizeBaseUrl(value) {
-  const candidate = String(value || "").trim().replace(/\/+$/, "");
-  if (!ALLOWED_TIERX_URLS.has(candidate)) {
-    throw new Error("TierX URL is not allow-listed by this Forge app version.");
+  let url;
+  try { url = new URL(String(value || "").trim()); } catch { throw new Error("Enter a public HTTPS origin."); }
+  if (url.protocol !== "https:" || url.port || url.username || url.password ||
+      url.pathname !== "/" || url.search || url.hash || !url.hostname.includes(".") ||
+      /[\\\\%]/.test(String(value)) || url.hostname.endsWith(".") ||
+      /(^|\.)(localhost|local|internal|test|invalid)$/.test(url.hostname)) {
+    throw new Error("Enter a public HTTPS origin on port 443 without a path, credentials, query, or fragment.");
   }
-  return candidate;
+  return url.origin;
 }
 
 export function priorityToSeverity(priorityName) {
