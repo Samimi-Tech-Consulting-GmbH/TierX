@@ -262,11 +262,11 @@ class AgenticAnalysisWorker(BaseWorker):
             while True:
                 if getattr(self, "_draining", False):
                     break
-                job = await self._claim(db)
-                if not job:
-                    break
                 self._inference_running = True
                 try:
+                    job = await self._claim(db)
+                    if not job:
+                        break
                     with settings.capture(job.get("configuration_snapshot")) as snapshot:
                         job["configuration_snapshot"] = snapshot
                         job.setdefault("configuration_revision", settings.revision)

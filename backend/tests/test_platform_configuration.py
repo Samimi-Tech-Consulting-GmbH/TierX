@@ -15,6 +15,35 @@ from app.services.platform_configuration_service import PlatformConfigurationSer
 from tierx_runtime import COLLECTION, IDENTITY, DEFAULTS, effective, validate
 
 
+@pytest.mark.parametrize("payload", [None, [], {"models": [None]}, {"models": ["invalid"]}])
+def test_malformed_ollama_tags_fail_safely(payload):
+    from types import SimpleNamespace
+    client = SimpleNamespace(get=lambda *args: httpx.Response(200, json=payload))
+    with pytest.raises(HTTPException) as exc:
+        Service.check_ollama(client, DEFAULTS)
+    assert exc.value.status_code == 422
+
+
+def test_completed_gate_uses_cached_state_and_health_hides_configuration(db, monkeypatch):
+    import main
+    from types import SimpleNamespace
+    monkeypatch.setattr(app.state, "configuration_ready", True)
+    monkeypatch.setattr(app.state, "installation_completed", True)
+    monkeypatch.setattr(Service, "document", lambda: (_ for _ in ()).throw(RuntimeError("database unavailable")))
+    monkeypatch.setattr(Service, "read", lambda: (_ for _ in ()).throw(AssertionError("private config read")))
+    monkeypatch.setattr(main, "MongoClient", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")))
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args): raise httpx.ConnectError("offline")
+    monkeypatch.setattr(main.httpx, "AsyncClient", lambda **kwargs: Client())
+    response = TestClient(app).get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json()["components"]["mongodb"] == "red"
+    assert "configuration" not in response.json()
+    assert TestClient(app).get("/api/v1/admin/settings/platform").status_code in (401, 403)
+
+
 @pytest.fixture
 def db(monkeypatch):
     database = mongomock.MongoClient(tz_aware=True).platform
@@ -27,6 +56,7 @@ def db(monkeypatch):
             monkeypatch.delenv(prefix + name.upper(), raising=False)
     monkeypatch.setenv("TIERX_INSTALLATION_TOKEN", "synthetic-one-time-token")
     monkeypatch.setattr(app.state, "configuration_ready", False, raising=False)
+    monkeypatch.setattr(app.state, "installation_completed", False, raising=False)
     return database
 
 

@@ -17,6 +17,7 @@ from app.services.tenant_cache import tenant_cache
 async def lifespan(app: FastAPI):
     await tenant_cache.start()
     await kafka_publisher.start()
+    app.state.installation_client = AsyncIOMotorClient(settings.mongo_url, serverSelectionTimeoutMS=2000)
     monitor = asyncio.create_task(configuration_monitor())
     try:
         yield
@@ -28,6 +29,8 @@ async def lifespan(app: FastAPI):
             pass
         await kafka_publisher.stop()
         await tenant_cache.stop()
+        app.state.installation_client.close()
+        app.state.installation_client = None
 
 
 app = FastAPI(
@@ -52,28 +55,26 @@ async def installation_gate(request, call_next):
 
 
 async def installation_complete():
-    client = AsyncIOMotorClient(settings.mongo_url, serverSelectionTimeoutMS=2000)
-    try:
-        document = await client[settings.mongo_db][COLLECTION].find_one({"_id": IDENTITY})
-        return installed(document)
-    finally:
-        client.close()
+    client = getattr(app.state, "installation_client", None)
+    if client is None:
+        client = AsyncIOMotorClient(settings.mongo_url, serverSelectionTimeoutMS=2000)
+        app.state.installation_client = client
+    document = await client[settings.mongo_db][COLLECTION].find_one({"_id": IDENTITY})
+    return installed(document)
 
 
 async def configuration_monitor():
-    client = AsyncIOMotorClient(settings.mongo_url, serverSelectionTimeoutMS=2000)
-    try:
-        while True:
-            try:
-                db = client[settings.mongo_db]
-                document = await db[COLLECTION].find_one({"_id": IDENTITY})
-                await db.service_heartbeats.update_one({"service": "ingestion-proxy"}, {
-                    "$set": heartbeat("ingestion-proxy", (document or {}).get("revision", 0))}, upsert=True)
-            except PyMongoError:
-                pass
-            await asyncio.sleep(5)
-    finally:
-        client.close()
+    client = app.state.installation_client
+    # The application lifespan owns this shared client's cleanup.
+    while True:
+        try:
+            db = client[settings.mongo_db]
+            document = await db[COLLECTION].find_one({"_id": IDENTITY})
+            await db.service_heartbeats.update_one({"service": "ingestion-proxy"}, {
+                "$set": heartbeat("ingestion-proxy", (document or {}).get("revision", 0))}, upsert=True)
+        except PyMongoError:
+            pass
+        await asyncio.sleep(5)
 
 
 @app.get("/api/v1/health")

@@ -10,6 +10,69 @@ from unittest.mock import AsyncMock
 from app.workers import analysis_worker
 
 
+@pytest.mark.asyncio
+async def test_core_start_failure_cleans_partial_group_and_can_retry():
+    from main import start_core_workers
+    first = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+    second = SimpleNamespace(start=AsyncMock(side_effect=[RuntimeError("startup failed"), None]), stop=AsyncMock())
+    pending = []
+    with pytest.raises(RuntimeError):
+        await start_core_workers([first, second], pending)
+    assert pending == []
+    first.stop.assert_awaited_once()
+    second.stop.assert_awaited_once()
+    assert await start_core_workers([first, second], pending) == [first, second]
+
+
+@pytest.mark.asyncio
+async def test_failed_optional_stop_retains_reference():
+    from main import stop_optional
+    worker = SimpleNamespace(stop=AsyncMock(side_effect=[RuntimeError("shutdown failed"), None]))
+    optional = {"analysis": worker}
+    with pytest.raises(RuntimeError):
+        await stop_optional(optional, "analysis")
+    assert optional["analysis"] is worker
+    await stop_optional(optional, "analysis")
+    assert optional == {}
+
+
+@pytest.mark.asyncio
+async def test_producer_start_failure_closes_both_resources(monkeypatch):
+    from app.workers import base
+    consumer = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+    producer = SimpleNamespace(start=AsyncMock(side_effect=RuntimeError("producer failed")), stop=AsyncMock())
+    monkeypatch.setattr(base, "AIOKafkaConsumer", lambda *args, **kwargs: consumer)
+    monkeypatch.setattr(base, "AIOKafkaProducer", lambda *args, **kwargs: producer)
+    worker = Worker("synthetic", "input", None)
+    with pytest.raises(RuntimeError):
+        await worker.start()
+    consumer.stop.assert_awaited_once()
+    producer.stop.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_analysis_drain_waits_for_inflight_claim(monkeypatch):
+    worker = analysis_worker.AgenticAnalysisWorker()
+    claimed, release = asyncio.Event(), asyncio.Event()
+    cursor = SimpleNamespace(to_list=AsyncMock(return_value=[{"db_name": "synthetic"}]))
+    monkeypatch.setattr(analysis_worker, "get_database", lambda: {"tenants": SimpleNamespace(find=lambda *args: cursor)})
+    monkeypatch.setattr(analysis_worker, "get_client", lambda: {"synthetic": {}})
+    monkeypatch.setattr(worker, "_ensure_indexes", AsyncMock())
+    async def claim(db):
+        claimed.set()
+        await release.wait()
+        return None
+    monkeypatch.setattr(worker, "_claim", claim)
+    tick = asyncio.create_task(worker._scheduler_tick())
+    await claimed.wait()
+    stop = asyncio.create_task(worker.stop())
+    await asyncio.sleep(0)
+    assert not stop.done()
+    release.set()
+    await tick
+    await stop
+
+
 def test_environment_precedence_and_empty_override():
     values, locked = effective({"ollama_model": "saved-model"}, {
         "TIERX_OLLAMA_MODEL": "canonical-model", "OLLAMA_MODEL": "legacy-model",

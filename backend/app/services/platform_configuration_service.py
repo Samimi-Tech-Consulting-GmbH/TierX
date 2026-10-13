@@ -142,7 +142,7 @@ class PlatformConfigurationService:
             import json
             if json.loads(result.json()["response"]) != {"ready": True}:
                 raise ValueError("Ollama structured inference returned invalid output")
-        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+        except (httpx.HTTPError, AttributeError, KeyError, TypeError, ValueError) as exc:
             raise HTTPException(422, "Ollama connectivity/model/structured inference validation failed") from exc
         return {"ok": True, "model": values["ollama_model"]}
 

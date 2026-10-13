@@ -66,8 +66,12 @@ class BaseWorker(abc.ABC):
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             key_serializer=lambda value: value.encode("utf-8"),
         )
-        await self._consumer.start()
-        await self._producer.start()
+        try:
+            await self._consumer.start()
+            await self._producer.start()
+        except BaseException:
+            await self.stop()
+            raise
         self._task = asyncio.create_task(self._run(), name=f"worker-{self.name}")
         self.logger.info("Started  [%s] → [%s]", self.input_topic, self.output_topic)
 
@@ -81,12 +85,15 @@ class BaseWorker(abc.ABC):
                 await self._task
             except asyncio.CancelledError:
                 pass
-        if self._consumer:
-            await self._consumer.stop()
         if self._trace_tasks:
             await asyncio.gather(*self._trace_tasks, return_exceptions=True)
-        if self._producer:
-            await self._producer.stop()
+        failures = await asyncio.gather(
+            *(resource.stop() for resource in (self._consumer, self._producer) if resource),
+            return_exceptions=True,
+        )
+        for failure in failures:
+            if isinstance(failure, BaseException):
+                raise failure
         self.logger.info("Stopped")
 
     # ------------------------------------------------------------------

@@ -90,6 +90,8 @@ async def lifespan(app: FastAPI):
         from app.models.user import User
         User.ensure_indexes()
         PlatformConfigurationService.initialize()
+        app.state.installation_completed = installed(PlatformConfigurationService.document())
+        app.state.configuration_revision = 0
         app.state.configuration_ready = True
         settings_task = asyncio.create_task(refresh_platform_settings(), name="platform-settings")
         AnalysisService.ensure_system_prompt()
@@ -141,7 +143,9 @@ app.include_router(platform_configuration_router, prefix="/api/v1")
 async def installation_gate(request: Request, call_next):
     if getattr(app.state, "configuration_ready", False):
         allowed = {"/api/v1/health", "/api/v1/installation/status", "/api/v1/installation/test", "/api/v1/installation/complete"}
-        if request.url.path not in allowed and not installed(PlatformConfigurationService.document()):
+        if request.url.path not in allowed and not getattr(app.state, "installation_completed", False):
+            app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
+        if request.url.path not in allowed and not app.state.installation_completed:
             return JSONResponse(status_code=503, content={"detail": "INSTALLATION_REQUIRED"})
     response = await call_next(request)
     if request.url.path.startswith("/api/v1/installation"):
@@ -154,7 +158,10 @@ async def refresh_platform_settings():
     global KNOWLEDGE_BASE_PROCESSING_ENABLED, KNOWLEDGE_BASE_RETRIEVAL_ENABLED
     while True:
         try:
-            doc = PlatformConfigurationService.document() or {}
+            doc = await asyncio.to_thread(PlatformConfigurationService.document) or {}
+            if installed(doc):
+                app.state.installation_completed = True
+            app.state.configuration_revision = doc.get("revision", 0)
             values, _ = effective(doc.get("values"))
             OLLAMA_URL, OLLAMA_MODEL = values["ollama_url"], values["ollama_model"]
             LLM_ANALYSIS_ENABLED = values["llm_analysis_enabled"]
@@ -282,8 +289,7 @@ KNOWLEDGE_BASE_RETRIEVAL_ENABLED = os.getenv(
 @app.get("/api/v1/health")
 async def health_check():
     if getattr(app.state, "configuration_ready", False):
-        doc = PlatformConfigurationService.document()
-        if not installed(doc):
+        if not getattr(app.state, "installation_completed", False):
             return {"status": "INSTALLATION_REQUIRED", "installation_completed": False,
                     "release_version": APP_RELEASE_VERSION, "release_sha": APP_RELEASE_SHA}
     components = {}
@@ -341,7 +347,6 @@ async def health_check():
     if not LLM_ANALYSIS_ENABLED:
         components["ollama"] = "optional" if components.get("ollama") == "red" else components.get("ollama")
         overall_status = "HEALTHY" if all(value != "red" for key, value in components.items() if key != "ollama_model") else "UNHEALTHY"
-    configuration = PlatformConfigurationService.read() if getattr(app.state, "configuration_ready", False) else None
     return {
         "status": overall_status,
         "components": components,
@@ -353,5 +358,5 @@ async def health_check():
         "release_version": APP_RELEASE_VERSION,
         "release_sha": APP_RELEASE_SHA,
         "installation_completed": True,
-        "configuration": configuration,
+        "configuration_revision": getattr(app.state, "configuration_revision", 0),
     }

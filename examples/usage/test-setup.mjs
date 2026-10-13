@@ -12,6 +12,7 @@ test("setup generates restricted secrets, preserves values, and requires a pinne
     const run = (...args) => execFileSync(process.execPath, [join(directory, "setup.mjs"), ...args], { stdio: "pipe" }).toString();
     assert.throws(() => run());
     assert.throws(() => run("--release", "latest"));
+    for (const version of ["v01.2.3", "v1.02.3", "v1.2.03"]) assert.throws(() => run("--release", version));
     const output = run("--release", "v1.2.3");
     const first = await readFile(join(directory, ".env"), "utf8");
     assert.match(first, /^TIERX_RELEASE=1\.2\.3$/m);
@@ -26,7 +27,18 @@ test("setup generates restricted secrets, preserves values, and requires a pinne
     await writeFile(join(directory, ".env"), first.replace(/^TIERX_INSTALLATION_TOKEN=.*$/m, "TIERX_INSTALLATION_TOKEN=synthetic-operator-token"));
     run();
     assert.match(await readFile(join(directory, ".env"), "utf8"), /TIERX_INSTALLATION_TOKEN=synthetic-operator-token/);
+    await writeFile(join(directory, ".env"), first.replace("TIERX_RELEASE=1.2.3", "TIERX_RELEASE=01.2.3"));
+    assert.throws(() => run());
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("shared example environment excludes authentication and setup secrets", async () => {
+  const compose = await readFile(new URL("compose.common.yaml", import.meta.url), "utf8");
+  const shared = compose.split("x-app:")[0];
+  for (const key of ["JWT_SECRET_KEY", "WEBHOOK_SECRET_ENCRYPTION_KEY", "INSTALLATION_TOKEN", "PLATFORM_ADMIN_PASSWORD", "PLATFORM_ADMIN_EMAIL"]) {
+    assert.ok(!shared.includes(key));
+  }
+  assert.match(compose, /qdrant:\n\s+image:.*\n\s+restart: unless-stopped/);
 });

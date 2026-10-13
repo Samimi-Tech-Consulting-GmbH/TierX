@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 const directory = fileURLToPath(new URL(".", import.meta.url));
 const releaseIndex = process.argv.indexOf("--release");
 const release = releaseIndex >= 0 ? process.argv[releaseIndex + 1] : undefined;
-if (release && !/^v\d+\.\d+\.\d+$/.test(release)) throw new Error("Use --release vMAJOR.MINOR.PATCH");
+const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+if (release && (!release.startsWith("v") || !versionPattern.test(release.slice(1)))) throw new Error("Use --release vMAJOR.MINOR.PATCH");
 let contents;
 try { contents = await readFile(`${directory}.env`, "utf8"); }
 catch (error) {
@@ -19,7 +20,7 @@ function fill(key, value) {
   else contents += `\n${key}=${value}\n`;
 }
 fill("TIERX_RELEASE", release?.slice(1) || "");
-if (!/^\d+\.\d+\.\d+$/.test(existing("TIERX_RELEASE") || "")) throw new Error("Supply the released installer version with --release vX.Y.Z (image tags omit v)");
+if (!versionPattern.test(existing("TIERX_RELEASE") || "")) throw new Error("Supply the released installer version with --release vX.Y.Z (image tags omit v)");
 for (const key of ["TIERX_MONGO_ROOT_PASSWORD", "TIERX_JWT_SECRET_KEY", "TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY"]) {
   fill(key, randomBytes(32).toString("base64url"));
 }

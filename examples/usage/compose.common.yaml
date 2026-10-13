@@ -2,13 +2,6 @@ name: tierx
 
 x-runtime: &runtime
   TIERX_MONGO_URL: ${TIERX_MONGO_URL:-mongodb://${TIERX_MONGO_ROOT_USER}:${TIERX_MONGO_ROOT_PASSWORD}@mongodb:27017/}
-  TIERX_JWT_SECRET_KEY: ${TIERX_JWT_SECRET_KEY:?Run node setup.mjs --release vX.Y.Z first}
-  TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY: ${TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY:?Run setup.mjs first}
-  TIERX_INSTALLATION_ENABLED: ${TIERX_INSTALLATION_ENABLED:-true}
-  TIERX_INSTALLATION_TOKEN: ${TIERX_INSTALLATION_TOKEN:-}
-  TIERX_BOOTSTRAP_CONFIGURED: ${TIERX_BOOTSTRAP_CONFIGURED:-false}
-  TIERX_PLATFORM_ADMIN_EMAIL: ${TIERX_PLATFORM_ADMIN_EMAIL:-}
-  TIERX_PLATFORM_ADMIN_PASSWORD: ${TIERX_PLATFORM_ADMIN_PASSWORD:-}
   TIERX_PUBLIC_URL: ${TIERX_PUBLIC_URL:-}
   TIERX_OLLAMA_URL: ${TIERX_OLLAMA_URL:-}
   TIERX_OLLAMA_MODEL: ${TIERX_OLLAMA_MODEL:-}
@@ -51,6 +44,15 @@ services:
     networks: [private]
   backend:
     <<: *app
+    environment: &backend-runtime
+      <<: *runtime
+      TIERX_JWT_SECRET_KEY: ${TIERX_JWT_SECRET_KEY:?Run setup.mjs first}
+      TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY: ${TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY:?Run setup.mjs first}
+      TIERX_INSTALLATION_ENABLED: ${TIERX_INSTALLATION_ENABLED:-true}
+      TIERX_INSTALLATION_TOKEN: ${TIERX_INSTALLATION_TOKEN:-}
+      TIERX_BOOTSTRAP_CONFIGURED: ${TIERX_BOOTSTRAP_CONFIGURED:-false}
+      TIERX_PLATFORM_ADMIN_EMAIL: ${TIERX_PLATFORM_ADMIN_EMAIL:-}
+      TIERX_PLATFORM_ADMIN_PASSWORD: ${TIERX_PLATFORM_ADMIN_PASSWORD:-}
     image: ghcr.io/samimi-tech-consulting-gmbh/tierx-backend:${TIERX_RELEASE}
     healthcheck:
       test: [CMD, curl, -f, http://localhost:8000/api/v1/health]
@@ -62,6 +64,9 @@ services:
     image: ghcr.io/samimi-tech-consulting-gmbh/tierx-ingestion-proxy:${TIERX_RELEASE}
   pipeline:
     <<: *app
+    environment:
+      <<: *runtime
+      TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY: ${TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY:?Run setup.mjs first}
     image: ghcr.io/samimi-tech-consulting-gmbh/tierx-pipeline:${TIERX_RELEASE}
   knowledge-base-processor:
     <<: *app
@@ -116,6 +121,7 @@ services:
     restart: "no"
   qdrant:
     image: qdrant/qdrant:v1.17.0@sha256:f1c7272cdac52b38c1a0e89313922d940ba50afd90d593a1605dbbc214e66ffb
+    restart: unless-stopped
     profiles: [semantic]
     environment: {QDRANT__TELEMETRY_DISABLED: "true"}
     networks: [private]

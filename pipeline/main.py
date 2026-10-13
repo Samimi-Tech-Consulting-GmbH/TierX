@@ -21,6 +21,29 @@ logging.basicConfig(
 logger = logging.getLogger("pipeline")
 
 
+async def cleanup_workers(pending):
+    while pending:
+        await pending[-1].stop()
+        pending.pop()
+
+
+async def start_core_workers(candidates, pending):
+    pending.extend(candidates)
+    try:
+        for worker in candidates:
+            await worker.start()
+    except BaseException:
+        await cleanup_workers(pending)
+        raise
+    pending.clear()
+    return candidates
+
+
+async def stop_optional(optional, name):
+    await optional[name].stop()
+    del optional[name]
+
+
 async def main():
     logger.info("Pipeline service starting")
     logger.info("Kafka: %s", settings.kafka_bootstrap_servers)
@@ -33,11 +56,16 @@ async def main():
 
     workers = []
     optional = {}
+    pending_core = []
+    pending_optional = {}
     while not stop.is_set():
         try:
             db = get_database()
             document = await db[COLLECTION].find_one({"_id": IDENTITY})
             if installed(document):
+                await cleanup_workers(pending_core)
+                for name in list(pending_optional):
+                    await stop_optional(pending_optional, name)
                 values, _ = effective(document.get("values"))
                 # Core consumers stay alive: their per-message snapshots isolate active
                 # work. Only disabled optional workers drain and stop claiming work.
@@ -45,21 +73,22 @@ async def main():
                            "analysis": values["llm_analysis_enabled"]}
                 for name in list(optional):
                     if not desired[name]:
-                        await optional.pop(name).stop()
+                        await stop_optional(optional, name)
                 settings.values, settings.revision = values, document["revision"]
                 if not workers:
-                    workers = [ValidationWorker(), NormalizationWorker(), FingerprintWorker(),
+                    candidates = [ValidationWorker(), NormalizationWorker(), FingerprintWorker(),
                                EnrichmentWorker(), DeadLetterWorker()]
                     if settings.debug_trace_enabled:
-                        workers.append(TraceWorker())
-                    for worker in workers:
-                        await worker.start()
+                        candidates.append(TraceWorker())
+                    workers = await start_core_workers(candidates, pending_core)
                 for name, factory in (("correlation", CorrelationClusteringWorker),
                                       ("analysis", AgenticAnalysisWorker)):
                     if desired[name] and name not in optional:
                         worker = factory()
+                        pending_optional[name] = worker
                         await worker.start()
                         optional[name] = worker
+                        del pending_optional[name]
             await db.service_heartbeats.update_one({"service": "pipeline"}, {
                 "$set": heartbeat("pipeline", settings.revision)}, upsert=True)
         except Exception:
@@ -75,7 +104,7 @@ async def main():
             pass
 
     logger.info("Shutting down workers …")
-    for w in [*optional.values(), *workers]:
+    for w in [*optional.values(), *pending_optional.values(), *pending_core, *workers]:
         await w.stop()
 
     await close_client()
