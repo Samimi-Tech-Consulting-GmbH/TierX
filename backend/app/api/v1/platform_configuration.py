@@ -84,7 +84,7 @@ def platform_settings(admin=Depends(require_platform_admin)):
 @router.put("/admin/settings/platform")
 async def update_platform_settings(body: Update, admin=Depends(require_platform_admin)):
     try:
-        return await Service.update(body.values.model_dump(), body.expected_revision, admin.email)
+        return await Service.update(body.values.model_dump(exclude_unset=True), body.expected_revision, admin.email)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

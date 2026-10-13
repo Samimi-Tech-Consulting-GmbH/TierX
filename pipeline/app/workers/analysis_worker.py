@@ -268,11 +268,6 @@ class AgenticAnalysisWorker(BaseWorker):
                     if not job:
                         break
                     with settings.capture(job.get("configuration_snapshot")) as snapshot:
-                        job["configuration_snapshot"] = snapshot
-                        job.setdefault("configuration_revision", settings.revision)
-                        await db[RUNS_COLLECTION].update_one({"analysis_run_id": job["analysis_run_id"]}, {"$set": {
-                            "configuration_snapshot": snapshot, "configuration_revision": job["configuration_revision"],
-                        }})
                         await self._execute(db, job)
                 finally:
                     self._inference_running = False
@@ -293,14 +288,16 @@ class AgenticAnalysisWorker(BaseWorker):
                     },
                 ]
             },
-            {
+            [{
                 "$set": {
                     "state": "RUNNING",
                     "lease_expires_at": lease,
                     "started_at": now,
                     "updated_at": now,
+                    "configuration_snapshot": {"$ifNull": ["$configuration_snapshot", {"$literal": dict(settings.values)}]},
+                    "configuration_revision": {"$ifNull": ["$configuration_revision", settings.revision]},
                 }
-            },
+            }],
             sort=[("requested_analysis_version", -1), ("created_at", 1)],
             return_document=ReturnDocument.AFTER,
         )

@@ -25,6 +25,25 @@ def stop(*_args):
     running = False
 
 
+def refresh_configuration(db, previous):
+    try:
+        document = db[COLLECTION].find_one({"_id": IDENTITY})
+        values, _ = effective((document or {}).get("values"))
+        return (document, values), None
+    except Exception:
+        logger.warning("Configuration refresh failed; retaining last validated configuration")
+        return previous, "SETTINGS_REFRESH_FAILED"
+
+
+def report_heartbeat(db, revision, configuration_error, processing_error=None):
+    try:
+        value = heartbeat("knowledge-base-processor", revision, configuration_error)
+        value["processing_error"] = processing_error
+        db.service_heartbeats.update_one({"service": "knowledge-base-processor"}, {"$set": value}, upsert=True)
+    except Exception:
+        logger.warning("Processor heartbeat could not be persisted")
+
+
 def main() -> None:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
@@ -33,26 +52,17 @@ def main() -> None:
     lease = max(60, int(os.getenv("KNOWLEDGE_BASE_PROCESSOR_LEASE_SECONDS", "600")))
     platform_db = DatabaseManager.get_tenant_database("soc_mind_platform")
     logger.info("Knowledge Base processor ready")
+    cached_configuration = None
     while running:
         processed = False
+        cached_configuration, refresh_error = refresh_configuration(platform_db, cached_configuration)
+        configuration, values = cached_configuration or (None, {})
+        revision = (configuration or {}).get("revision", 0)
+        report_heartbeat(platform_db, revision, refresh_error)
+        if not installed(configuration) or not values.get("knowledge_base_processing_enabled"):
+            time.sleep(5)
+            continue
         try:
-            configuration = platform_db[COLLECTION].find_one({"_id": IDENTITY})
-            values, _ = effective((configuration or {}).get("values"))
-            platform_db.service_heartbeats.update_one({"service": "knowledge-base-processor"}, {
-                "$set": heartbeat("knowledge-base-processor", (configuration or {}).get("revision", 0))}, upsert=True)
-            if not installed(configuration) or not values["knowledge_base_processing_enabled"]:
-                time.sleep(5)
-                continue
-            platform_db.service_heartbeats.update_one(
-                {"service": "knowledge-base-processor"},
-                {
-                    "$set": {
-                        "service": "knowledge-base-processor",
-                        "seen_at": datetime.now(timezone.utc),
-                    }
-                },
-                upsert=True,
-            )
             for tenant in Tenant.objects(status__ne="DELETED").only("db_name"):
                 db = DatabaseManager.get_tenant_database(str(tenant.db_name))
                 KnowledgeBaseService._ensure_database_indexes(db)
@@ -69,13 +79,10 @@ def main() -> None:
                     )
                 except Exception:
                     logger.exception("Failed document_id=%s", document["document_id"])
+                    report_heartbeat(platform_db, revision, refresh_error, "PROCESSING_FAILED")
         except Exception:
-            logger.warning("Processor iteration failed; retaining last valid configuration")
-            try:
-                platform_db.service_heartbeats.update_one({"service": "knowledge-base-processor"}, {
-                    "$set": {"configuration_error": "SETTINGS_REFRESH_FAILED"}}, upsert=True)
-            except Exception:
-                pass
+            logger.warning("Processor work failed")
+            report_heartbeat(platform_db, revision, refresh_error, "PROCESSING_FAILED")
         if not processed:
             time.sleep(interval)
 

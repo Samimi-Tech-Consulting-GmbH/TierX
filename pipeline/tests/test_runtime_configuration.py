@@ -220,10 +220,44 @@ async def test_analysis_scheduler_persists_and_reuses_snapshot_with_real_run_id(
         assert claimed["configuration_revision"] == 1
     monkeypatch.setattr(worker, "_execute", execute)
     await worker._scheduler_tick()
-    query, update = runs.update_one.await_args.args
-    assert query == {"analysis_run_id": "synthetic-run"}
-    assert update["$set"]["configuration_revision"] == 1
-    assert update["$set"]["configuration_snapshot"]["ollama_model"] == "original-model"
+    runs.update_one.assert_not_awaited()  # Snapshot is already part of the atomic claim.
+
+
+@pytest.mark.asyncio
+async def test_analysis_claim_atomically_captures_initial_configuration():
+    worker = analysis_worker.AgenticAnalysisWorker()
+    runs = AsyncMock()
+    await worker._claim({analysis_worker.RUNS_COLLECTION: runs})
+    query, update = runs.find_one_and_update.await_args.args
+    state = update[0]["$set"]
+    assert state["state"] == "RUNNING"
+    assert state["configuration_snapshot"]["$ifNull"][0] == "$configuration_snapshot"
+    assert state["configuration_snapshot"]["$ifNull"][1]["$literal"] == settings.values
+    assert state["configuration_revision"]["$ifNull"] == ["$configuration_revision", settings.revision]
+
+
+@pytest.mark.parametrize("worker_type", ["trace", "dead-letter"])
+@pytest.mark.asyncio
+async def test_terminal_workers_rewind_failed_storage_then_commit(monkeypatch, worker_type):
+    from app.workers.trace_worker import TraceWorker
+    from app.workers.dead_letter_worker import DeadLetterWorker
+    worker = TraceWorker() if worker_type == "trace" else DeadLetterWorker()
+    worker._draining = False
+    events = []
+    class Consumer:
+        remaining = 2
+        def __aiter__(self): return self
+        async def __anext__(self):
+            if not self.remaining: raise StopAsyncIteration
+            self.remaining -= 1
+            return SimpleNamespace(value={}, topic="terminal", partition=0, offset=1)
+        def seek(self, partition, offset): events.append("rewound")
+        async def commit(self): events.append("committed")
+    worker._consumer = Consumer()
+    monkeypatch.setattr(worker, "process", AsyncMock(side_effect=[RuntimeError("database unavailable"), None]))
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+    await worker._run()
+    assert events == ["rewound", "committed"]
 
 
 @pytest.mark.asyncio

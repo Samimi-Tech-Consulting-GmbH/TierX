@@ -31,6 +31,32 @@ async def test_configuration_heartbeats_run_off_event_loop(monkeypatch):
     assert len(calls) == 2
 
 
+def test_partial_settings_api_preserves_omitted_fields(db):
+    complete(db, public_url="https://tierx.example.com", knowledge_base_retrieval_enabled=True)
+    response = TestClient(app).put("/api/v1/admin/settings/platform", headers=auth(), json={
+        "expected_revision": 1, "values": {"ollama_model": "new-model"}})
+    assert response.status_code == 200
+    values = response.json()["values"]
+    assert values["public_url"] == "https://tierx.example.com"
+    assert values["knowledge_base_retrieval_enabled"] is True
+    assert values["ollama_model"] == "new-model"
+
+
+def test_processor_retains_valid_config_and_reports_distinct_errors():
+    import kb_processor
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    collection = SimpleNamespace(find_one=Mock(side_effect=RuntimeError("offline")))
+    previous = ({"state": "INSTALLED", "revision": 2}, {"knowledge_base_processing_enabled": True})
+    cached, error = kb_processor.refresh_configuration({COLLECTION: collection}, previous)
+    assert cached is previous and error == "SETTINGS_REFRESH_FAILED"
+    writes = Mock()
+    kb_processor.report_heartbeat(SimpleNamespace(service_heartbeats=SimpleNamespace(update_one=writes)), 2, error, "PROCESSING_FAILED")
+    record = writes.call_args.args[1]["$set"]
+    assert record["configuration_error"] == "SETTINGS_REFRESH_FAILED"
+    assert record["processing_error"] == "PROCESSING_FAILED"
+
+
 @pytest.mark.parametrize("payload", [None, [], {"models": [None]}, {"models": ["invalid"]}])
 def test_malformed_ollama_tags_fail_safely(payload):
     from types import SimpleNamespace

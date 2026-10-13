@@ -159,7 +159,7 @@ class PlatformConfigurationService:
         values, locked = effective(doc.get("values"))
         services = list(cls.db().service_heartbeats.find(
             {"applied_revision": {"$exists": True}}, {"_id": 0, "service": 1, "applied_revision": 1,
-            "configuration_error": 1, "seen_at": 1}))
+            "configuration_error": 1, "processing_error": 1, "seen_at": 1}))
         for service in services:
             seen = service.get("seen_at")
             if seen and seen.tzinfo is None:
