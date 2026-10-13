@@ -1,0 +1,15 @@
+.git
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.next
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/venv
+**/*.pyc
+**/*.pem
+**/keys.txt
+**/id_rsa*
+**/id_ed25519*

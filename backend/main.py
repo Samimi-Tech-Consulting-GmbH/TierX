@@ -131,6 +131,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(platform_configuration_router, prefix="/api/v1")
+from app.api.v2.workflows import router as workflows_v2_router
+app.include_router(workflows_v2_router, prefix="/api/v2")
+from app.api.v2.llm_profiles import router as llm_profiles_v2_router
+app.include_router(llm_profiles_v2_router, prefix="/api/v2")
 
 
 @app.middleware("http")

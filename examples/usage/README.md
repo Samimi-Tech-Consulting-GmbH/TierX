@@ -1,5 +1,9 @@
 # Run TierX from released images
 
+For the separately built experimental workflow editor and worker, see
+[Ingestion V2](../../docs/ingestion-v2.md). It is disabled by default and is not
+included in the normal released-image startup commands below.
+
 Requires Docker Engine and Compose v2.20+ (Compose `include` support). Copy this
 whole folder, including `compose.common.yaml` and `nginx.conf`. Node 20+ is needed
 only for the optional setup helper. No application build or npm install is needed.
