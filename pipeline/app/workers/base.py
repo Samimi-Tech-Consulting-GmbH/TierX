@@ -16,6 +16,8 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from types import SimpleNamespace
+from uuid import NAMESPACE_URL, uuid5
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition
@@ -59,7 +61,7 @@ class BaseWorker(abc.ABC):
             group_id=self.consumer_group,
             auto_offset_reset=self.auto_offset_reset,
             enable_auto_commit=False,
-            value_deserializer=lambda raw: json.loads(raw.decode("utf-8")),
+            value_deserializer=None,
         )
         self._producer = AIOKafkaProducer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
@@ -109,7 +111,14 @@ class BaseWorker(abc.ABC):
                 self._processing = True
                 try:
                     with settings.capture():
-                        await self._handle(msg)
+                        try:
+                            payload = msg.value if isinstance(msg.value, dict) else json.loads(msg.value)
+                            if not isinstance(payload, dict):
+                                raise ValueError("Kafka message must be an object")
+                        except (ValueError, TypeError, UnicodeDecodeError):
+                            await self._handle_malformed(msg)
+                        else:
+                            await self._handle(SimpleNamespace(value=payload))
                     await self._consumer.commit()
                 except Exception:
                     self.logger.warning("Processing/publication failed; retaining the message for replay")
@@ -119,6 +128,22 @@ class BaseWorker(abc.ABC):
                     self._processing = False
         except asyncio.CancelledError:
             raise
+
+    def malformed_message(self, msg):
+        identity = f"{msg.topic}:{msg.partition}:{msg.offset}"
+        return {
+            "alert_id": str(uuid5(NAMESPACE_URL, "tierx:kafka:" + identity)),
+            "tenant_id": None, "alert_type": None, "source_system": None,
+            "raw_payload": None, "error_type": "INVALID_KAFKA_MESSAGE",
+            "error_detail": "Kafka record could not be decoded as a JSON object",
+            "failed_stage": "KAFKA_DECODE",
+            "kafka_record": {"topic": msg.topic, "partition": msg.partition, "offset": msg.offset},
+        }
+
+    async def _handle_malformed(self, msg):
+        data = self.malformed_message(msg)
+        record = data.pop("kafka_record")
+        await self.produce_dead_letter(**data, extra={"kafka_record": record})
 
     async def _handle(self, msg: Any):
         """Process one Kafka message with dead-letter routing on unexpected failure."""

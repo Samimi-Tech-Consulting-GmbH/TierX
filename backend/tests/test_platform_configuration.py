@@ -128,6 +128,9 @@ def test_token_hash_consumption_and_permanent_closure(db, monkeypatch):
         Service.authorize_setup("synthetic-one-time-token")
     assert exc.value.status_code == 404
     assert db.users.count_documents({}) == 1
+    admin = db.users.find_one({})
+    assert admin["created_at"] == admin["updated_at"]
+    assert admin["updated_by"] == "installation"
 
 
 def test_generated_token_is_logged_only_once(db, monkeypatch, caplog):

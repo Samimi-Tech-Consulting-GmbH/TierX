@@ -94,10 +94,12 @@ class PlatformConfigurationService:
         values = validate(values)
         if cls.db().users.find_one({"email": email}):
             raise HTTPException(409, "Administrator email is already in use")
+        created_at = datetime.now(timezone.utc)
         pending = {"user_id": str(uuid4()), "email": email,
                    "hashed_password": UserService.hash_password(password),
                    "role": "PLATFORM_ADMIN", "tenant_id": None, "is_active": True,
-                   "created_at": datetime.now(timezone.utc), "created_by": "installation"}
+                   "created_at": created_at, "updated_at": created_at,
+                   "created_by": "installation", "updated_by": "installation"}
         cls.db()[COLLECTION].update_one({"_id": IDENTITY}, {"$setOnInsert": {"state": "PENDING", "revision": 0}}, upsert=True)
         doc = cls.db()[COLLECTION].find_one_and_update(
             {"_id": IDENTITY, "state": "PENDING"},

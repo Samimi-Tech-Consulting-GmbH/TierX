@@ -45,6 +45,9 @@ class TraceWorker(BaseWorker):
             self.logger.exception("Failed to persist trace event")
             raise
 
+    async def _handle_malformed(self, msg):
+        self.logger.warning("Discarding malformed trace at %s:%s:%s", msg.topic, msg.partition, msg.offset)
+
     async def process(self, data: dict[str, Any]) -> None:
         span_id = data.get("span_id")
         alert_id = data.get("alert_id")

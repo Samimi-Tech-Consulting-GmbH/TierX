@@ -10,6 +10,47 @@ from unittest.mock import AsyncMock
 from app.workers import analysis_worker
 
 
+@pytest.mark.asyncio
+async def test_malformed_kafka_payload_is_quarantined_without_stopping_worker(monkeypatch):
+    worker = Worker("synthetic", "input", None)
+    worker._draining = False
+    remaining = iter([b"not-json", b"[]", b'{"alert_id":"synthetic"}'])
+    class Consumer:
+        committed = 0
+        def __aiter__(self): return self
+        async def __anext__(self):
+            try: value = next(remaining)
+            except StopIteration: raise StopAsyncIteration
+            return SimpleNamespace(value=value, topic="input", partition=0, offset=self.committed)
+        async def commit(self): self.committed += 1
+    worker._consumer = Consumer()
+    dead_letter = AsyncMock()
+    process = AsyncMock(return_value=None)
+    monkeypatch.setattr(worker, "produce_dead_letter", dead_letter)
+    monkeypatch.setattr(worker, "process", process)
+    await worker._run()
+    assert worker._consumer.committed == 3
+    assert dead_letter.await_count == 2
+    process.assert_awaited_once_with({"alert_id": "synthetic"})
+    assert all(call.kwargs["raw_payload"] is None for call in dead_letter.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_malformed_terminal_records_never_recursively_publish(monkeypatch):
+    from app.workers.trace_worker import TraceWorker
+    from app.workers.dead_letter_worker import DeadLetterWorker
+    record = SimpleNamespace(value=b"opaque-invalid-data", topic="terminal", partition=0, offset=1)
+    dlq = DeadLetterWorker()
+    persist = AsyncMock()
+    monkeypatch.setattr(dlq, "process", persist)
+    monkeypatch.setattr(dlq, "produce_dead_letter", AsyncMock(side_effect=AssertionError("recursive DLQ")))
+    await dlq._handle_malformed(record)
+    assert persist.await_args.args[0]["error_type"] == "INVALID_KAFKA_MESSAGE"
+    trace = TraceWorker()
+    monkeypatch.setattr(trace, "produce_dead_letter", AsyncMock(side_effect=AssertionError("recursive trace")))
+    await trace._handle_malformed(record)
+
+
 @pytest.mark.parametrize("worker_type", ["trace", "dead-letter"])
 @pytest.mark.asyncio
 async def test_terminal_persistence_failures_propagate_for_replay(monkeypatch, worker_type):
