@@ -42,6 +42,13 @@ docker compose -f compose.external-ollama.yaml logs backend
 
 Enter the external Ollama origin/model in the installer, or set
 `TIERX_OLLAMA_URL` and `TIERX_OLLAMA_MODEL` in `.env` to manage them by environment.
+
+Set `TIERX_OLLAMA_MODEL_DIGEST` to the SHA-256 digest of the model you approve,
+for either Compose variant. For the previously verified `phi3:latest` artifact,
+that digest is `4f222292793889a9a40a020799cfd28d53f3e01af25d48e06c5e708610fc47e9`.
+Ollama tags are mutable: the initializer may download the current tag, but
+installation preflight and analysis reject it if the configured digest differs.
+When choosing another model, verify its digest and update this setting explicitly.
 The origin must be reachable from application containers. `localhost` refers to
 the container; on Docker Desktop a host service may use
 `http://host.docker.internal:11434`. Linux operators must explicitly configure

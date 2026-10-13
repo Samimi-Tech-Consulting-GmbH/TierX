@@ -11,6 +11,27 @@ from app.workers import analysis_worker
 
 
 @pytest.mark.asyncio
+async def test_correlation_drains_only_current_scheduler_item(monkeypatch):
+    from app.workers import correlation_worker as module
+    worker = module.CorrelationClusteringWorker()
+    tenants = SimpleNamespace(to_list=AsyncMock(return_value=[{"db_name": "synthetic"}]))
+    clusters = SimpleNamespace(find=lambda *args: SimpleNamespace(to_list=AsyncMock(return_value=[
+        {"pending_analysis_request": {"cluster_id": "first"}},
+        {"pending_analysis_request": {"cluster_id": "second"}},
+    ])))
+    monkeypatch.setattr(module, "get_database", lambda: {"tenants": SimpleNamespace(find=lambda *args: tenants)})
+    monkeypatch.setattr(module, "get_client", lambda: {"synthetic": {module.CLUSTERS_COLLECTION: clusters, module.ALERTS_COLLECTION: {}}})
+    monkeypatch.setattr(worker, "_ensure_indexes", AsyncMock())
+    seen = []
+    async def publish(db, message):
+        seen.append(message["cluster_id"])
+        worker._draining = True
+    monkeypatch.setattr(worker, "_publish_request", publish)
+    await worker._scheduler_tick()
+    assert seen == ["first"]
+
+
+@pytest.mark.asyncio
 async def test_core_start_failure_cleans_partial_group_and_can_retry():
     from main import start_core_workers
     first = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())

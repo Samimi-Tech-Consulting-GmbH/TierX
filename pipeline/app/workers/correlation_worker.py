@@ -907,6 +907,8 @@ class CorrelationClusteringWorker(BaseWorker):
         ).to_list(length=None)
         now = datetime.now(timezone.utc)
         for tenant in tenants:
+            if getattr(self, "_draining", False):
+                return
             db = get_client()[tenant["db_name"]]
             await self._ensure_indexes(tenant["db_name"])
             clusters = db[CLUSTERS_COLLECTION]
@@ -915,6 +917,8 @@ class CorrelationClusteringWorker(BaseWorker):
                 {"pending_analysis_request": {"$exists": True, "$ne": None}}
             ).to_list(length=None)
             for cluster in pending:
+                if getattr(self, "_draining", False):
+                    return
                 await self._publish_request(
                     db, cluster["pending_analysis_request"]
                 )
@@ -927,6 +931,8 @@ class CorrelationClusteringWorker(BaseWorker):
                 }
             ).to_list(length=None)
             for cluster in due:
+                if getattr(self, "_draining", False):
+                    return
                 is_solo = int(cluster.get("alert_count", 0)) == 1
                 analysis_type = (
                     "SINGLE_ALERT_ANALYSIS" if is_solo else "CLUSTER_ANALYSIS"
@@ -979,6 +985,8 @@ class CorrelationClusteringWorker(BaseWorker):
                 }
             ).to_list(length=None)
             for cluster in expired:
+                if getattr(self, "_draining", False):
+                    return
                 closed = await clusters.find_one_and_update(
                     {
                         "cluster_id": cluster["cluster_id"],

@@ -11,10 +11,12 @@ import pytest
 @pytest.mark.asyncio
 async def test_installation_checks_reuse_application_client(monkeypatch):
     from types import SimpleNamespace
-    collection = SimpleNamespace(find_one=AsyncMock(return_value={"state": "INSTALLED"}))
+    collection = SimpleNamespace(find_one=AsyncMock(side_effect=[{"state": "PENDING"}, {"state": "INSTALLED"}]))
     client = {main.settings.mongo_db: {main.COLLECTION: collection}}
     monkeypatch.setattr(main.app.state, "installation_client", client, raising=False)
+    monkeypatch.setattr(main.app.state, "installation_completed", False, raising=False)
     monkeypatch.setattr(main, "AsyncIOMotorClient", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("new client")))
+    assert not await main.installation_complete()
     assert await main.installation_complete()
     assert await main.installation_complete()
     assert collection.find_one.await_count == 2

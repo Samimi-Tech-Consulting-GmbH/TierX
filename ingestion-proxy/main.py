@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
     await tenant_cache.start()
     await kafka_publisher.start()
     app.state.installation_client = AsyncIOMotorClient(settings.mongo_url, serverSelectionTimeoutMS=2000)
+    app.state.installation_completed = False
     monitor = asyncio.create_task(configuration_monitor())
     try:
         yield
@@ -55,12 +56,17 @@ async def installation_gate(request, call_next):
 
 
 async def installation_complete():
+    if getattr(app.state, "installation_completed", False):
+        return True
     client = getattr(app.state, "installation_client", None)
     if client is None:
         client = AsyncIOMotorClient(settings.mongo_url, serverSelectionTimeoutMS=2000)
         app.state.installation_client = client
     document = await client[settings.mongo_db][COLLECTION].find_one({"_id": IDENTITY})
-    return installed(document)
+    ready = installed(document)
+    if ready:
+        app.state.installation_completed = True
+    return ready
 
 
 async def configuration_monitor():
@@ -70,6 +76,8 @@ async def configuration_monitor():
         try:
             db = client[settings.mongo_db]
             document = await db[COLLECTION].find_one({"_id": IDENTITY})
+            if installed(document):
+                app.state.installation_completed = True
             await db.service_heartbeats.update_one({"service": "ingestion-proxy"}, {
                 "$set": heartbeat("ingestion-proxy", (document or {}).get("revision", 0))}, upsert=True)
         except PyMongoError:
