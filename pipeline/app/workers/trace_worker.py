@@ -39,8 +39,11 @@ class TraceWorker(BaseWorker):
     async def _handle(self, msg: Any):
         try:
             await self.process(msg.value)
+        except ValueError:
+            self.logger.warning("Discarding malformed trace event")
         except Exception:
             self.logger.exception("Failed to persist trace event")
+            raise
 
     async def process(self, data: dict[str, Any]) -> None:
         span_id = data.get("span_id")

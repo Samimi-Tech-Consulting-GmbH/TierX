@@ -4,14 +4,8 @@ import signal
 import time
 from datetime import datetime, timezone
 
-for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("TIERX_") and _value:
-        os.environ[_key.removeprefix("TIERX_")] = _value
-for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("SOC_MIND_"):
-        _unprefixed = _key.removeprefix("SOC_MIND_")
-        if _unprefixed not in os.environ and f"TIERX_{_unprefixed}" not in os.environ:
-            os.environ[_unprefixed] = _value
+from tierx_runtime import normalize_environment
+normalize_environment()
 
 from app.db.mongodb import DatabaseManager
 from app.models.tenant import Tenant

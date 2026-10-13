@@ -39,8 +39,9 @@ class DeadLetterWorker(BaseWorker):
             await self.process(msg.value)
         except Exception:
             self.logger.exception(
-                "Failed to persist dead-letter document — skipping message"
+                "Failed to persist dead-letter document — retaining for replay"
             )
+            raise
 
     # ------------------------------------------------------------------
     # Processing

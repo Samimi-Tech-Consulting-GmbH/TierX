@@ -20,6 +20,19 @@ COLLECTION = "platform_configuration"
 IDENTITY = "installation"
 
 
+def normalize_environment(environ=None):
+    """Canonical > current > legacy; empty values are not overrides."""
+    env = os.environ if environ is None else environ
+    for key, value in tuple(env.items()):
+        if key.startswith("TIERX_") and value:
+            env[key.removeprefix("TIERX_")] = value
+    for key, value in tuple(env.items()):
+        if key.startswith("SOC_MIND_") and value:
+            name = key.removeprefix("SOC_MIND_")
+            if not env.get(name) and not env.get(f"TIERX_{name}"):
+                env[name] = value
+
+
 def env_value(name, environ=None):
     env = os.environ if environ is None else environ
     for key in (f"TIERX_{name.upper()}", name.upper(), f"SOC_MIND_{name.upper()}"):

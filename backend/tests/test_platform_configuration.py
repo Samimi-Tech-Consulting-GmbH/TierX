@@ -15,6 +15,22 @@ from app.services.platform_configuration_service import PlatformConfigurationSer
 from tierx_runtime import COLLECTION, IDENTITY, DEFAULTS, effective, validate
 
 
+@pytest.mark.asyncio
+async def test_configuration_heartbeats_run_off_event_loop(monkeypatch):
+    import threading
+    import main
+    from types import SimpleNamespace
+    thread = threading.get_ident()
+    calls = []
+    def write(*args, **kwargs):
+        assert threading.get_ident() != thread
+        calls.append(args[1])
+    monkeypatch.setattr(Service, "db", lambda: SimpleNamespace(service_heartbeats=SimpleNamespace(update_one=write)))
+    await main.record_configuration_heartbeat({"applied_revision": 2})
+    await main.record_configuration_heartbeat({"configuration_error": "SETTINGS_REFRESH_FAILED"})
+    assert len(calls) == 2
+
+
 @pytest.mark.parametrize("payload", [None, [], {"models": [None]}, {"models": ["invalid"]}])
 def test_malformed_ollama_tags_fail_safely(payload):
     from types import SimpleNamespace

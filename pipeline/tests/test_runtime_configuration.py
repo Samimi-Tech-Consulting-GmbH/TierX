@@ -10,6 +10,27 @@ from unittest.mock import AsyncMock
 from app.workers import analysis_worker
 
 
+@pytest.mark.parametrize("worker_type", ["trace", "dead-letter"])
+@pytest.mark.asyncio
+async def test_terminal_persistence_failures_propagate_for_replay(monkeypatch, worker_type):
+    from app.workers.trace_worker import TraceWorker
+    from app.workers.dead_letter_worker import DeadLetterWorker
+    worker = TraceWorker() if worker_type == "trace" else DeadLetterWorker()
+    monkeypatch.setattr(worker, "process", AsyncMock(side_effect=RuntimeError("database unavailable")))
+    with pytest.raises(RuntimeError):
+        await worker._handle(SimpleNamespace(value={}))
+
+
+def test_empty_environment_aliases_use_shared_precedence():
+    from tierx_runtime import normalize_environment
+    env = {"TIERX_MONGO_URL": "", "MONGO_URL": "", "SOC_MIND_MONGO_URL": "legacy"}
+    normalize_environment(env)
+    assert env["MONGO_URL"] == "legacy"
+    env["TIERX_MONGO_URL"] = "canonical"
+    normalize_environment(env)
+    assert env["MONGO_URL"] == "canonical"
+
+
 @pytest.mark.asyncio
 async def test_correlation_drains_only_current_scheduler_item(monkeypatch):
     from app.workers import correlation_worker as module
