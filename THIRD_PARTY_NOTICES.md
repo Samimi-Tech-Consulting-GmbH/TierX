@@ -486,6 +486,12 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@tybys/wasm-util` | `0.10.3` | MIT | `frontend/package-lock.json` |
 | `@types/aria-query` | `5.0.4` | MIT | `frontend/package-lock.json` |
 | `@types/chai` | `5.2.3` | MIT | `frontend/package-lock.json` |
+| `@types/d3-color` | `3.1.3` | MIT | `frontend/package-lock.json` |
+| `@types/d3-drag` | `3.0.7` | MIT | `frontend/package-lock.json` |
+| `@types/d3-interpolate` | `3.0.4` | MIT | `frontend/package-lock.json` |
+| `@types/d3-selection` | `3.0.12` | MIT | `frontend/package-lock.json` |
+| `@types/d3-transition` | `3.0.9` | MIT | `frontend/package-lock.json` |
+| `@types/d3-zoom` | `3.0.9` | MIT | `frontend/package-lock.json` |
 | `@types/deep-eql` | `4.0.2` | MIT | `frontend/package-lock.json` |
 | `@types/estree` | `1.0.8` | MIT | `frontend/package-lock.json` |
 | `@types/history` | `4.7.11` | MIT | `integrations/jira-forge/package-lock.json` |
@@ -556,6 +562,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@unrs/resolver-binding-win32-x64-msvc` | `1.11.1` | MIT | `frontend/package-lock.json` |
 | `@vitest/mocker` | `5.0.0` | MIT | `frontend/package-lock.json` |
 | `@vitest/spy` | `5.0.0` | MIT | `frontend/package-lock.json` |
+| `@xyflow/react` | `12.12.0` | MIT | `frontend/package-lock.json` |
+| `@xyflow/system` | `0.0.83` | MIT | `frontend/package-lock.json` |
 | `accepts` | `2.0.0` | MIT | `frontend/package-lock.json` |
 | `acorn` | `8.16.0` | MIT | `frontend/package-lock.json` |
 | `acorn-jsx` | `5.3.2` | MIT | `frontend/package-lock.json` |
@@ -628,6 +636,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `cheerio` | `1.2.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `cheerio-select` | `2.1.0` | BSD-2-Clause | `integrations/jira-forge/package-lock.json` |
 | `class-variance-authority` | `0.7.1` | Apache-2.0 | `frontend/package-lock.json` |
+| `classcat` | `5.0.5` | MIT | `frontend/package-lock.json` |
 | `cli-cursor` | `5.0.0` | MIT | `frontend/package-lock.json` |
 | `cli-spinners` | `2.9.2` | MIT | `frontend/package-lock.json` |
 | `cli-width` | `4.1.0` | ISC | `frontend/package-lock.json` |
@@ -666,6 +675,15 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `cssstyle` | `4.6.0` | MIT | `frontend/package-lock.json` |
 | `csstype` | `3.2.3` | MIT | `frontend/package-lock.json` |
 | `csstype` | `3.2.3` | MIT | `integrations/jira-forge/package-lock.json` |
+| `d3-color` | `3.1.0` | ISC | `frontend/package-lock.json` |
+| `d3-dispatch` | `3.0.1` | ISC | `frontend/package-lock.json` |
+| `d3-drag` | `3.0.0` | ISC | `frontend/package-lock.json` |
+| `d3-ease` | `3.0.1` | BSD-3-Clause | `frontend/package-lock.json` |
+| `d3-interpolate` | `3.0.1` | ISC | `frontend/package-lock.json` |
+| `d3-selection` | `3.0.0` | ISC | `frontend/package-lock.json` |
+| `d3-timer` | `3.0.1` | ISC | `frontend/package-lock.json` |
+| `d3-transition` | `3.0.1` | ISC | `frontend/package-lock.json` |
+| `d3-zoom` | `3.0.0` | ISC | `frontend/package-lock.json` |
 | `damerau-levenshtein` | `1.0.8` | BSD-2-Clause | `frontend/package-lock.json` |
 | `data-urls` | `5.0.0` | MIT | `frontend/package-lock.json` |
 | `data-view-buffer` | `1.0.2` | MIT | `frontend/package-lock.json` |
@@ -944,6 +962,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `json5` | `1.0.2` | MIT | `frontend/package-lock.json` |
 | `json5` | `2.2.3` | MIT | `frontend/package-lock.json` |
 | `jsonfile` | `6.2.1` | MIT | `frontend/package-lock.json` |
+| `jsonschema` | `4.25.1` | MIT | `kb_shared/pyproject.toml` |
 | `jsx-ast-utils` | `3.3.5` | MIT | `frontend/package-lock.json` |
 | `keyv` | `4.5.4` | MIT | `frontend/package-lock.json` |
 | `kleur` | `3.0.3` | MIT | `frontend/package-lock.json` |
@@ -1019,6 +1038,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `minipass` | `7.1.3` | BlueOak-1.0.0 | `integrations/jira-forge/package-lock.json` |
 | `mongoengine` | `Not resolved` | MIT | `backend/requirements.txt` |
 | `mongomock` | `Not resolved` | ISC | `backend/requirements.txt` |
+| `mongomock` | `4.3.0` | ISC | `pipeline/requirements.txt` |
 | `motor` | `Not resolved` | Apache-2.0 | `ingestion-proxy/requirements.txt` |
 | `motor` | `Not resolved` | Apache-2.0 | `pipeline/requirements.txt` |
 | `ms` | `2.1.3` | MIT | `frontend/package-lock.json` |
@@ -1360,3 +1380,4 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `zod` | `4.4.3` | MIT | `frontend/package-lock.json` |
 | `zod-to-json-schema` | `3.25.2` | ISC | `frontend/package-lock.json` |
 | `zod-validation-error` | `4.0.2` | MIT | `frontend/package-lock.json` |
+| `zustand` | `4.5.7` | MIT | `frontend/package-lock.json` |

@@ -1,0 +1,36 @@
+# Local branch builds only; no image publication or release creation.
+x-v2-args: &v2-args
+  APP_RELEASE_SHA: ${TIERX_APP_RELEASE_SHA:-development}
+  APP_RELEASE_VERSION: development
+x-v2-environment: &v2-environment
+  TIERX_APP_RELEASE_SHA: ${TIERX_APP_RELEASE_SHA:-development}
+  TIERX_APP_RELEASE_VERSION: development
+services:
+  backend:
+    image: tierx-v2-backend:local
+    build: {context: ../.., dockerfile: backend/Dockerfile, args: *v2-args}
+    environment: *v2-environment
+  frontend:
+    image: tierx-v2-frontend:local
+    build:
+      context: ../../frontend
+      target: runner
+      args:
+        NEXT_PUBLIC_APP_RELEASE_SHA: ${TIERX_APP_RELEASE_SHA:-development}
+        NEXT_PUBLIC_APP_RELEASE_VERSION: development
+  ingestion-proxy:
+    image: tierx-v2-ingestion:local
+    build: {context: ../.., dockerfile: ingestion-proxy/Dockerfile, args: *v2-args}
+    environment: *v2-environment
+  pipeline:
+    image: tierx-v2-pipeline:local
+    build: {context: ../.., dockerfile: pipeline/Dockerfile, args: *v2-args}
+    environment: *v2-environment
+  knowledge-base-processor:
+    image: tierx-v2-backend:local
+    build: {context: ../.., dockerfile: backend/Dockerfile, args: *v2-args}
+    environment: *v2-environment
+  workflow-v2:
+    image: tierx-v2-pipeline:local
+    build: {context: ../.., dockerfile: pipeline/Dockerfile, args: *v2-args}
+    environment: *v2-environment

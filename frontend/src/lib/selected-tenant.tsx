@@ -45,6 +45,11 @@ const SECTIONS = {
     admin: (id: string) => `/dashboard/${id}/knowledge-base`,
     tenant: (id: string) => `/dashboard/${id}/knowledge-base`,
   },
+  "ingestion-v2": {
+    all: "/dashboard/admin/ingestion-v2",
+    admin: (id: string) => `/dashboard/${id}/ingestion-v2`,
+    tenant: (id: string) => `/dashboard/${id}/ingestion-v2`,
+  },
 } as const;
 
 export type SectionKey = keyof typeof SECTIONS;

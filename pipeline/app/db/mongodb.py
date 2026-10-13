@@ -9,7 +9,8 @@ def get_client() -> AsyncIOMotorClient:
     global _client
     if _client is None:
         _client = AsyncIOMotorClient(settings.mongo_url, tz_aware=True)
-    return _client
+    from app.workflows.storage import wrap
+    return wrap(_client)
 
 
 def get_database():
