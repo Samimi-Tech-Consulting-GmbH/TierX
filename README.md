@@ -38,6 +38,9 @@ The local development workflow is wrapped in the provided `Makefile`.
 
 ## Prerequisites
 
+For an image-based installation without building source, see
+[released-image examples and first-run setup](examples/usage/README.md).
+
 Before starting, make sure you have:
 
 - Docker installed and running

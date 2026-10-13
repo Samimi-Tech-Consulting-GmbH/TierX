@@ -116,6 +116,9 @@ class AgenticAnalysisWorker(BaseWorker):
         )
 
     async def stop(self):
+        self._draining = True
+        while getattr(self, "_inference_running", False):
+            await asyncio.sleep(0.1)
         if self._scheduler_task and not self._scheduler_task.done():
             self._scheduler_task.cancel()
             try:
@@ -234,6 +237,7 @@ class AgenticAnalysisWorker(BaseWorker):
             await self.process(msg.value)
         except Exception:
             self.logger.exception("Failed to persist analysis request")
+            raise
 
     async def _scheduler_loop(self) -> None:
         while True:
@@ -256,10 +260,17 @@ class AgenticAnalysisWorker(BaseWorker):
             await self._ensure_indexes(db_name)
             db = get_client()[db_name]
             while True:
-                job = await self._claim(db)
-                if not job:
+                if getattr(self, "_draining", False):
                     break
-                await self._execute(db, job)
+                self._inference_running = True
+                try:
+                    job = await self._claim(db)
+                    if not job:
+                        break
+                    with settings.capture(job.get("configuration_snapshot")) as snapshot:
+                        await self._execute(db, job)
+                finally:
+                    self._inference_running = False
 
     async def _claim(self, db: Any) -> dict[str, Any] | None:
         now = datetime.now(timezone.utc)
@@ -277,14 +288,16 @@ class AgenticAnalysisWorker(BaseWorker):
                     },
                 ]
             },
-            {
+            [{
                 "$set": {
                     "state": "RUNNING",
                     "lease_expires_at": lease,
                     "started_at": now,
                     "updated_at": now,
+                    "configuration_snapshot": {"$ifNull": ["$configuration_snapshot", {"$literal": dict(settings.values)}]},
+                    "configuration_revision": {"$ifNull": ["$configuration_revision", settings.revision]},
                 }
-            },
+            }],
             sort=[("requested_analysis_version", -1), ("created_at", 1)],
             return_document=ReturnDocument.AFTER,
         )
@@ -872,6 +885,7 @@ class AgenticAnalysisWorker(BaseWorker):
                     "analysis_scope_type": job.get("analysis_scope_type"),
                     "analysis_scope_id": job.get("analysis_scope_id"),
                     "requested_analysis_version": job.get("requested_analysis_version"),
+                    "configuration_revision": job.get("configuration_revision"),
                 },
             )
             await span.__aenter__()
@@ -1036,6 +1050,7 @@ class AgenticAnalysisWorker(BaseWorker):
             now = datetime.now(timezone.utc)
             summary = {
                 "version": int(job["requested_analysis_version"]),
+                "configuration_revision": job.get("configuration_revision"),
                 **output.model_dump(),
                 "generated_at": now,
                 "model": settings.ollama_model,

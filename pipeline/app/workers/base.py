@@ -16,8 +16,11 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from types import SimpleNamespace
+from uuid import NAMESPACE_URL, uuid5
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka.structs import TopicPartition
 
 from app.core.config import settings
 from app.services.trace import TraceSpan
@@ -50,36 +53,49 @@ class BaseWorker(abc.ABC):
     # ------------------------------------------------------------------
 
     async def start(self):
+        self._draining = False
+        self._processing = False
         self._consumer = AIOKafkaConsumer(
             self.input_topic,
             bootstrap_servers=settings.kafka_bootstrap_servers,
             group_id=self.consumer_group,
             auto_offset_reset=self.auto_offset_reset,
-            value_deserializer=lambda raw: json.loads(raw.decode("utf-8")),
+            enable_auto_commit=False,
+            value_deserializer=None,
         )
         self._producer = AIOKafkaProducer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             key_serializer=lambda value: value.encode("utf-8"),
         )
-        await self._consumer.start()
-        await self._producer.start()
+        try:
+            await self._consumer.start()
+            await self._producer.start()
+        except BaseException:
+            await self.stop()
+            raise
         self._task = asyncio.create_task(self._run(), name=f"worker-{self.name}")
         self.logger.info("Started  [%s] → [%s]", self.input_topic, self.output_topic)
 
     async def stop(self):
+        self._draining = True
+        while getattr(self, "_processing", False):
+            await asyncio.sleep(0.1)
         if self._task and not self._task.done():
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        if self._consumer:
-            await self._consumer.stop()
         if self._trace_tasks:
             await asyncio.gather(*self._trace_tasks, return_exceptions=True)
-        if self._producer:
-            await self._producer.stop()
+        failures = await asyncio.gather(
+            *(resource.stop() for resource in (self._consumer, self._producer) if resource),
+            return_exceptions=True,
+        )
+        for failure in failures:
+            if isinstance(failure, BaseException):
+                raise failure
         self.logger.info("Stopped")
 
     # ------------------------------------------------------------------
@@ -90,9 +106,44 @@ class BaseWorker(abc.ABC):
         assert self._consumer is not None
         try:
             async for msg in self._consumer:
-                await self._handle(msg)
+                if self._draining:
+                    break
+                self._processing = True
+                try:
+                    with settings.capture():
+                        try:
+                            payload = msg.value if isinstance(msg.value, dict) else json.loads(msg.value)
+                            if not isinstance(payload, dict):
+                                raise ValueError("Kafka message must be an object")
+                        except (ValueError, TypeError, UnicodeDecodeError):
+                            await self._handle_malformed(msg)
+                        else:
+                            await self._handle(SimpleNamespace(value=payload))
+                    await self._consumer.commit()
+                except Exception:
+                    self.logger.warning("Processing/publication failed; retaining the message for replay")
+                    self._consumer.seek(TopicPartition(msg.topic, msg.partition), msg.offset)
+                    await asyncio.sleep(5)
+                finally:
+                    self._processing = False
         except asyncio.CancelledError:
             raise
+
+    def malformed_message(self, msg):
+        identity = f"{msg.topic}:{msg.partition}:{msg.offset}"
+        return {
+            "alert_id": str(uuid5(NAMESPACE_URL, "tierx:kafka:" + identity)),
+            "tenant_id": None, "alert_type": None, "source_system": None,
+            "raw_payload": None, "error_type": "INVALID_KAFKA_MESSAGE",
+            "error_detail": "Kafka record could not be decoded as a JSON object",
+            "failed_stage": "KAFKA_DECODE",
+            "kafka_record": {"topic": msg.topic, "partition": msg.partition, "offset": msg.offset},
+        }
+
+    async def _handle_malformed(self, msg):
+        data = self.malformed_message(msg)
+        record = data.pop("kafka_record")
+        await self.produce_dead_letter(**data, extra={"kafka_record": record})
 
     async def _handle(self, msg: Any):
         """Process one Kafka message with dead-letter routing on unexpected failure."""

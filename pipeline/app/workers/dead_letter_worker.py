@@ -39,8 +39,13 @@ class DeadLetterWorker(BaseWorker):
             await self.process(msg.value)
         except Exception:
             self.logger.exception(
-                "Failed to persist dead-letter document — skipping message"
+                "Failed to persist dead-letter document — retaining for replay"
             )
+            raise
+
+    async def _handle_malformed(self, msg):
+        # Persist metadata directly, never recursively republish into the DLQ.
+        await self.process(self.malformed_message(msg))
 
     # ------------------------------------------------------------------
     # Processing
@@ -72,6 +77,7 @@ class DeadLetterWorker(BaseWorker):
             if data.get("fingerprint"):
                 doc["fingerprint"] = data["fingerprint"]
             for key in (
+                "kafka_record",
                 "analysis_run_id",
                 "analysis_scope_type",
                 "analysis_scope_id",
