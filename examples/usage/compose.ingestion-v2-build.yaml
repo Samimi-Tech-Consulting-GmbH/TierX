@@ -34,3 +34,6 @@ services:
     image: tierx-v2-pipeline:local
     build: {context: ../.., dockerfile: pipeline/Dockerfile, args: *v2-args}
     environment: *v2-environment
+  kb-semantic:
+    image: tierx-v2-kb-semantic:local
+    build: {context: ../.., dockerfile: kb_semantic/Dockerfile}

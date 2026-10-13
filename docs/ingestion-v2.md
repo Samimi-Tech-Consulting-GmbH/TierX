@@ -34,13 +34,14 @@ node setup.mjs --release v0.0.0
 export TIERX_APP_RELEASE_SHA="$(git rev-parse HEAD)"
 docker compose -p tierx-v2-local --profile ingestion-v2 \
   -f compose.all-in-one.yaml -f compose.ingestion-v2.yaml \
-  -f compose.ingestion-v2-build.yaml up -d --build
+  -f compose.ingestion-v2-build.yaml -f compose.ingestion-v2-model-build.yaml up -d --build
 ```
 
 The build overlay replaces every application image with a local branch build;
 `v0.0.0` is only a setup-helper placeholder, not a published release. Optional
 semantic services still require their separate profile and approved embedding
-model. The external-Ollama variant can replace `compose.all-in-one.yaml` above.
+model. For external Ollama, replace `compose.all-in-one.yaml` above with
+`compose.external-ollama.yaml` and omit `compose.ingestion-v2-model-build.yaml`.
 
 Complete the first-run installer and create an active synthetic tenant allowing
 `SPLUNK`. Open that tenant's **Configuration → Ingestion V2** workspace. Create a
@@ -53,11 +54,11 @@ testing performs real inference and can take up to the configured timeout.
 ```sh
 docker compose -p tierx-v2-local --profile ingestion-v2 \
   -f compose.all-in-one.yaml -f compose.ingestion-v2.yaml \
-  -f compose.ingestion-v2-build.yaml logs -f workflow-v2
+  -f compose.ingestion-v2-build.yaml -f compose.ingestion-v2-model-build.yaml logs -f workflow-v2
 # Stop without deleting data:
 docker compose -p tierx-v2-local --profile ingestion-v2 \
   -f compose.all-in-one.yaml -f compose.ingestion-v2.yaml \
-  -f compose.ingestion-v2-build.yaml down
+  -f compose.ingestion-v2-build.yaml -f compose.ingestion-v2-model-build.yaml down
 ```
 
 Never add `--volumes` unless deliberately deleting this disposable installation.
