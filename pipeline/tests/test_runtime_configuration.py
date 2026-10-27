@@ -303,6 +303,29 @@ async def test_analysis_storage_and_dlq_failures_remain_retryable(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_inactive_analysis_requires_explicit_resubmission_after_reactivation(monkeypatch):
+    worker = analysis_worker.AgenticAnalysisWorker()
+    tenants = SimpleNamespace(find_one=AsyncMock(return_value=None))
+    monkeypatch.setattr(analysis_worker, "get_database", lambda: {"tenants": tenants})
+    runs = AsyncMock()
+    monkeypatch.setattr(analysis_worker, "get_client", lambda: {"synthetic": {analysis_worker.RUNS_COLLECTION: runs}})
+    monkeypatch.setattr(worker, "_ensure_indexes", AsyncMock())
+    dead_letter = AsyncMock()
+    monkeypatch.setattr(worker, "produce_dead_letter", dead_letter)
+    record = SimpleNamespace(value=analysis_request())
+    await worker._handle(record)
+    assert tenants.find_one.await_args.args[0]["status"] == "ACTIVE"
+    assert dead_letter.await_args.kwargs["tenant_id"] == "synthetic-tenant"
+    assert dead_letter.await_args.kwargs["alert_id"] == "synthetic-alert"
+    tenants.find_one.return_value = {"db_name": "synthetic"}
+    runs.update_one.assert_not_awaited()
+    # Only a new explicit submission creates an accepted durable analysis run.
+    await worker._handle(record)
+    runs.update_one.assert_awaited_once()
+    dead_letter.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_dead_letter_replay_is_idempotent_per_kafka_delivery(monkeypatch):
     from app.workers.dead_letter_worker import DeadLetterWorker
     worker = DeadLetterWorker()
