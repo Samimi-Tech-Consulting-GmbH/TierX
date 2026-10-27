@@ -39,6 +39,10 @@ class ContextTooLargeError(ValueError):
     pass
 
 
+class InactiveAnalysisTenantError(ValueError):
+    pass
+
+
 def _canonical(value: Any) -> bytes:
     return json.dumps(
         value, default=str, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -116,6 +120,9 @@ class AgenticAnalysisWorker(BaseWorker):
         )
 
     async def stop(self):
+        self._draining = True
+        while getattr(self, "_inference_running", False):
+            await asyncio.sleep(0.1)
         if self._scheduler_task and not self._scheduler_task.done():
             self._scheduler_task.cancel()
             try:
@@ -192,7 +199,7 @@ class AgenticAnalysisWorker(BaseWorker):
             {"db_name": 1, "_id": 0},
         )
         if not tenant:
-            raise ValueError(f"Active tenant not found: {tenant_id}")
+            raise InactiveAnalysisTenantError("Active tenant not found")
         return tenant
 
     async def process(self, data: dict[str, Any]) -> None:
@@ -232,8 +239,23 @@ class AgenticAnalysisWorker(BaseWorker):
     async def _handle(self, msg: Any) -> None:
         try:
             await self.process(msg.value)
+        except (ValidationError, InactiveAnalysisTenantError):
+            # Poison input must not block every later record on this partition.
+            # Never include arbitrary invalid payload values in the DLQ.
+            data = msg.value
+            def safe_id(key):
+                value = data.get(key)
+                return value if isinstance(value, str) and len(value) <= 256 else None
+            await self.produce_dead_letter(
+                alert_id=safe_id("alert_id") or "unknown",
+                tenant_id=safe_id("tenant_id"), alert_type=None, source_system=None,
+                raw_payload=None, error_type="INVALID_ANALYSIS_REQUEST",
+                error_detail="Invalid analysis request or tenant is not active",
+                failed_stage="ANALYSIS",
+            )
         except Exception:
             self.logger.exception("Failed to persist analysis request")
+            raise
 
     async def _scheduler_loop(self) -> None:
         while True:
@@ -256,10 +278,17 @@ class AgenticAnalysisWorker(BaseWorker):
             await self._ensure_indexes(db_name)
             db = get_client()[db_name]
             while True:
-                job = await self._claim(db)
-                if not job:
+                if getattr(self, "_draining", False):
                     break
-                await self._execute(db, job)
+                self._inference_running = True
+                try:
+                    job = await self._claim(db)
+                    if not job:
+                        break
+                    with settings.capture(job.get("configuration_snapshot")) as snapshot:
+                        await self._execute(db, job)
+                finally:
+                    self._inference_running = False
 
     async def _claim(self, db: Any) -> dict[str, Any] | None:
         now = datetime.now(timezone.utc)
@@ -277,14 +306,16 @@ class AgenticAnalysisWorker(BaseWorker):
                     },
                 ]
             },
-            {
+            [{
                 "$set": {
                     "state": "RUNNING",
                     "lease_expires_at": lease,
                     "started_at": now,
                     "updated_at": now,
+                    "configuration_snapshot": {"$ifNull": ["$configuration_snapshot", {"$literal": dict(settings.values)}]},
+                    "configuration_revision": {"$ifNull": ["$configuration_revision", settings.revision]},
                 }
-            },
+            }],
             sort=[("requested_analysis_version", -1), ("created_at", 1)],
             return_document=ReturnDocument.AFTER,
         )
@@ -872,6 +903,7 @@ class AgenticAnalysisWorker(BaseWorker):
                     "analysis_scope_type": job.get("analysis_scope_type"),
                     "analysis_scope_id": job.get("analysis_scope_id"),
                     "requested_analysis_version": job.get("requested_analysis_version"),
+                    "configuration_revision": job.get("configuration_revision"),
                 },
             )
             await span.__aenter__()
@@ -1036,6 +1068,7 @@ class AgenticAnalysisWorker(BaseWorker):
             now = datetime.now(timezone.utc)
             summary = {
                 "version": int(job["requested_analysis_version"]),
+                "configuration_revision": job.get("configuration_revision"),
                 **output.model_dump(),
                 "generated_at": now,
                 "model": settings.ollama_model,

@@ -24,3 +24,10 @@ it("keeps authenticated routes private", () => {
   expect(screen.queryByText("Private content")).toBeNull();
   expect(state.replace).toHaveBeenCalledWith("/login");
 });
+
+it("lets an unauthenticated operator reach the token-protected installer", () => {
+  state.path = "/installation";
+  render(<AppShell><p>First-run setup</p></AppShell>);
+  expect(screen.getByText("First-run setup")).toBeTruthy();
+  expect(state.replace).not.toHaveBeenCalled();
+});

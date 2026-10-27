@@ -8,7 +8,7 @@ import { DashboardShell } from "./dashboard/dashboard-shell";
 import { hasSeenOnboarding } from "@/lib/storage";
 import { Shield } from "lucide-react";
 
-const PUBLIC_PATHS = ["/login", "/legal/source"];
+const PUBLIC_PATHS = ["/login", "/installation", "/legal/source"];
 const FULL_BLEED_PATHS = ["/onboarding"];
 
 /** Config / admin routes restricted to platform admins. */

@@ -4,18 +4,13 @@ import signal
 import time
 from datetime import datetime, timezone
 
-for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("TIERX_"):
-        os.environ[_key.removeprefix("TIERX_")] = _value
-for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("SOC_MIND_"):
-        _unprefixed = _key.removeprefix("SOC_MIND_")
-        if _unprefixed not in os.environ and f"TIERX_{_unprefixed}" not in os.environ:
-            os.environ[_unprefixed] = _value
+from tierx_runtime import normalize_environment
+normalize_environment()
 
 from app.db.mongodb import DatabaseManager
 from app.models.tenant import Tenant
 from app.services.knowledge_base_service import KnowledgeBaseService
+from tierx_runtime import COLLECTION, IDENTITY, effective, installed, heartbeat
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,18 +25,26 @@ def stop(*_args):
     running = False
 
 
-def main() -> None:
-    if os.getenv("KNOWLEDGE_BASE_PROCESSING_ENABLED", "false").lower() not in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        logger.info("Knowledge Base processing is disabled")
-        while running:
-            time.sleep(5)
-        return
+def refresh_configuration(db, previous):
+    try:
+        document = db[COLLECTION].find_one({"_id": IDENTITY})
+        values, _ = effective((document or {}).get("values"))
+        return (document, values), None
+    except Exception:
+        logger.warning("Configuration refresh failed; retaining last validated configuration")
+        return previous, "SETTINGS_REFRESH_FAILED"
 
+
+def report_heartbeat(db, revision, configuration_error, processing_error=None):
+    try:
+        value = heartbeat("knowledge-base-processor", revision, configuration_error)
+        value["processing_error"] = processing_error
+        db.service_heartbeats.update_one({"service": "knowledge-base-processor"}, {"$set": value}, upsert=True)
+    except Exception:
+        logger.warning("Processor heartbeat could not be persisted")
+
+
+def main() -> None:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     DatabaseManager.initialize()
@@ -49,19 +52,19 @@ def main() -> None:
     lease = max(60, int(os.getenv("KNOWLEDGE_BASE_PROCESSOR_LEASE_SECONDS", "600")))
     platform_db = DatabaseManager.get_tenant_database("soc_mind_platform")
     logger.info("Knowledge Base processor ready")
+    cached_configuration = None
+    processing_error = None
+    loop_error = None
     while running:
         processed = False
+        cached_configuration, refresh_error = refresh_configuration(platform_db, cached_configuration)
+        configuration, values = cached_configuration or (None, {})
+        revision = (configuration or {}).get("revision", 0)
+        report_heartbeat(platform_db, revision, refresh_error, processing_error or loop_error)
+        if not installed(configuration) or not values.get("knowledge_base_processing_enabled"):
+            time.sleep(5)
+            continue
         try:
-            platform_db.service_heartbeats.update_one(
-                {"service": "knowledge-base-processor"},
-                {
-                    "$set": {
-                        "service": "knowledge-base-processor",
-                        "seen_at": datetime.now(timezone.utc),
-                    }
-                },
-                upsert=True,
-            )
             for tenant in Tenant.objects(status__ne="DELETED").only("db_name"):
                 db = DatabaseManager.get_tenant_database(str(tenant.db_name))
                 KnowledgeBaseService._ensure_database_indexes(db)
@@ -71,6 +74,8 @@ def main() -> None:
                 processed = True
                 try:
                     count = KnowledgeBaseService.process_claimed(db, document)
+                    processing_error = None
+                    report_heartbeat(platform_db, revision, refresh_error, processing_error or loop_error)
                     logger.info(
                         "Indexed document_id=%s chunks=%d",
                         document["document_id"],
@@ -78,8 +83,17 @@ def main() -> None:
                     )
                 except Exception:
                     logger.exception("Failed document_id=%s", document["document_id"])
+                    processing_error = "PROCESSING_FAILED"
+                    report_heartbeat(platform_db, revision, refresh_error, processing_error)
         except Exception:
-            logger.exception("Processor iteration failed")
+            logger.warning("Processor work failed")
+            loop_error = "PROCESSING_FAILED"
+            report_heartbeat(platform_db, revision, refresh_error, processing_error or loop_error)
+        else:
+            # A clean idle pass proves loop recovery, but not document recovery.
+            if loop_error:
+                loop_error = None
+                report_heartbeat(platform_db, revision, refresh_error, processing_error)
         if not processed:
             time.sleep(interval)
 

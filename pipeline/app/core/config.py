@@ -3,6 +3,7 @@ import os
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from tierx_runtime import RuntimeSettings, normalize_environment
 
 
 class Settings(BaseSettings):
@@ -100,11 +101,6 @@ class Settings(BaseSettings):
     )
 
 
-for _field in Settings.model_fields:
-    _name = _field.upper()
-    if f"TIERX_{_name}" in os.environ:
-        os.environ[_name] = os.environ[f"TIERX_{_name}"]
-    elif _name not in os.environ and f"SOC_MIND_{_name}" in os.environ:
-        os.environ[_name] = os.environ[f"SOC_MIND_{_name}"]
+normalize_environment()
 
-settings = Settings()
+settings = RuntimeSettings(Settings())

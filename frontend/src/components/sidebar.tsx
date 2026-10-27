@@ -119,6 +119,7 @@ function settingsMenuItems(
             icon: Building2,
           },
       { href: "/users", label: "Users", icon: Users },
+      { href: "/dashboard/admin/settings/platform", label: "Platform settings", icon: SlidersHorizontal },
       {
         href: "/dashboard/admin/integrations/jira",
         label: "Jira integration",

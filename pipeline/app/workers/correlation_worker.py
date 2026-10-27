@@ -226,6 +226,9 @@ class CorrelationClusteringWorker(BaseWorker):
         )
 
     async def stop(self):
+        self._draining = True
+        while getattr(self, "_scheduling", False):
+            await asyncio.sleep(0.1)
         if self._scheduler_task and not self._scheduler_task.done():
             self._scheduler_task.cancel()
             try:
@@ -885,11 +888,17 @@ class CorrelationClusteringWorker(BaseWorker):
     async def _scheduler_loop(self):
         while True:
             try:
-                await self._scheduler_tick()
+                if getattr(self, "_draining", False):
+                    return
+                self._scheduling = True
+                with settings.capture():
+                    await self._scheduler_tick()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 self.logger.exception("Correlation scheduler tick failed")
+            finally:
+                self._scheduling = False
             await asyncio.sleep(settings.correlation_scheduler_interval_seconds)
 
     async def _scheduler_tick(self):
@@ -898,6 +907,8 @@ class CorrelationClusteringWorker(BaseWorker):
         ).to_list(length=None)
         now = datetime.now(timezone.utc)
         for tenant in tenants:
+            if getattr(self, "_draining", False):
+                return
             db = get_client()[tenant["db_name"]]
             await self._ensure_indexes(tenant["db_name"])
             clusters = db[CLUSTERS_COLLECTION]
@@ -906,6 +917,8 @@ class CorrelationClusteringWorker(BaseWorker):
                 {"pending_analysis_request": {"$exists": True, "$ne": None}}
             ).to_list(length=None)
             for cluster in pending:
+                if getattr(self, "_draining", False):
+                    return
                 await self._publish_request(
                     db, cluster["pending_analysis_request"]
                 )
@@ -918,6 +931,8 @@ class CorrelationClusteringWorker(BaseWorker):
                 }
             ).to_list(length=None)
             for cluster in due:
+                if getattr(self, "_draining", False):
+                    return
                 is_solo = int(cluster.get("alert_count", 0)) == 1
                 analysis_type = (
                     "SINGLE_ALERT_ANALYSIS" if is_solo else "CLUSTER_ANALYSIS"
@@ -970,6 +985,8 @@ class CorrelationClusteringWorker(BaseWorker):
                 }
             ).to_list(length=None)
             for cluster in expired:
+                if getattr(self, "_draining", False):
+                    return
                 closed = await clusters.find_one_and_update(
                     {
                         "cluster_id": cluster["cluster_id"],
