@@ -1,6 +1,7 @@
 """Installation and runtime configuration shared by TierX services."""
 
 import os
+import ipaddress
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -62,6 +63,8 @@ def validate(values):
         if any(ord(character) < 32 or ord(character) == 127 for character in url):
             raise ValueError(f"Invalid control character in {key}")
         parts = urlsplit(url)
+        if any(character.isspace() for character in parts.netloc):
+            raise ValueError(f"Invalid whitespace in {key} authority")
         if (parts.scheme not in {"http", "https"} or not parts.hostname
                 or parts.username or parts.password or parts.query or parts.fragment
                 or parts.path not in {"", "/"}):
@@ -70,6 +73,16 @@ def validate(values):
             parts.port
         except ValueError as exc:
             raise ValueError(f"Invalid port in {key}") from exc
+        if key == "ollama_url":
+            try:
+                address = ipaddress.ip_address(parts.hostname)
+            except ValueError:
+                address = None  # Internal Docker/service DNS names are intentional.
+            if address and (address.is_link_local or address.is_unspecified or address.is_multicast
+                            or (getattr(address, "ipv4_mapped", None) and
+                                (address.ipv4_mapped.is_link_local or address.ipv4_mapped.is_unspecified
+                                 or address.ipv4_mapped.is_multicast))):
+                raise ValueError("ollama_url cannot target link-local, unspecified, or multicast addresses")
         if key == "public_url" and parts.scheme == "http" and parts.hostname not in {
             "localhost", "127.0.0.1", "::1"
         }:

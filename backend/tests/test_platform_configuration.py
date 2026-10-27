@@ -142,6 +142,114 @@ def test_generated_token_is_logged_only_once(db, monkeypatch, caplog):
     assert caplog.text == first
 
 
+def test_disabled_then_enabled_installation_generates_usable_token(db, monkeypatch, caplog):
+    monkeypatch.delenv("TIERX_INSTALLATION_TOKEN")
+    monkeypatch.setenv("TIERX_INSTALLATION_ENABLED", "false")
+    Service.initialize()
+    assert "token_hash" not in Service.document()
+    assert "one-time installation token:" not in caplog.text
+    monkeypatch.setenv("TIERX_INSTALLATION_ENABLED", "true")
+    Service.initialize()
+    token = caplog.text.split("one-time installation token: ", 1)[1].splitlines()[0]
+    Service.authorize_setup(token)
+    first = caplog.text
+    Service.initialize()
+    assert caplog.text == first
+
+
+def test_legacy_bootstrap_does_not_require_ollama_but_explicit_bootstrap_does(db, monkeypatch):
+    monkeypatch.setenv("TIERX_PLATFORM_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("TIERX_PLATFORM_ADMIN_PASSWORD", "synthetic-password-only")
+    monkeypatch.setenv("TIERX_LLM_ANALYSIS_ENABLED", "true")
+    monkeypatch.setenv("TIERX_CORRELATION_ENABLED", "true")
+    def fail(*args):
+        raise HTTPException(422, "Synthetic Ollama unavailable")
+    monkeypatch.setattr(Service, "check_ollama", fail)
+    Service.initialize()
+    assert Service.document()["state"] == "INSTALLED"
+    db.users.delete_many({})
+    db[COLLECTION].delete_many({})
+    for key, value in {"BOOTSTRAP_CONFIGURED": "true", "PUBLIC_URL": "https://tierx.example.com",
+                       "OLLAMA_URL": "http://ollama:11434", "OLLAMA_MODEL": "phi3:latest"}.items():
+        monkeypatch.setenv("TIERX_" + key, value)
+    with pytest.raises(HTTPException):
+        Service.initialize()
+    assert db.users.count_documents({}) == 0
+
+
+def test_preinstallation_database_outage_returns_safe_503(db, monkeypatch):
+    monkeypatch.setattr(app.state, "configuration_ready", True)
+    monkeypatch.setattr(Service, "document", lambda: (_ for _ in ()).throw(RuntimeError("private connection details")))
+    response = TestClient(app).get("/api/v1/admin/settings/platform", headers=auth())
+    assert response.status_code == 503
+    assert response.json() == {"detail": "INSTALLATION_STATUS_UNAVAILABLE"}
+
+
+@pytest.mark.asyncio
+async def test_settings_persistence_runs_off_loop_and_normalizes_locked_url(db, monkeypatch):
+    import threading
+    complete(db)
+    loop_thread = threading.get_ident()
+    original = Service.document
+    def document():
+        assert threading.get_ident() != loop_thread
+        return original()
+    monkeypatch.setattr(Service, "document", document)
+    monkeypatch.setenv("TIERX_OLLAMA_URL", "http://ollama:11434")
+    result = await Service.update({"ollama_url": "  http://ollama:11434/  "}, 1, "admin@example.com")
+    assert result["values"]["ollama_url"] == "http://ollama:11434"
+    assert result["revision"] == 2
+
+
+@pytest.mark.asyncio
+async def test_installation_handlers_offload_auth_and_reservation(monkeypatch):
+    import threading
+    from app.api.v1.platform_configuration import installation_complete, installation_test, Complete, Values
+    loop_thread = threading.get_ident()
+    calls = []
+    def authorized(token):
+        assert threading.get_ident() != loop_thread
+        calls.append("authorize")
+    def reserve(*args):
+        assert threading.get_ident() != loop_thread
+        calls.append("reserve")
+    async def passed(values): return {"ok": True}
+    monkeypatch.setattr(Service, "authorize_setup", authorized)
+    monkeypatch.setattr(Service, "reserve", reserve)
+    monkeypatch.setattr(Service, "test", passed)
+    await installation_test(Values(), "synthetic")
+    await installation_complete(Complete(email="admin@example.com", password="synthetic-password-only", values=Values()), "synthetic")
+    assert calls == ["authorize", "authorize", "reserve"]
+
+
+def test_processor_keeps_failure_through_idle_loops_until_success(monkeypatch):
+    import kb_processor as module
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    monkeypatch.setattr(module, "running", True)
+    monkeypatch.setattr(module.signal, "signal", lambda *args: None)
+    monkeypatch.setattr(module.time, "sleep", lambda *args: None)
+    monkeypatch.setattr(module.DatabaseManager, "initialize", lambda: None)
+    monkeypatch.setattr(module.DatabaseManager, "get_tenant_database", lambda *args: {})
+    monkeypatch.setattr(module, "refresh_configuration", lambda *args: (({"state": "INSTALLED", "revision": 1},
+        {"knowledge_base_processing_enabled": True}), None))
+    monkeypatch.setattr(module, "Tenant", SimpleNamespace(objects=lambda **kwargs: SimpleNamespace(only=lambda *args: [SimpleNamespace(db_name="synthetic")])))
+    monkeypatch.setattr(module.KnowledgeBaseService, "_ensure_database_indexes", lambda *args: None)
+    monkeypatch.setattr(module.KnowledgeBaseService, "claim_next", Mock(side_effect=[{"document_id": "first"}, None, {"document_id": "second"}]))
+    attempts = []
+    def process(*args):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("synthetic failure")
+        module.running = False
+        return 1
+    monkeypatch.setattr(module.KnowledgeBaseService, "process_claimed", process)
+    errors = []
+    monkeypatch.setattr(module, "report_heartbeat", lambda db, revision, config, error=None: errors.append(error))
+    module.main()
+    assert errors == [None, "PROCESSING_FAILED", "PROCESSING_FAILED", "PROCESSING_FAILED", None]
+
+
 def test_disabled_installation_and_incomplete_bootstrap(db, monkeypatch):
     monkeypatch.setenv("TIERX_INSTALLATION_ENABLED", "false")
     Service.initialize()

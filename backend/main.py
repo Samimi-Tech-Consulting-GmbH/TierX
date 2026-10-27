@@ -83,8 +83,8 @@ async def lifespan(app: FastAPI):
         TenantService.initialize_schema()
         from app.models.user import User
         User.ensure_indexes()
-        PlatformConfigurationService.initialize()
-        app.state.installation_completed = installed(PlatformConfigurationService.document())
+        await asyncio.to_thread(PlatformConfigurationService.initialize)
+        app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
         app.state.configuration_revision = 0
         app.state.configuration_ready = True
         settings_task = asyncio.create_task(refresh_platform_settings(), name="platform-settings")
@@ -138,7 +138,10 @@ async def installation_gate(request: Request, call_next):
     if getattr(app.state, "configuration_ready", False):
         allowed = {"/api/v1/health", "/api/v1/installation/status", "/api/v1/installation/test", "/api/v1/installation/complete"}
         if request.url.path not in allowed and not getattr(app.state, "installation_completed", False):
-            app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
+            try:
+                app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
+            except Exception:
+                return JSONResponse(status_code=503, content={"detail": "INSTALLATION_STATUS_UNAVAILABLE"})
         if request.url.path not in allowed and not app.state.installation_completed:
             return JSONResponse(status_code=503, content={"detail": "INSTALLATION_REQUIRED"})
     response = await call_next(request)

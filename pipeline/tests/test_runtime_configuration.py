@@ -244,6 +244,92 @@ def test_invalid_runtime_settings(values):
         validate(values)
 
 
+@pytest.mark.parametrize("url", ["http://olla ma:11434", "https://exa mple.com", "http://169.254.169.254",
+                                "http://[fe80::1]", "http://[::ffff:169.254.169.254]", "http://0.0.0.0", "http://224.0.0.1"])
+def test_invalid_ollama_authorities(url):
+    with pytest.raises(ValueError):
+        validate({"ollama_url": url})
+
+
+def analysis_request():
+    return {"alert_id": "synthetic-alert", "tenant_id": "synthetic-tenant", "cluster_id": "synthetic-cluster",
+            "analysis_type": "CLUSTER_ANALYSIS", "debounce_outcome": "IMMEDIATE",
+            "requested_analysis_version": 1, "trigger_reason": "MEMBERSHIP_CHANGED", "is_final": False}
+
+
+@pytest.mark.parametrize("bad_record", [{"opaque": "never-copy-to-dlq"}, analysis_request()])
+@pytest.mark.asyncio
+async def test_poison_analysis_record_dead_letters_and_partition_advances(monkeypatch, bad_record):
+    worker = analysis_worker.AgenticAnalysisWorker()
+    worker._draining = False
+    valid = analysis_request()
+    records = iter([bad_record, valid])
+    class Consumer:
+        committed = 0
+        def __aiter__(self): return self
+        async def __anext__(self):
+            try: data = next(records)
+            except StopIteration: raise StopAsyncIteration
+            return SimpleNamespace(value=data, topic="clustered", partition=0, offset=self.committed)
+        async def commit(self): self.committed += 1
+        def seek(self, *args): raise AssertionError("Poison input must not rewind")
+    worker._consumer = Consumer()
+    monkeypatch.setattr(worker, "_tenant", AsyncMock(side_effect=[analysis_worker.InactiveAnalysisTenantError("inactive"), {"db_name": "synthetic"}]
+        if "cluster_id" in bad_record else [{"db_name": "synthetic"}]))
+    monkeypatch.setattr(worker, "_ensure_indexes", AsyncMock())
+    runs = AsyncMock()
+    monkeypatch.setattr(analysis_worker, "get_client", lambda: {"synthetic": {analysis_worker.RUNS_COLLECTION: runs}})
+    dead_letter = AsyncMock()
+    monkeypatch.setattr(worker, "produce_dead_letter", dead_letter)
+    await worker._run()
+    assert worker._consumer.committed == 2
+    runs.update_one.assert_awaited_once()
+    dead_letter.assert_awaited_once()
+    assert dead_letter.await_args.kwargs["error_type"] == "INVALID_ANALYSIS_REQUEST"
+    assert dead_letter.await_args.kwargs["raw_payload"] is None
+    assert "never-copy-to-dlq" not in str(dead_letter.await_args)
+
+
+@pytest.mark.asyncio
+async def test_analysis_storage_and_dlq_failures_remain_retryable(monkeypatch):
+    worker = analysis_worker.AgenticAnalysisWorker()
+    monkeypatch.setattr(worker, "process", AsyncMock(side_effect=RuntimeError("database unavailable")))
+    with pytest.raises(RuntimeError):
+        await worker._handle(SimpleNamespace(value=analysis_request()))
+    monkeypatch.setattr(worker, "process", AsyncMock(side_effect=analysis_worker.InactiveAnalysisTenantError("inactive")))
+    monkeypatch.setattr(worker, "produce_dead_letter", AsyncMock(side_effect=RuntimeError("Kafka unavailable")))
+    with pytest.raises(RuntimeError):
+        await worker._handle(SimpleNamespace(value=analysis_request()))
+
+
+@pytest.mark.asyncio
+async def test_dead_letter_replay_is_idempotent_per_kafka_delivery(monkeypatch):
+    from app.workers.dead_letter_worker import DeadLetterWorker
+    worker = DeadLetterWorker()
+    documents = {}
+    from bson import ObjectId
+    async def update_one(query, update, **kwargs):
+        documents.setdefault(query["_id"], update["$setOnInsert"])
+    collection = SimpleNamespace(update_one=update_one)
+    class Database:
+        name = "synthetic"
+        def __getitem__(self, key): return collection
+    monkeypatch.setattr(worker, "_resolve_db", AsyncMock(return_value=Database()))
+    data = {"alert_id": "synthetic", "error_type": "TEST", "tenant_id": None}
+    record = SimpleNamespace(value=data, topic="dlq", partition=0, offset=4)
+    await worker._handle(record)
+    await worker._handle(record)
+    assert len(documents) == 1
+    assert all(isinstance(identity, ObjectId) for identity in documents)
+    record.offset = 5
+    await worker._handle(record)
+    assert len(documents) == 2  # Distinct failures for one alert remain auditable.
+    malformed = SimpleNamespace(value=b"invalid", topic="dlq", partition=0, offset=6)
+    await worker._handle_malformed(malformed)
+    await worker._handle_malformed(malformed)
+    assert len(documents) == 3
+
+
 @pytest.mark.asyncio
 async def test_analysis_scheduler_persists_and_reuses_snapshot_with_real_run_id(monkeypatch):
     worker = analysis_worker.AgenticAnalysisWorker()

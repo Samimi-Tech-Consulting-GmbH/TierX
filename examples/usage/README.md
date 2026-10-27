@@ -76,12 +76,26 @@ Incomplete environment bootstrap fails with missing variable names. Existing
 installations retain their administrator and never reset its password on restart.
 The first successful setup closes the installer; subsequently sign in and open
 Settings → Platform settings. Environment-supplied values remain read-only there.
+Environment-only bootstrap saves the effective initial settings. Removing an
+environment override later restores that saved initial value, not necessarily
+the product default. Explicit `TIERX_BOOTSTRAP_CONFIGURED` installation validates
+Ollama when analysis is enabled; legacy administrator-only bootstrap retains its
+startup behavior without requiring Ollama to be available.
+
+If a generated installation token is lost, set `TIERX_INSTALLATION_TOKEN` to a
+new strong token and restart the backend before completing setup. A disabled
+installer does not generate or persist an inaccessible token.
 Database, Kafka, internal service URLs, JWT and encryption keys are deployment
 configuration. They cannot be edited in the installer or admin panel.
 `TIERX_MONGO_URL` can override the generated internal MongoDB URI. These two
 variants still include a local MongoDB service; an external-database topology
 requires an operator-reviewed Compose override. Never put credential-bearing
 URIs in the public URL or Ollama fields.
+The Ollama endpoint is a trusted platform-administrator/deployment setting, not
+an untrusted tenant URL. Private service and loopback endpoints are supported.
+Literal link-local/metadata, unspecified, and multicast addresses are rejected;
+operators must restrict network egress and use trusted DNS to prevent a configured
+hostname from resolving to an unintended destination. Keep setup tokens private.
 
 Without Node, copy `.env.example` to `.env`, select the release, and supply unique
 MongoDB/JWT/encryption secrets manually. The encryption key must encode 32 random

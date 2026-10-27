@@ -22,7 +22,10 @@ test("setup generates restricted secrets, preserves values, and requires a pinne
       assert.equal(Buffer.from(secret, "base64url").length, 32);
       assert.ok(!output.includes(secret));
     }
-    run("--release", "v9.9.9");
+    const { spawnSync } = await import("node:child_process");
+    const mismatch = spawnSync(process.execPath, [join(directory, "setup.mjs"), "--release", "v9.9.9"], {encoding: "utf8"});
+    assert.equal(mismatch.status, 0);
+    assert.match(mismatch.stderr, /Requested release differs.*existing value preserved/);
     assert.equal(await readFile(join(directory, ".env"), "utf8"), first);
     await writeFile(join(directory, ".env"), first.replace(/^TIERX_INSTALLATION_TOKEN=.*$/m, "TIERX_INSTALLATION_TOKEN=synthetic-operator-token"));
     run();
@@ -32,6 +35,13 @@ test("setup generates restricted secrets, preserves values, and requires a pinne
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("proxy preserves only valid outer TLS scheme values", async () => {
+  const config = await readFile(new URL("nginx.conf", import.meta.url), "utf8");
+  assert.match(config, /map \$http_x_forwarded_proto \$tierx_forwarded_proto/);
+  assert.match(config, /default \$scheme;/);
+  assert.equal((config.match(/proxy_set_header X-Forwarded-Proto \$tierx_forwarded_proto;/g) || []).length, 2);
 });
 
 test("shared example environment excludes authentication and setup secrets", async () => {

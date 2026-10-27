@@ -55,21 +55,29 @@ class PlatformConfigurationService:
             if missing:
                 raise RuntimeError("Incomplete environment bootstrap: " + ", ".join(missing))
             values, _ = effective()
-            if values["llm_analysis_enabled"]:
+            if bootstrap and values["llm_analysis_enabled"]:
                 # Startup remains fail-closed; validation must finish before completion.
                 with httpx.Client(timeout=300, follow_redirects=False) as client:
                     cls.check_ollama(client, values)
             cls.reserve(env_value("platform_admin_email"), env_value("platform_admin_password"), values)
             return
-        token = env_value("installation_token") or secrets.token_urlsafe(32)
-        digest = hashlib.sha256(token.encode()).hexdigest()
-        result = collection.update_one({"_id": IDENTITY}, {"$setOnInsert": {
-            "state": "PENDING", "token_hash": digest, "revision": 0
+        collection.update_one({"_id": IDENTITY}, {"$setOnInsert": {
+            "state": "PENDING", "revision": 0
         }}, upsert=True)
-        if env_value("installation_token"):
+        if not cls.enabled():
+            return
+        configured_token = env_value("installation_token")
+        token = configured_token or secrets.token_urlsafe(32)
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        if configured_token:
             collection.update_one({"_id": IDENTITY, "state": "PENDING"}, {"$set": {"token_hash": digest}})
-        elif result.upserted_id and cls.enabled():
-            logger.warning("TierX one-time installation token: %s", token)
+        else:
+            result = collection.update_one(
+                {"_id": IDENTITY, "state": "PENDING", "token_hash": {"$exists": False}},
+                {"$set": {"token_hash": digest}},
+            )
+            if result.modified_count:
+                logger.warning("TierX one-time installation token: %s", token)
 
     @staticmethod
     def enabled():
@@ -173,6 +181,13 @@ class PlatformConfigurationService:
 
     @classmethod
     async def update(cls, values, expected_revision, actor):
+        saved, resolved = await asyncio.to_thread(cls._prepare_update, values, expected_revision)
+        if resolved["llm_analysis_enabled"]:
+            await cls.test(resolved)
+        return await asyncio.to_thread(cls._commit_update, saved, expected_revision, actor)
+
+    @classmethod
+    def _prepare_update(cls, values, expected_revision):
         doc = cls.document()
         if not installed(doc):
             raise HTTPException(409, "Installation is incomplete")
@@ -183,8 +198,11 @@ class PlatformConfigurationService:
                 and values.get("correlation_enabled") is False):
             raise ValueError("Analysis requires correlation; disable analysis before disabling correlation")
         current, locked = effective(doc["values"])
+        normalized = validate({**current, **values,
+                               "correlation_enabled": saved.get("correlation_enabled", False)
+                               or saved.get("llm_analysis_enabled", False)})
         for key in locked:
-            if key in values and values[key] != current[key]:
+            if key in values and normalized[key] != current[key]:
                 raise HTTPException(422, f"{key} is managed by environment configuration")
             # Preserve the saved shadow value; removing an override restores it.
             saved[key] = doc["values"][key]
@@ -193,8 +211,10 @@ class PlatformConfigurationService:
                 raise HTTPException(422, "Correlation is disabled by environment configuration")
             saved["correlation_enabled"] = True
         resolved, _ = effective(saved)
-        if resolved["llm_analysis_enabled"]:
-            await cls.test(resolved)
+        return saved, resolved
+
+    @classmethod
+    def _commit_update(cls, saved, expected_revision, actor):
         result = cls.db()[COLLECTION].update_one({"_id": IDENTITY, "revision": expected_revision, "state": "INSTALLED"}, {
             "$set": {"values": validate(saved), "updated_at": datetime.now(timezone.utc), "updated_by": actor},
             "$inc": {"revision": 1},

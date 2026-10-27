@@ -11,7 +11,9 @@ written to the platform database's ``dead_letters`` collection instead.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Any
+from bson import ObjectId
 
 from app.core.config import settings
 from app.db.mongodb import get_client, get_database
@@ -36,7 +38,10 @@ class DeadLetterWorker(BaseWorker):
 
     async def _handle(self, msg: Any):
         try:
-            await self.process(msg.value)
+            data = dict(msg.value)
+            if all(getattr(msg, key, None) is not None for key in ("topic", "partition", "offset")):
+                data["kafka_delivery"] = {key: getattr(msg, key) for key in ("topic", "partition", "offset")}
+            await self.process(data)
         except Exception:
             self.logger.exception(
                 "Failed to persist dead-letter document — retaining for replay"
@@ -45,7 +50,9 @@ class DeadLetterWorker(BaseWorker):
 
     async def _handle_malformed(self, msg):
         # Persist metadata directly, never recursively republish into the DLQ.
-        await self.process(self.malformed_message(msg))
+        data = self.malformed_message(msg)
+        data["kafka_delivery"] = data["kafka_record"]
+        await self.process(data)
 
     # ------------------------------------------------------------------
     # Processing
@@ -87,9 +94,18 @@ class DeadLetterWorker(BaseWorker):
                 if data.get(key) is not None:
                     doc[key] = data[key]
 
-            result = await db[COLLECTION].insert_one(doc)
+            delivery = data.get("kafka_delivery")
+            if delivery:
+                identity = f"{delivery['topic']}:{delivery['partition']}:{delivery['offset']}"
+                # Preserve the ObjectId contract used by existing detail APIs.
+                document_id = ObjectId(sha256(("tierx:dead-letter:" + identity).encode()).digest()[:12])
+                doc["kafka_delivery"] = delivery
+                await db[COLLECTION].update_one({"_id": document_id}, {"$setOnInsert": doc}, upsert=True)
+            else:
+                result = await db[COLLECTION].insert_one(doc)
+                document_id = str(result.inserted_id)
             output = {
-                "dead_letter_id": str(result.inserted_id),
+                "dead_letter_id": str(document_id),
                 "database": db.name,
                 "error_type": doc["error_type"],
             }

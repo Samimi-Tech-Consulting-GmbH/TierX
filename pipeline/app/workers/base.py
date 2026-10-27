@@ -118,7 +118,10 @@ class BaseWorker(abc.ABC):
                         except (ValueError, TypeError, UnicodeDecodeError):
                             await self._handle_malformed(msg)
                         else:
-                            await self._handle(SimpleNamespace(value=payload))
+                            await self._handle(SimpleNamespace(
+                                value=payload, topic=getattr(msg, "topic", None),
+                                partition=getattr(msg, "partition", None), offset=getattr(msg, "offset", None),
+                            ))
                     await self._consumer.commit()
                 except Exception:
                     self.logger.warning("Processing/publication failed; retaining the message for replay")

@@ -53,12 +53,13 @@ def main() -> None:
     platform_db = DatabaseManager.get_tenant_database("soc_mind_platform")
     logger.info("Knowledge Base processor ready")
     cached_configuration = None
+    processing_error = None
     while running:
         processed = False
         cached_configuration, refresh_error = refresh_configuration(platform_db, cached_configuration)
         configuration, values = cached_configuration or (None, {})
         revision = (configuration or {}).get("revision", 0)
-        report_heartbeat(platform_db, revision, refresh_error)
+        report_heartbeat(platform_db, revision, refresh_error, processing_error)
         if not installed(configuration) or not values.get("knowledge_base_processing_enabled"):
             time.sleep(5)
             continue
@@ -72,6 +73,8 @@ def main() -> None:
                 processed = True
                 try:
                     count = KnowledgeBaseService.process_claimed(db, document)
+                    processing_error = None
+                    report_heartbeat(platform_db, revision, refresh_error, processing_error)
                     logger.info(
                         "Indexed document_id=%s chunks=%d",
                         document["document_id"],
@@ -79,10 +82,12 @@ def main() -> None:
                     )
                 except Exception:
                     logger.exception("Failed document_id=%s", document["document_id"])
-                    report_heartbeat(platform_db, revision, refresh_error, "PROCESSING_FAILED")
+                    processing_error = "PROCESSING_FAILED"
+                    report_heartbeat(platform_db, revision, refresh_error, processing_error)
         except Exception:
             logger.warning("Processor work failed")
-            report_heartbeat(platform_db, revision, refresh_error, "PROCESSING_FAILED")
+            processing_error = "PROCESSING_FAILED"
+            report_heartbeat(platform_db, revision, refresh_error, processing_error)
         if not processed:
             time.sleep(interval)
 
