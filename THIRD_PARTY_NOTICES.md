@@ -755,8 +755,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `fast-glob` | `3.3.3` | MIT | `frontend/package-lock.json` |
 | `fast-json-stable-stringify` | `2.1.0` | MIT | `frontend/package-lock.json` |
 | `fast-levenshtein` | `2.0.6` | MIT | `frontend/package-lock.json` |
-| `fast-uri` | `3.1.8` | BSD-3-Clause | `integrations/jira-forge/package-lock.json` |
 | `fast-uri` | `3.1.9` | BSD-3-Clause | `frontend/package-lock.json` |
+| `fast-uri` | `3.1.9` | BSD-3-Clause | `integrations/jira-forge/package-lock.json` |
 | `fastapi` | `Not resolved` | MIT | `backend/requirements.txt` |
 | `fastapi` | `Not resolved` | MIT | `ingestion-proxy/requirements.txt` |
 | `fastapi` | `0.116.1` | MIT | `kb_semantic/requirements.txt` |
@@ -966,7 +966,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `magic-string` | `0.30.21` | MIT | `frontend/package-lock.json` |
 | `magic-string` | `1.4.5` | MIT | `frontend/package-lock.json` |
 | `magic-string` | `1.4.5` | MIT | `frontend/package-lock.json` |
-| `markdown-it` | `14.3.2` | MIT | `integrations/jira-forge/package-lock.json` |
+| `markdown-it` | `14.3.3` | MIT | `integrations/jira-forge/package-lock.json` |
 | `markdown-it-py` | `3.0.0` | MIT | `kb_shared/pyproject.toml` |
 | `math-intrinsics` | `1.1.0` | MIT | `frontend/package-lock.json` |
 | `mdurl` | `2.1.0` | MIT | `integrations/jira-forge/package-lock.json` |
@@ -1253,8 +1253,8 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `typescript-eslint` | `8.59.2` | MIT | `frontend/package-lock.json` |
 | `uc.micro` | `2.1.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `unbox-primitive` | `1.1.0` | MIT | `frontend/package-lock.json` |
-| `undici` | `7.29.1` | MIT | `integrations/jira-forge/package-lock.json` |
 | `undici` | `7.30.1` | MIT | `frontend/package-lock.json` |
+| `undici` | `7.30.1` | MIT | `integrations/jira-forge/package-lock.json` |
 | `undici-types` | `6.21.0` | MIT | `frontend/package-lock.json` |
 | `unicorn-magic` | `0.3.0` | MIT | `frontend/package-lock.json` |
 | `universalify` | `2.0.1` | MIT | `frontend/package-lock.json` |
