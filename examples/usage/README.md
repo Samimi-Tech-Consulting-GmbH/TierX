@@ -107,6 +107,11 @@ Only the proxy is published, on localhost by default. For a remote installation,
 use a trusted HTTPS reverse proxy in front of this port and set the public URL
 accordingly. Do not send setup tokens, passwords, or login requests over public
 HTTP. Certificate automation is deliberately outside this example.
+Keep the example proxy bound to localhost or restrict its ingress to a trusted
+TLS terminator. That terminator must overwrite `X-Forwarded-Proto` with the
+actual connection scheme; it must not pass through a client-supplied value.
+Do not expose this HTTP proxy directly on `0.0.0.0`: the proxy accepts valid
+forwarded scheme values from its upstream and does not authenticate that header.
 
 MongoDB, Kafka, Ollama, ingestion and optional vector services remain unpublished.
 Send alerts through authenticated TierX integrations/debug APIs, not a public

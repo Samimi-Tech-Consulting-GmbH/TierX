@@ -250,6 +250,37 @@ def test_processor_keeps_failure_through_idle_loops_until_success(monkeypatch):
     assert errors == [None, "PROCESSING_FAILED", "PROCESSING_FAILED", "PROCESSING_FAILED", None]
 
 
+@pytest.mark.parametrize("document_failure", [False, True])
+def test_processor_clears_recovered_loop_error_without_clearing_document_error(monkeypatch, document_failure):
+    import kb_processor as module
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    monkeypatch.setattr(module, "running", True)
+    monkeypatch.setattr(module.signal, "signal", lambda *args: None)
+    monkeypatch.setattr(module.DatabaseManager, "initialize", lambda: None)
+    monkeypatch.setattr(module.DatabaseManager, "get_tenant_database", lambda *args: {})
+    monkeypatch.setattr(module, "refresh_configuration", lambda *args: (({"state": "INSTALLED", "revision": 1},
+        {"knowledge_base_processing_enabled": True}), None))
+    tenants = SimpleNamespace(only=lambda *args: [SimpleNamespace(db_name="synthetic")])
+    passes = ([tenants] if document_failure else []) + [RuntimeError("transient outage"), tenants]
+    monkeypatch.setattr(module, "Tenant", SimpleNamespace(objects=Mock(side_effect=passes)))
+    monkeypatch.setattr(module.KnowledgeBaseService, "_ensure_database_indexes", lambda *args: None)
+    claims = ([{"document_id": "failed"}] if document_failure else []) + [None]
+    monkeypatch.setattr(module.KnowledgeBaseService, "claim_next", Mock(side_effect=claims))
+    monkeypatch.setattr(module.KnowledgeBaseService, "process_claimed", Mock(side_effect=RuntimeError("document failed")))
+    sleeps = []
+    def sleep(*args):
+        sleeps.append(1)
+        if len(sleeps) == 2:
+            module.running = False
+    monkeypatch.setattr(module.time, "sleep", sleep)
+    errors = []
+    monkeypatch.setattr(module, "report_heartbeat", lambda db, revision, config, error=None: errors.append(error))
+    module.main()
+    assert errors[-2] == "PROCESSING_FAILED"
+    assert errors[-1] == ("PROCESSING_FAILED" if document_failure else None)
+
+
 def test_disabled_installation_and_incomplete_bootstrap(db, monkeypatch):
     monkeypatch.setenv("TIERX_INSTALLATION_ENABLED", "false")
     Service.initialize()
