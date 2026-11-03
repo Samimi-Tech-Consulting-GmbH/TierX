@@ -178,7 +178,7 @@ class Engine:
             )
             state = (
                 "FAILED"
-                if node["type"] == "dead_letter"
+                if node["type"] == "dead_letter" or job["state"] == "FAILED"
                 else "SUCCEEDED_WITH_WARNINGS" if handled else "SUCCEEDED"
             )
             await db.v2_runs.update_one(
@@ -188,6 +188,7 @@ class Engine:
                         "state": state,
                         "completed_at": now(),
                         "terminal_node": node["id"],
+                        **({"error": job["error"]} if job.get("error") else {}),
                     }
                 },
             )

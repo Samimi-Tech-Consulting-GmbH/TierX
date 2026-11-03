@@ -2,11 +2,11 @@
 
 ## Review candidate
 
-The experimental implementation starts from the requested PR #10 commit
-`3bc29ab7a983ab9c5e049821e5b6819fc7e8efe5`. PR #10 has since advanced; this
-branch is intentionally pinned and must be reconciled with the final installer
-branch before any future main merge. No release, remote deployment, Jira change,
-or data migration is included.
+The experimental implementation originally started from PR #10 commit
+`3bc29ab7a983ab9c5e049821e5b6819fc7e8efe5`. On 3 November 2026 it was
+reconciled with main, including the merged installer and dependency fixes.
+The feature remains disabled by default. No remote deployment, Jira change,
+or data migration is included in this review.
 
 ## Automated checks
 
@@ -28,9 +28,9 @@ Local results on 13 October 2026:
 | Compose all-in-one/external Ollama plus V2 overlays | Rendered successfully |
 | Staged diff and existing Git history secret scans | No findings |
 
-The inherited development dependency advisory `GHSA-vfj7-8cjw-p6xm` remains
-covered by the existing bounded audit exception expiring 5 November 2026. No
-production dependency vulnerability was reported by the npm audit check.
+The former development dependency exception was removed on main before this
+reconciliation. Current dependency checks must pass the repository's full audit
+policy; the October results above are historical evidence, not current clearance.
 
 ## Container and browser verification
 

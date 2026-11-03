@@ -12,6 +12,28 @@ from workflow_database import Database, Client
 
 
 @pytest.mark.asyncio
+async def test_failed_completion_validation_cannot_succeed_run():
+    mongo = mongomock.MongoClient(tz_aware=True)
+    db = Database(mongo.tenant)
+    run = {
+        "run_id": "r",
+        "state": "RUNNING",
+        "graph": {"nodes": [{"id": "done", "type": "complete", "config": {}}]},
+    }
+    mongo.tenant.v2_runs.insert_one(run)
+    job = {
+        "job_id": "j", "run_id": "r", "node_id": "done", "state": "FAILED",
+        "error": {"type": "MODEL_OUTPUT_INVALID"},
+    }
+    mongo.tenant.v2_jobs.insert_one(dict(job))
+    await Engine().route(db, job)
+    saved = mongo.tenant.v2_runs.find_one({"run_id": "r"})
+    assert saved["state"] == "FAILED"
+    assert saved["error"] == job["error"]
+    assert mongo.tenant.v2_jobs.find_one({"job_id": "j"})["routed"]
+
+
+@pytest.mark.asyncio
 async def test_scheduler_recovers_expired_leases_and_limits_parallel_nodes(monkeypatch):
     from app.workflows import engine as module
 
