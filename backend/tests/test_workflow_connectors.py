@@ -143,6 +143,7 @@ def test_mcp_discovery_and_call_validate_actual_protocol(monkeypatch):
 
 def test_tool_capability_edges_are_not_execution_edges():
     graph = minimal()
+    graph["format_version"] = "2.0"
     graph["nodes"][1:1] = [
         {"id": "valid", "type": "validation", "config": {}},
         {"id": "normal", "type": "normalization", "config": {}},
@@ -175,6 +176,21 @@ def test_tool_capability_edges_are_not_execution_edges():
     graph["edges"][-1]["target"] = "normal"
     with pytest.raises(GraphError):
         validate_graph(graph)
+
+
+def test_mcp_handshake_and_call_share_one_outer_deadline(monkeypatch):
+    monkeypatch.setenv("TIERX_V2_LOCAL_CONNECTOR_ORIGINS","http://provider:8090")
+    import json
+    async def handler(request):
+        await asyncio.sleep(0.035)
+        body=json.loads(request.content)
+        if body["method"]=="notifications/initialized": return httpx.Response(202)
+        return httpx.Response(200,json={"jsonrpc":"2.0","id":body["id"],"result":{"protocolVersion":"2025-11-25"}})
+    async def check():
+        client=ConnectorClient({"url":"http://provider:8090/mcp","kind":"mcp","timeout_seconds":0.08},transport=httpx.MockTransport(handler))
+        with pytest.raises(ConnectorError):
+            await client.call({"name":"observe","input_schema":{"type":"object"},"output_schema":{"type":"object"}},{},"one")
+    asyncio.run(check())
 
 
 def test_connector_rejects_private_addresses_and_url_credentials(monkeypatch):

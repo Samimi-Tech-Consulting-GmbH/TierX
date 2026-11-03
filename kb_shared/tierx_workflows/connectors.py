@@ -197,6 +197,13 @@ class ConnectorClient:
         )
 
     async def discover(self):
+        try:
+            async with asyncio.timeout(self.config.get("timeout_seconds", 30)):
+                return await self._discover()
+        except TimeoutError as exc:
+            raise ConnectorError("CONNECTOR_TIMEOUT") from exc
+
+    async def _discover(self):
         await self.initialize()
         result = await self.rpc("tools/list")
         if result.get("nextCursor") or len(result.get("tools", [])) > 100:
@@ -204,6 +211,13 @@ class ConnectorClient:
         return result.get("tools", [])
 
     async def call(self, tool, arguments, delivery_id):
+        try:
+            async with asyncio.timeout(self.config.get("timeout_seconds", 30)):
+                return await self._call(tool, arguments, delivery_id)
+        except TimeoutError as exc:
+            raise ConnectorError("CONNECTOR_TIMEOUT") from exc
+
+    async def _call(self, tool, arguments, delivery_id):
         validate_schema(tool["input_schema"])
         if not Draft202012Validator(tool["input_schema"]).is_valid(arguments):
             raise ConnectorError("TOOL_ARGUMENTS_INVALID")

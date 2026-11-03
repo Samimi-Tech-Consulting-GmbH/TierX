@@ -14,6 +14,7 @@ from app.db.mongodb import get_client, get_database
 from app.workflows.tools import Tools, NodeFailure, NodeWaiting
 from app.workflows.runtime import WorkflowTools
 from app.workflows.storage import for_run
+from tierx_workflows.tracing import debug_snapshot
 
 logger = logging.getLogger("workflow-v2")
 
@@ -93,6 +94,7 @@ class Engine:
     async def execute(self, db, job):
         heart = asyncio.create_task(self.heartbeat(db, job))
         started = time.monotonic()
+        first_started = job.get("first_started_at") or now()
         try:
             run = await db.v2_runs.find_one({"run_id": job["run_id"]})
             if not run or run["state"] in {"FAILED", "CANCELLED"}:
@@ -102,6 +104,14 @@ class Engine:
                 )
                 return
             node = next(n for n in run["graph"]["nodes"] if n["id"] == job["node_id"])
+            scoped = for_run(db, run)
+            alert = await scoped.v2_alerts.find_one({"alert_id": run["alert_id"]}) or {}
+            input_data = {key: alert.get(key) for key in ("alert_id", "tenant_id", "alert_type", "source_system", "normalized_payload", "fingerprint", "cluster_id", "validated")}
+            input_data["upstream"] = await self.tools.materialize(db, job.get("ancestors", {}))
+            input_data["source_payload_sha256"] = checksum(alert.get("raw_payload"))
+            await db.v2_jobs.update_one({"job_id": job["job_id"], "lease_owner": self.owner}, {"$set": {
+                "input_snapshot": debug_snapshot(input_data), "definition_ref": run.get("definition_ref"),
+                "first_started_at": first_started, "release_version": run.get("release_version"), "release_sha": run.get("release_sha")}, "$inc": {"attempt_count": 1}})
             output, port = await self.tools.execute(for_run(db, run), run, node, job)
             import json
 
@@ -116,7 +126,7 @@ class Engine:
                         "state": "WAITING",
                         "wait_reason": exc.code,
                         "lease_expires_at": now() + timedelta(seconds=5),
-                    }
+                    }, "$inc": {"execution_duration_ms": round((time.monotonic() - started) * 1000, 3)}
                 },
             )
             return
@@ -156,9 +166,11 @@ class Engine:
             duration_ms=round((time.monotonic() - started) * 1000, 3),
             routed=False,
         )
+        result["output_snapshot"] = debug_snapshot(result.get("output"))
+        result["node_elapsed_ms"] = round((now() - first_started).total_seconds() * 1000, 3)
         await db.v2_jobs.update_one(
             {"job_id": job["job_id"], "lease_owner": self.owner, "state": "RUNNING"},
-            {"$set": result},
+            {"$set": result, "$inc": {"execution_duration_ms": result["duration_ms"]}, "$unset": {"wait_reason": ""}},
         )
 
     async def route(self, db, job):
@@ -265,6 +277,9 @@ class Engine:
                 if current.get("error"):
                     fields["workflow_error"] = current["error"]
                 await db.alerts.update_one({"alert_id": run["alert_id"], "run_id": run["run_id"]}, {"$set": fields})
+                if current["state"] in {"FAILED", "CANCELLED"}:
+                    await db.alerts.update_one({"alert_id": run["alert_id"], "run_id": run["run_id"], "analysis_status": "RUNNING"},
+                        {"$set": {"analysis_status": "FAILED", "status": "ERROR", "analysis_error": current.get("error", {"type": current["state"]})}})
 
     async def arrive(self, db, run, target_id, path, ancestry):
         target = next(n for n in run["graph"]["nodes"] if n["id"] == target_id)

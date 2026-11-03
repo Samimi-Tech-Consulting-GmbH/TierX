@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCKS = (ROOT / "frontend/package-lock.json", ROOT / "integrations/jira-forge/package-lock.json")
+LOCKS = (ROOT / "frontend/package-lock.json", ROOT / "integrations/jira-forge/package-lock.json", ROOT / "examples/workflow-sandbox/package-lock.json")
 REQUIREMENTS = (ROOT / "backend/requirements.txt", ROOT / "ingestion-proxy/requirements.txt", ROOT / "pipeline/requirements.txt", ROOT / "kb_semantic/requirements.txt")
 PYPROJECTS = (ROOT / "kb_shared/pyproject.toml",)
 NPM_LICENSE_EVIDENCE = json.loads((ROOT / "tools/npm_license_evidence.json").read_text())

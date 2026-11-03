@@ -14,7 +14,7 @@ describe("Workflow execution", () => {
   it("shows pinned revision, actual wall time and nested playbook navigation", async () => {
     vi.mocked(workflowRequest).mockResolvedValue(run);
     render(<WorkflowRunView tenantId="one" runId="r" />);
-    expect(await screen.findByText(/workflow:triage@2/)).toBeInTheDocument();
+    expect(await screen.findByText("Flow version: workflow:triage@2")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "playbook:generic@3" })).toHaveAttribute("href", "/dashboard/one/workflows/runs/c");
     expect(screen.getByText(/elapsed 2,?000/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel execution" })).not.toBeInTheDocument();

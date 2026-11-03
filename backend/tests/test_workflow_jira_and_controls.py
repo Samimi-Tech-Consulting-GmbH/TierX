@@ -71,3 +71,21 @@ def test_workflow_controls_and_feedback_do_not_change_verdict(setup, monkeypatch
     assert db.workflow_analyst_decisions.count_documents({}) == 1
     assert client.post("/api/v2/tenants/one/runs/r/cancel").status_code == 403
     assert client.get("/api/v2/tenants/two/alerts/a/feedback").status_code == 403
+
+
+def test_preparation_is_available_before_cutover_and_debug_reports_pinned_versions(setup, monkeypatch):
+    client,mongo,user=prepare(setup,monkeypatch)
+    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED","false")
+    monkeypatch.setenv("TIERX_INGESTION_V2_ENABLED","false")
+    assert client.get("/api/v2/admin/workflow-definitions").status_code==200
+    assert client.get("/api/v2/admin/llm-profiles").status_code==200
+    assert client.post("/api/v2/workflows/raw/tenants/one/ingest",json={}).status_code==404
+    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED","true")
+    root=mongo.tenant_one.v2_revisions.find_one({"flow_id":"workflow:raw"})
+    mongo.tenant_one.v2_runs.insert_one({"run_id":"debug","root_run_id":"debug","alert_id":"a","tenant_id":"one","state":"RUNNING",
+        "definition_code":"raw","definition_ref":"workflow:raw@1","revision":1,"graph":root["graph"],"bundle":root["bundle"]})
+    result=client.get("/api/v2/tenants/one/runs/debug").json()
+    assert result["workflow_version"]["definition_ref"]=="workflow:raw@1"
+    assert len(result["nodes"])==2
+    assert all(node["state"]=="NOT_REACHED" for node in result["nodes"])
+    assert "bundle" not in result

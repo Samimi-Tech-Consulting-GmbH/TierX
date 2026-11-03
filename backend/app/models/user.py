@@ -15,6 +15,7 @@ class User(me.Document):
     created_at = me.DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = me.DateTimeField(default=lambda: datetime.now(timezone.utc))
     created_by = me.StringField(null=True)
+    updated_by = me.StringField(null=True)
 
     meta = {
         "collection": "users",

@@ -293,12 +293,12 @@ export default function Page() {
           className="rounded bg-primary p-2 text-primary-foreground"
           onClick={() =>
             void act(async () => {
-              const { connector_code, revision, ...body } = value;
+              const { connector_code, revision, name, kind, url, tenant_ids, enabled, timeout_seconds, tools } = value;
               const saved = await workflowRequest<Connector>(
                 `/admin/connectors/${encodeURIComponent(connector_code)}`,
                 "PUT",
                 {
-                  ...body,
+                  name, kind, url, tenant_ids, enabled, timeout_seconds, tools,
                   expected_revision: revision,
                   ...(credential ? { credential } : {}),
                 },
@@ -384,6 +384,14 @@ function SchemaField({
 }) {
   const [text, setText] = useState(JSON.stringify(value, null, 2));
   const [error, setError] = useState("");
+  const serialized = JSON.stringify(value);
+  const [previous, setPrevious] = useState(serialized);
+  if (serialized !== previous) {
+    setPrevious(serialized);
+    let equivalent = false;
+    try { equivalent = JSON.stringify(JSON.parse(text)) === serialized; } catch { /* invalid local buffer */ }
+    if (!equivalent) { setText(JSON.stringify(value, null, 2)); setError(""); }
+  }
   return (
     <details>
       <summary className="cursor-pointer text-sm">{label}</summary>

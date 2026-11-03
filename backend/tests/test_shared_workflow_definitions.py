@@ -64,3 +64,20 @@ def test_editable_templates_validate_without_installing_resources():
     from tierx_workflows.definitions import validate_definition
     for template in templates():
         validate_definition(template["kind"], template["configuration"])
+
+
+def test_cached_dependency_cannot_hide_excessive_depth():
+    def sub(code, children):
+        return row("playbook",code,graph(*[{"id":"call"+str(index),"type":"playbook_call","config":{"definition_code":child}} for index,child in enumerate(children)],capabilities=["normalization"]))
+    entries={code:sub(code,children) for code,children in {"a":["d"],"b":["c"],"c":["a"],"d":[]}.items()}
+    root=row("workflow","root",graph({"id":"map","type":"normalization","config":{"field_mapping":{"host.name":"host"}}},
+        {"id":"a","type":"playbook_call","config":{"definition_code":"a"}}, {"id":"b","type":"playbook_call","config":{"definition_code":"b"}}))
+    with pytest.raises(GraphError,match="three nested"):
+        compile_bundle(root,lambda kind,code,revision:entries[code],"one",lambda _: {})
+
+
+def test_modern_nodes_and_connector_tools_are_rejected_in_legacy_graphs():
+    value=graph({"id":"tool","type":"tool_call","config":{"connector_code":"assets","tool_name":"observe"}})
+    value["format_version"]="1.0"
+    with pytest.raises(GraphError,match="format 2.0"):
+        validate_graph(value)

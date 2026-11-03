@@ -40,6 +40,20 @@ function Tile({ data }: NodeProps<StudioNode>) {
 }
 const nodeTypes = { studio: Tile };
 
+export function GraphJsonEditor({ graph, readOnly, onApply }: { graph: FlowGraph; readOnly: boolean; onApply: (value: FlowGraph) => void }) {
+  const serialized = pretty(graph);
+  const [base, setBase] = useState(serialized), [text, setText] = useState(serialized), [error, setError] = useState("");
+  if (base !== serialized && text === base) { setBase(serialized); setText(serialized); }
+  const stale = base !== serialized;
+  return <details><summary>Whole graph JSON / import</summary>
+    <textarea className="min-h-64 w-full rounded border bg-background p-2 font-mono text-sm" aria-label="Graph JSON" value={text} readOnly={readOnly} onChange={event => setText(event.target.value)} />
+    {stale && <p role="alert">The graph changed while editing JSON. Reload the current graph before applying an import.</p>}
+    {error && <p role="alert">{error}</p>}
+    <button disabled={readOnly || stale} onClick={() => { try { const value = JSON.parse(text); onApply(value); setBase(pretty(value)); setText(pretty(value)); setError(""); } catch { setError("Invalid graph JSON; current graph was preserved."); } }}>Apply JSON import</button>{" "}
+    <button onClick={() => { setBase(serialized); setText(serialized); setError(""); }}>Reload current graph</button>
+  </details>;
+}
+
 export function WorkflowCanvas({ graph, onChange, onSelect, states = {} }: {
   graph: FlowGraph; onChange?: (value: FlowGraph) => void; onSelect?: (node: FlowNode) => void; states?: Record<string, string>;
 }) {
@@ -128,8 +142,7 @@ export function WorkflowStudio() {
             <textarea className={`${field} min-h-40 w-full font-mono`} aria-label="Node configuration" value={nodeJson} readOnly={readOnly} onChange={event => setNodeJson(event.target.value)} />
             <button className={field} disabled={readOnly} onClick={() => { try { const config = JSON.parse(nodeJson); setDraft({ ...draft, configuration: { ...graph, nodes: graph.nodes.map(n => n.id === selected ? { ...n, config } : n) } }); setMessage("Node configuration applied to draft."); } catch { setMessage("Node configuration must be valid JSON."); } }}>Apply node settings</button>
             {(() => { const n = graph.nodes.find(n => n.id === selected); const code = n?.config.definition_code; const target = items.find(row => row.code === code && row.kind === (n?.type === "agent" ? "agent" : "playbook")); return target && <button className={`${field} ml-2`} onClick={() => open(target, true)}>Open {target.kind} subflow</button>; })()}</div>}
-          <details><summary>Whole graph JSON / import</summary><textarea className={`${field} min-h-64 w-full font-mono`} aria-label="Graph JSON" defaultValue={pretty(graph)} key={`${draft.code}:${draft.draft_version}:${readOnly}`} readOnly={readOnly}
-            onBlur={event => { if (readOnly) return; try { setDraft({ ...draft, configuration: JSON.parse(event.target.value) }); } catch { setMessage("Invalid graph JSON; current graph was preserved."); } }} /></details>
+          <GraphJsonEditor graph={graph} readOnly={readOnly} key={`${draft.kind}:${draft.code}:${draft.draft_version}:${readOnly}`} onApply={value => setDraft({ ...draft, configuration: value as unknown as Record<string, unknown> })} />
         </> : <label>Agent configuration (prompt, model profile, schemas, tool allowlist and budgets)<textarea aria-label="Agent configuration" className={`${field} block min-h-96 w-full font-mono`} value={agentJson} readOnly={readOnly} onChange={event => setAgentJson(event.target.value)} /></label>}
         <div className="flex flex-wrap gap-2"><button className={field} disabled={busy || readOnly} onClick={() => action(save)}>Save draft</button>
           <button className={field} disabled={busy || readOnly || !draft.draft_version || unsaved} onClick={() => action(async () => { const result = await workflowRequest<{ revision: number }>(`/admin/workflow-definitions/${draft.kind}/${draft.code}/publish`, "POST"); setDraft({ ...draft, active_revision: result.revision }); setMessage("Published and activated for new runs."); await load(); })}>Publish and activate</button>

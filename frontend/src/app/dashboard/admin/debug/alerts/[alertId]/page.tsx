@@ -29,6 +29,8 @@ import {
   runStateTone,
 } from "@/lib/cluster-display";
 import { cn } from "@/lib/utils";
+import { workflowRequest } from "@/lib/workflows";
+import { WorkflowRunView } from "@/components/workflow-run-view";
 
 const EXPECTED_STAGES = [
   "INGESTION",
@@ -298,11 +300,15 @@ export default function ProcessingTraceDetailPage() {
   const [detail, setDetail] = useState<ProcessingTraceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [workflowRun, setWorkflowRun] = useState<{ tenant_id: string; run_id: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const run = await workflowRequest<{ tenant_id: string; run_id: string }>(`/admin/workflow-definitions/alert-executions/${encodeURIComponent(alertId)}`).catch(() => null);
+      setWorkflowRun(run);
+      if (run) return;
       setDetail(await getDebugTrace(alertId));
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
@@ -346,6 +352,7 @@ export default function ProcessingTraceDetailPage() {
     }));
   }, [detail]);
 
+  if (workflowRun) return <WorkflowRunView tenantId={workflowRun.tenant_id} runId={workflowRun.run_id} />;
   if (loading && !detail) {
     return (
       <div className="flex h-48 items-center justify-center gap-2 text-muted-foreground">

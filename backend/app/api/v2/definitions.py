@@ -17,7 +17,7 @@ from app.api.v2.workflows import db_for, engine_enabled, resources
 from app.db.mongodb import DatabaseManager
 
 router = APIRouter(prefix="/admin/workflow-definitions", tags=["Workflow studio"],
-                   dependencies=[Depends(engine_enabled), Depends(require_platform_admin)])
+                   dependencies=[Depends(require_platform_admin)])
 
 
 def now():
@@ -62,6 +62,18 @@ def listing(kind: Literal["workflow", "playbook", "agent"] | None = None):
     query = {"deleted_at": None, **({"kind": kind} if kind else {})}
     return {"items": list(platform().workflow_definitions.find(query, {"_id": 0}).sort([("kind", 1), ("code", 1)])),
             "node_types": sorted(NODE_TYPES), "templates": templates()}
+
+
+@router.get("/alert-executions/{alert_id}")
+def alert_execution(alert_id: str):
+    for tenant in platform().tenants.find({"deleted_at": None}, {"tenant_id": 1, "db_name": 1}):
+        if not tenant.get("db_name"):
+            continue
+        row = DatabaseManager.get_tenant_database(tenant["db_name"]).v2_runs.find_one({"alert_id": alert_id,
+            "parent_run_id": {"$exists": False}}, {"run_id": 1, "tenant_id": 1, "definition_ref": 1})
+        if row:
+            return {key: row[key] for key in ("run_id", "tenant_id", "definition_ref")}
+    raise HTTPException(404, "No workflow execution recorded")
 
 
 @router.put("/{kind}/{code}")

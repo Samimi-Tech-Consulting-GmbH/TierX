@@ -23,7 +23,7 @@ from app.db.mongodb import DatabaseManager
 router = APIRouter(
     prefix="/admin/connectors",
     tags=["Workflow connectors"],
-    dependencies=[Depends(enabled), Depends(require_platform_admin)],
+    dependencies=[Depends(require_platform_admin)],
 )
 
 

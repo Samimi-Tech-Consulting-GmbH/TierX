@@ -69,7 +69,11 @@ Human-response waiting, implicit learning, automatic benign-rule approval and au
 
 ## Execution inspection
 
-The execution view shows definition/release versions, actual elapsed wall time, graph states, nested playbooks/agents, errors, model calls and tool-delivery metadata. Full prompts, raw alerts and credentials are excluded from debug/run-list responses. Authorized alert detail retains its separate original source record.
+The execution view shows the pinned root flow revision and checksum separately from the application release. Every graph node appears, including not-reached nodes and capability-only tool definitions. Executed nodes expose sanitized input/output snapshots, checks, decisions, routes, attempts, timestamps, active execution time and wall elapsed time. Nested playbook/agent runs link to their own node timelines. The alert Debug page resolves workflow executions automatically. Copied summaries include the pinned flow version.
+
+Full prompts, raw alerts, evidence text and credentials are excluded from debug/run-list responses. Snapshots above 32 KiB are omitted with checksum and size metadata, not silently truncated. Authorized alert detail retains its separate original source record. Model profiles expose an explicit context-token limit (default 2,048) for Ollama; size it against the tested model and available memory.
+
+Use the dependency-free [Workflow Sandbox](../examples/workflow-sandbox/README.md) to send synthetic alerts and watch the last five runs without blocking ingestion. It starts with `npm install` and `npm run dev` and keeps credentials only in page memory.
 
 Tenant-authorized users may inspect runs and analysis history. Only platform admins cancel root runs and descendants. Cancellation cannot recall already dispatched external operations.
 

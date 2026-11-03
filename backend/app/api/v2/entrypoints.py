@@ -141,6 +141,9 @@ def jira_record(code, tenant_id, submission_id, integration):
         state = "DELIVERY_REQUESTED"
         row["analysis"], row["delivery_id"] = delivery["analysis"], str(delivery["_id"])
         row["comments"] = {key: value for key, value in row.get("comments", {}).items() if key != "FINAL"}
+    elif row.get("alert_id"):
+        alert = db_for(tenant_id).alerts.find_one({"alert_id": row["alert_id"]}, {"alert_analysis": 1})
+        row["analysis"] = (alert or {}).get("alert_analysis")
     if state not in {"DELIVERY_REQUESTED", "DELIVERED", "FAILED"} and run:
         if run["state"] in {"FAILED", "CANCELLED"}:
             state = "FAILED"

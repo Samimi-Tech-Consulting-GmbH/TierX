@@ -77,6 +77,7 @@ async def test_nested_playbook_releases_parent_and_returns_output(environment):
     assert mongo.tenant.v2_runs.count_documents({}) == 2
     assert mongo.tenant.alerts.count_documents({}) == 1
     assert mongo.tenant.v2_alerts.count_documents({}) == 0
+    assert all("wait_reason" not in job for job in mongo.tenant.v2_jobs.find({"state": "SUCCEEDED"}))
 
 
 @pytest.mark.asyncio
@@ -124,6 +125,45 @@ async def test_analysis_persistence_is_alert_owned_and_preserves_history(environ
     assert mongo.tenant.alerts.find_one({"alert_id": "r"})["alert_analysis"]["headline"] == "Evidence-based result"
     assert mongo.tenant.clusters.count_documents({}) == 0
     assert mongo.tenant.v2_alert_analyses.count_documents({}) == 1
+
+
+@pytest.mark.asyncio
+async def test_waiting_selector_reuses_its_first_persisted_fallback(environment, monkeypatch):
+    from app.workflows import runtime
+    from app.workflows.tools import NodeWaiting
+    mongo,db=environment
+    mongo.tenant.v2_jobs.insert_one({"job_id":"selector"})
+    tools=WorkflowTools()
+    tools.profile=AsyncMock(return_value=({},None))
+    tools.model_call=AsyncMock(side_effect=TimeoutError())
+    invoke=AsyncMock(side_effect=NodeWaiting("SUBFLOW_RUNNING"))
+    monkeypatch.setattr(runtime,"invoke",invoke)
+    definition={"references":{"select:playbook:fallback":"playbook:fallback@1","select:playbook:other":"playbook:other@1"}}
+    parent=run(linear([node("entry","entry"),node("done","complete")]))
+    parent["bundle"]["definitions"]["playbook:other@1"]={"description":"Other"}
+    selector=node("select","playbook_selector",mode="model",profile_code="model",candidates=["other"],fallback="fallback")
+    alert={"alert_type":"synthetic","normalized_payload":{}}
+    for _ in range(2):
+        with pytest.raises(NodeWaiting):
+            await tools.select(db,parent,selector,{"job_id":"selector"},alert,definition)
+    assert tools.model_call.await_count==1
+    assert all(call.args[3]=="playbook:fallback@1" for call in invoke.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_failed_reasoning_has_terminal_analysis_status_and_safe_snapshots(environment):
+    mongo,db=environment
+    parent=run(linear([node("entry","entry"),node("map","normalization",field_mapping={"host.name":"host"}),
+        node("reason","llm_analysis",profile_code="missing"),node("done","complete")]))
+    result=await drive(mongo,db,parent)
+    assert result["state"]=="FAILED"
+    alert=mongo.tenant.alerts.find_one({"alert_id":"r"})
+    assert alert["analysis_status"]=="FAILED"
+    job=mongo.tenant.v2_jobs.find_one({"node_id":"reason"})
+    assert job["input_snapshot"]["value"]["normalized_payload"]=={"host.name":"synthetic"}
+    assert "raw_payload" not in str(job["input_snapshot"])
+    assert job["definition_ref"]=="workflow:root@1"
+    assert job["attempt_count"]==1
 
 
 @pytest.mark.asyncio

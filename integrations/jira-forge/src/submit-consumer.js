@@ -51,7 +51,7 @@ async function consume(event) {
       snapshot,
       (attachment) => downloadAttachment(accountId, attachment),
     );
-    const submissionRequest = {
+    const submissionPayload = {
       jira_cloud_id: snapshot.jira_cloud_id,
       jira_site_url: snapshot.jira_site_url,
       issue_id: snapshot.issue_id,
@@ -66,7 +66,7 @@ async function consume(event) {
     await kvs.set(`job:${requestId}`, { requestId, issueKey, state: "CREATING_SUBMISSION" });
     submission = await submissionRequest("", {
       method: "POST",
-      body: submissionRequest,
+      body: submissionPayload,
     });
 
     try {

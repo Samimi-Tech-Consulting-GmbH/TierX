@@ -270,11 +270,17 @@ async def test_typed_validation_and_normalization():
             "raw_payload": {"result": {"host": "example", "severity": "5"}},
         }
     )
-    job = {"ancestors": {}}
+    job = {"job_id": "validation-test", "ancestors": {}}
+    mongo.tenant.v2_jobs.insert_one({"job_id": job["job_id"]})
     validated, _ = await tools.execute(
         db, run, {"id": "v", "type": "validation", "config": {}}, job
     )
     assert validated["validated"]
+    decisions = mongo.tenant.v2_jobs.find_one({"job_id": job["job_id"]})["decisions"]
+    assert decisions["schema_id"] == "s"
+    assert decisions["critical_field_checks"] == [
+        {"field": "host.hostname", "source_path": "result.host", "passed": True}
+    ]
     normalized, _ = await tools.execute(
         db, run, {"id": "n", "type": "normalization", "config": {}}, job
     )

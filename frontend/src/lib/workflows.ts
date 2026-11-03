@@ -28,6 +28,19 @@ export interface FlowDraft {
   draft_version: number;
 }
 export interface WorkflowJob {
+  node_type?: string;
+  label?: string;
+  definition_ref?: string;
+  input_snapshot?: unknown;
+  output_snapshot?: unknown;
+  selection?: unknown;
+  decisions?: unknown;
+  port?: string;
+  first_started_at?: string;
+  completed_at?: string;
+  attempt_count?: number;
+  node_elapsed_ms?: number;
+  execution_duration_ms?: number;
   job_id: string;
   node_id: string;
   state: string;

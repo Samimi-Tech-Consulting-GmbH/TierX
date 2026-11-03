@@ -21,6 +21,7 @@ from app.workers.analysis_worker import AgenticAnalysisWorker, SYSTEM_PROMPT, _o
 from app.workers.correlation_worker import extract_correlation_values, display_pair, as_utc
 from app.workflows.tools import NodeFailure, NodeWaiting, Tools, now
 from app.core.severity import canonical_severity
+from tierx_workflows.tracing import debug_snapshot
 
 
 async def reserve(db, run, identity):
@@ -118,6 +119,7 @@ class WorkflowTools(Tools):
         await db.v2_tool_calls.update_one({"_id": identity}, {"$setOnInsert": {
             "run_id": run["run_id"], "job_id": job["job_id"], "tool": tool_name, "connector_code": code,
             "arguments_sha256": digest, "state": "RUNNING", "started_at": now(),
+            "arguments_snapshot": debug_snapshot(arguments),
             "deadline": now() + timedelta(seconds=pinned["timeout_seconds"])}}, upsert=True)
         credential = None
         if current.get("credentials"):
@@ -133,6 +135,7 @@ class WorkflowTools(Tools):
                 "state": "FAILED", "completed_at": now(), "error_type": str(exc)}})
             raise NodeFailure(str(exc)) from exc
         await db.v2_tool_calls.update_one({"_id": identity}, {"$set": {"state": "SUCCEEDED", "output": output,
+            "output_snapshot": debug_snapshot(output),
             "output_sha256": checksum(output), "completed_at": now(), "duration_ms": (time.monotonic() - started) * 1000}})
         return output
 
@@ -260,6 +263,12 @@ class WorkflowTools(Tools):
 
     async def select(self, db, run, node, job, alert, definition):
         cfg = node["config"]
+        saved = await db.v2_jobs.find_one({"job_id": job["job_id"]}) or {}
+        if saved.get("selection"):
+            selection = saved["selection"]
+            selected = selection["selected_playbook"]
+            result = await invoke(db, run, job, definition["references"][f"{node['id']}:playbook:{selected}"], "selected")
+            return {**selection, **result}
         selected = cfg.get("mappings", {}).get(alert["alert_type"])
         reason, confidence = "STATIC_MAPPING" if selected else "NO_STATIC_MAPPING", None
         model_reason = None
@@ -288,7 +297,9 @@ class WorkflowTools(Tools):
         selection = {"selected_playbook": selected, "reason": reason, "confidence": confidence,
                      "model_reason": model_reason,
                      "threshold": cfg.get("threshold", 0.7), "fallback": reason not in {"STATIC_MAPPING", "MODEL_ACCEPTED"}}
-        await db.v2_jobs.update_one({"job_id": job["job_id"]}, {"$set": {"selection": selection}})
+        await db.v2_jobs.update_one({"job_id": job["job_id"], "selection": {"$exists": False}}, {"$set": {"selection": selection}})
+        selection = (await db.v2_jobs.find_one({"job_id": job["job_id"]}))["selection"]
+        selected = selection["selected_playbook"]
         result = await invoke(db, run, job, definition["references"][f"{node['id']}:playbook:{selected}"], "selected")
         return {**selection, **result}
 

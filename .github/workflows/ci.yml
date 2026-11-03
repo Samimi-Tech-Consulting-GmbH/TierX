@@ -154,6 +154,20 @@ jobs:
       - run: pip install pytest
       - run: pytest examples/workflow-providers/test_server.py -q
 
+  workflow-sandbox:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/workflow-sandbox
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm test
+      - run: node --check app.js
+
   configuration:
     runs-on: ubuntu-latest
     steps:
@@ -203,7 +217,7 @@ jobs:
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
       )
-    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, workflow-provider, configuration, kb-semantic]
+    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, workflow-provider, workflow-sandbox, configuration, kb-semantic]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.next.outputs.version }}

@@ -17,6 +17,7 @@ from tierx_workflows import (
     validate_graph,
 )
 from tierx_workflows.examples import examples
+from tierx_workflows.graph import MODERN_NODE_TYPES
 from tierx_workflows.safety import sanitize
 
 from app.api.dependencies.auth import (
@@ -73,6 +74,7 @@ def db_for(tenant_id):
     db.v2_revisions.create_index([("flow_id", 1), ("revision", 1)], unique=True)
     db.v2_bindings.create_index("binding_key", unique=True)
     db.v2_jobs.create_index([("state", 1), ("lease_expires_at", 1)])
+    db.v2_runs.create_index([("alert_id", 1), ("parent_run_id", 1)])
     return db
 
 
@@ -214,7 +216,7 @@ def catalog(tenant_id=Depends(verify_tenant_access), user=Depends(get_current_us
     db_for(tenant_id)
     return {
         "format_version": "1.0",
-        "node_types": sorted(NODE_TYPES),
+        "node_types": sorted(NODE_TYPES - MODERN_NODE_TYPES),
         "default_graph": default_graph(),
         "examples": examples(),
     }
@@ -533,6 +535,10 @@ def run_detail(
 ):
     db = db_for(tenant_id)
     run = found(db.v2_runs, {"run_id": run_id})
+    root = db.v2_runs.find_one({"run_id": run.get("root_run_id", run_id)}) or run
+    root_definition = (root.get("bundle") or {}).get("definitions", {}).get(root.get("definition_ref"), {})
+    run["workflow_version"] = {"code": root.get("definition_code"), "revision": root.get("revision"),
+        "definition_ref": root.get("definition_ref"), "checksum": root_definition.get("checksum")}
     run.pop("resources", None)
     run.pop("input", None)
     run["nodes"] = list(
@@ -540,6 +546,15 @@ def run_detail(
             "created_at", 1
         )
     )
+    observed = {job["node_id"] for job in run["nodes"]}
+    for node in run["graph"]["nodes"]:
+        for job in run["nodes"]:
+            if job["node_id"] == node["id"]:
+                job["node_type"], job["label"] = node["type"], node.get("label", node["id"])
+        if node["id"] not in observed:
+            capability = any(edge["source"] == node["id"] and edge.get("sourceHandle") == "tool" for edge in run["graph"]["edges"])
+            run["nodes"].append({"job_id": "not-executed:" + node["id"], "node_id": node["id"], "node_type": node["type"],
+                "label": node.get("label", node["id"]), "state": "CAPABILITY_ONLY" if capability else "NOT_REACHED"})
     run["alert"] = db.v2_alerts.find_one(
         {"alert_id": run["alert_id"]},
         {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0},

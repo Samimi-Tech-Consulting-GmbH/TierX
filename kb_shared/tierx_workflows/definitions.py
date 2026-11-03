@@ -97,6 +97,13 @@ def compile_bundle(root, resolve, tenant_id, resolve_resources):
         return identity
 
     identity = visit(root)
+    heights = {}
+    def height(reference):
+        if reference not in heights:
+            heights[reference] = max((1 + height(child) for child in bundle[reference]["references"].values()), default=0)
+        return heights[reference]
+    if height(identity) > 3:
+        raise GraphError("Maximum three nested definition calls")
     validate_parallel_effects(bundle)
     result = {"root": identity, "definitions": bundle}
     if len(canonical(result)) > 4 * 1024 * 1024:

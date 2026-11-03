@@ -26,6 +26,7 @@ NODE_TYPES = {
     "playbook_call", "playbook_selector", "agent", "tool_call",
     "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook",
 }
+MODERN_NODE_TYPES = {"playbook_call", "playbook_selector", "agent", "tool_call", "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook"}
 MUTATIONS = {
     "kb_deterministic", "kb_semantic", "persist_analysis",
     "normalization",
@@ -238,6 +239,10 @@ def validate_graph(graph):
         if kind not in NODE_TYPES:
             raise GraphError("Unknown node type")
         cfg = node.get("config", {})
+        if graph.get("format_version") != "2.0" and (kind in MODERN_NODE_TYPES or any(
+            str(tool).startswith(("connector:", "agent:", "playbook:")) for tool in cfg.get("tools", []) or []
+        )):
+            raise GraphError("Modern nodes and tools require workflow format 2.0")
         if graph.get("format_version") == "2.0" and "debounce_ms" in cfg:
             raise GraphError("Workflow correlation does not delay analysis; remove debounce_ms")
         if not isinstance(cfg, dict) or set(cfg) - CONFIG[kind]:
