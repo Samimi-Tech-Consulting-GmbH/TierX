@@ -3,14 +3,8 @@ import os
 
 # Canonical TierX environment variables override current unprefixed names;
 # legacy SOC_MIND_* aliases remain permanent for existing deployments.
-for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("TIERX_") and _value:
-        os.environ[_key.removeprefix("TIERX_")] = _value
-for _key, _value in tuple(os.environ.items()):
-    if _key.startswith("SOC_MIND_"):
-        _unprefixed = _key.removeprefix("SOC_MIND_")
-        if _unprefixed not in os.environ and f"TIERX_{_unprefixed}" not in os.environ:
-            os.environ[_unprefixed] = _value
+from tierx_runtime import normalize_environment
+normalize_environment()
 import httpx
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -89,8 +83,8 @@ async def lifespan(app: FastAPI):
         TenantService.initialize_schema()
         from app.models.user import User
         User.ensure_indexes()
-        PlatformConfigurationService.initialize()
-        app.state.installation_completed = installed(PlatformConfigurationService.document())
+        await asyncio.to_thread(PlatformConfigurationService.initialize)
+        app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
         app.state.configuration_revision = 0
         app.state.configuration_ready = True
         settings_task = asyncio.create_task(refresh_platform_settings(), name="platform-settings")
@@ -148,7 +142,10 @@ async def installation_gate(request: Request, call_next):
     if getattr(app.state, "configuration_ready", False):
         allowed = {"/api/v1/health", "/api/v1/installation/status", "/api/v1/installation/test", "/api/v1/installation/complete"}
         if request.url.path not in allowed and not getattr(app.state, "installation_completed", False):
-            app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
+            try:
+                app.state.installation_completed = installed(await asyncio.to_thread(PlatformConfigurationService.document))
+            except Exception:
+                return JSONResponse(status_code=503, content={"detail": "INSTALLATION_STATUS_UNAVAILABLE"})
         if request.url.path not in allowed and not app.state.installation_completed:
             return JSONResponse(status_code=503, content={"detail": "INSTALLATION_REQUIRED"})
     response = await call_next(request)
@@ -174,15 +171,18 @@ async def refresh_platform_settings():
             from app.services import debug_trace_service
             debug_trace_service.CORRELATION_ENABLED = values["correlation_enabled"]
             debug_trace_service.LLM_ANALYSIS_ENABLED = values["llm_analysis_enabled"]
-            PlatformConfigurationService.db().service_heartbeats.update_one(
-                {"service": "backend"}, {"$set": heartbeat("backend", doc.get("revision", 0))}, upsert=True)
+            await record_configuration_heartbeat(heartbeat("backend", doc.get("revision", 0)))
         except Exception:
             try:
-                PlatformConfigurationService.db().service_heartbeats.update_one(
-                    {"service": "backend"}, {"$set": {"configuration_error": "SETTINGS_REFRESH_FAILED"}}, upsert=True)
+                await record_configuration_heartbeat({"configuration_error": "SETTINGS_REFRESH_FAILED"})
             except Exception:
                 pass
         await asyncio.sleep(5)
+
+
+async def record_configuration_heartbeat(values):
+    await asyncio.to_thread(lambda: PlatformConfigurationService.db().service_heartbeats.update_one(
+        {"service": "backend"}, {"$set": values}, upsert=True))
 
 app.add_middleware(
     CORSMiddleware,

@@ -78,6 +78,23 @@ Refresh failures retain the last valid configuration and expose a safe error.
 Heartbeat freshness must be checked alongside revision; a stopped service is not
 treated as applied merely because its last recorded revision matches.
 
+## Analysis requests for non-active tenants
+
+An analysis request whose tenant is unknown, suspended, or deleted is rejected
+with `INVALID_ANALYSIS_REQUEST` in the dead-letter queue. After successful DLQ
+publication, its Kafka offset is acknowledged so it cannot block other tenants.
+Reactivating a tenant does not automatically resume these rejected requests;
+an operator must explicitly resubmit the original analysis request after verifying
+that the tenant is active. This is distinct from durable jobs already accepted
+into `analysis_runs`, and does not change their existing lifecycle.
+
+The DLQ record retains the tenant and alert identifiers, without copying arbitrary
+invalid payloads. Non-active tenants cannot resolve to an active tenant database,
+so operators locate these records in the platform database's `dead_letters`
+collection by `tenant_id`, `alert_id`, and `error_type=INVALID_ANALYSIS_REQUEST`.
+Transient MongoDB or DLQ-publication failures remain retryable; they are not
+treated as tenant rejection or acknowledged before durable handling.
+
 No schema migration, TLS provisioning, arbitrary internal wiring editor, or model
 download is performed by these APIs. Do not delete installation state to reset
 administrators; use normal authenticated user management.

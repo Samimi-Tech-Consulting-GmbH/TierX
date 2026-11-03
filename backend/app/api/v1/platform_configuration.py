@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -61,18 +62,18 @@ def installation_status():
 
 @router.post("/installation/test")
 async def installation_test(values: Values, token: Optional[str] = Header(None, alias="X-TierX-Installation-Token")):
-    Service.authorize_setup(token)
+    await asyncio.to_thread(Service.authorize_setup, token)
     _, result = resolved(values)
     return await Service.test(result)
 
 
 @router.post("/installation/complete")
 async def installation_complete(body: Complete, token: Optional[str] = Header(None, alias="X-TierX-Installation-Token")):
-    Service.authorize_setup(token)
+    await asyncio.to_thread(Service.authorize_setup, token)
     saved, result = resolved(body.values)
     if result["llm_analysis_enabled"]:
         await Service.test(result)
-    Service.reserve(str(body.email), body.password, validate(saved))
+    await asyncio.to_thread(Service.reserve, str(body.email), body.password, validate(saved))
     return {"installed": True}
 
 
@@ -84,7 +85,7 @@ def platform_settings(admin=Depends(require_platform_admin)):
 @router.put("/admin/settings/platform")
 async def update_platform_settings(body: Update, admin=Depends(require_platform_admin)):
     try:
-        return await Service.update(body.values.model_dump(), body.expected_revision, admin.email)
+        return await Service.update(body.values.model_dump(exclude_unset=True), body.expected_revision, admin.email)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

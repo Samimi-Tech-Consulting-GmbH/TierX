@@ -39,6 +39,10 @@ class ContextTooLargeError(ValueError):
     pass
 
 
+class InactiveAnalysisTenantError(ValueError):
+    pass
+
+
 def _canonical(value: Any) -> bytes:
     return json.dumps(
         value, default=str, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -195,7 +199,7 @@ class AgenticAnalysisWorker(BaseWorker):
             {"db_name": 1, "_id": 0},
         )
         if not tenant:
-            raise ValueError(f"Active tenant not found: {tenant_id}")
+            raise InactiveAnalysisTenantError("Active tenant not found")
         return tenant
 
     async def process(self, data: dict[str, Any]) -> None:
@@ -235,6 +239,20 @@ class AgenticAnalysisWorker(BaseWorker):
     async def _handle(self, msg: Any) -> None:
         try:
             await self.process(msg.value)
+        except (ValidationError, InactiveAnalysisTenantError):
+            # Poison input must not block every later record on this partition.
+            # Never include arbitrary invalid payload values in the DLQ.
+            data = msg.value
+            def safe_id(key):
+                value = data.get(key)
+                return value if isinstance(value, str) and len(value) <= 256 else None
+            await self.produce_dead_letter(
+                alert_id=safe_id("alert_id") or "unknown",
+                tenant_id=safe_id("tenant_id"), alert_type=None, source_system=None,
+                raw_payload=None, error_type="INVALID_ANALYSIS_REQUEST",
+                error_detail="Invalid analysis request or tenant is not active",
+                failed_stage="ANALYSIS",
+            )
         except Exception:
             self.logger.exception("Failed to persist analysis request")
             raise
@@ -268,11 +286,6 @@ class AgenticAnalysisWorker(BaseWorker):
                     if not job:
                         break
                     with settings.capture(job.get("configuration_snapshot")) as snapshot:
-                        job["configuration_snapshot"] = snapshot
-                        job.setdefault("configuration_revision", settings.revision)
-                        await db[RUNS_COLLECTION].update_one({"analysis_run_id": job["analysis_run_id"]}, {"$set": {
-                            "configuration_snapshot": snapshot, "configuration_revision": job["configuration_revision"],
-                        }})
                         await self._execute(db, job)
                 finally:
                     self._inference_running = False
@@ -293,14 +306,16 @@ class AgenticAnalysisWorker(BaseWorker):
                     },
                 ]
             },
-            {
+            [{
                 "$set": {
                     "state": "RUNNING",
                     "lease_expires_at": lease,
                     "started_at": now,
                     "updated_at": now,
+                    "configuration_snapshot": {"$ifNull": ["$configuration_snapshot", {"$literal": dict(settings.values)}]},
+                    "configuration_revision": {"$ifNull": ["$configuration_revision", settings.revision]},
                 }
-            },
+            }],
             sort=[("requested_analysis_version", -1), ("created_at", 1)],
             return_document=ReturnDocument.AFTER,
         )
