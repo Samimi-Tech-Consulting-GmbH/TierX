@@ -165,6 +165,9 @@ jobs:
           docker compose -f examples/usage/compose.all-in-one.yaml config --quiet
           docker compose -f examples/usage/compose.external-ollama.yaml config --quiet
           docker compose -f examples/usage/compose.all-in-one.yaml --profile semantic config --quiet
+          docker compose -f examples/usage/compose.all-in-one.yaml -f examples/usage/compose.ingestion-v2.yaml --profile ingestion-v2 config --quiet
+          docker compose -f examples/usage/compose.all-in-one.yaml -f examples/usage/compose.ingestion-v2.yaml -f examples/usage/compose.ingestion-v2-build.yaml -f examples/usage/compose.ingestion-v2-model-build.yaml --profile ingestion-v2 config --quiet
+          docker compose -f examples/usage/compose.external-ollama.yaml -f examples/usage/compose.ingestion-v2.yaml -f examples/usage/compose.ingestion-v2-build.yaml --profile ingestion-v2 config --quiet
       - name: Test semantic-version calculation
         run: |
           test "$(.github/scripts/next-version.sh '' patch)" = "0.2.0"

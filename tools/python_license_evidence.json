@@ -1,4 +1,5 @@
 {
+  "jsonschema": {"license": "MIT", "source": "https://pypi.org/project/jsonschema/4.25.1/"},
   "mem0ai": {"license": "Apache-2.0", "source": "https://pypi.org/project/mem0ai/1.0.11/"},
   "ollama": {"license": "MIT", "source": "https://pypi.org/project/ollama/0.6.1/"},
   "qdrant-client": {"license": "Apache-2.0", "source": "https://pypi.org/project/qdrant-client/1.17.0/"},

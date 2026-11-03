@@ -95,6 +95,16 @@ def python_components(path: Path) -> list[dict]:
 def main() -> None:
     components = [item for path in LOCKS for item in npm_components(path)]
     components += [item for path in (*REQUIREMENTS, *PYPROJECTS) for item in python_components(path)]
+    # Runtime CSS retained without installing the unrelated shadcn CLI toolchain.
+    stylesheet = ROOT / "frontend/src/styles/shadcn-utilities.css"
+    components.append({
+        "type": "library", "name": "shadcn-css", "version": "4.22.1",
+        "purl": "pkg:npm/shadcn@4.22.1#dist/tailwind.css",
+        "licenses": [{"license": {"id": "MIT"}}],
+        "hashes": [{"alg": "SHA-256", "content": hashlib.sha256(stylesheet.read_bytes()).hexdigest()}],
+        "properties": [{"name": "tierx:manifest", "value": str(stylesheet.relative_to(ROOT))},
+                       {"name": "tierx:license-evidence", "value": "frontend/src/styles/shadcn-LICENSE.txt"}],
+    })
     components.sort(key=lambda value: (value["name"].lower(), value.get("version", ""), value["purl"], value["properties"][0]["value"], value.get("bom-ref", "")))
     manifest_hash = hashlib.sha256("".join(path.read_text() for path in (*LOCKS, *REQUIREMENTS, *PYPROJECTS)).encode()).hexdigest()
     sbom = {

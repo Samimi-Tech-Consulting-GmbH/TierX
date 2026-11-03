@@ -1,0 +1,10 @@
+# Optional overlay: set TIERX_INGESTION_V2_ENABLED=true explicitly.
+services:
+  workflow-v2:
+    extends:
+      file: compose.common.yaml
+      service: pipeline
+    command: [python, workflow_main.py]
+    restart: on-failure
+    stop_grace_period: 32m
+    profiles: [ingestion-v2]

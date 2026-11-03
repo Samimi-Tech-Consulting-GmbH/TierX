@@ -1,6 +1,7 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY scripts/minimatch-compat.mjs ./scripts/minimatch-compat.mjs
 RUN npm ci
 
 FROM deps AS development

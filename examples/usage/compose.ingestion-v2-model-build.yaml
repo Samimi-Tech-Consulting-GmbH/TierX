@@ -1,0 +1,5 @@
+# Only for the all-in-one variant; external Ollama does not need this service.
+services:
+  model-init:
+    image: tierx-v2-init:local
+    build: {context: ../../init, dockerfile: Dockerfile}

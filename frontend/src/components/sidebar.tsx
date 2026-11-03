@@ -190,6 +190,12 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
       icon: LibraryBig,
       group: "Configuration",
     },
+    {
+      href: sectionHref("ingestion-v2", tenantId, isPlatformAdmin),
+      label: "Ingestion V2",
+      icon: ScanSearch,
+      group: "Configuration",
+    },
   ];
 }
 
