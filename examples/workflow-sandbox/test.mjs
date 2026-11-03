@@ -53,7 +53,7 @@ test("timeout, watch again, five-card eviction, cancellation and clear stop loca
 test("only fixed ingestion, observer and login routes are allowed",()=>{
   assert(allowed("POST","/api/v2/workflows/triage/tenants/one/ingest"));
   assert(allowed("GET","/api/v2/tenants/one/runs/id"));
-  for(const path of ["//evil.example", "/api/v2/admin/connectors", "/api/v1/admin/debug/ingest", "/api/v2/workflows/a/tenants/one/ingest/extra"]) assert.equal(allowed("POST",path),false);
+  for(const path of ["//evil.example", "/api/v2/admin/connectors", "/api/v1/admin/debug/ingest", "/api/v2/workflows/a/tenants/one/ingest/extra", "https://evil.example/api/v1/auth/login", "\\\\evil.example"]) assert.equal(allowed("POST",path),false);
   assert.throws(()=>createSandbox("https://user:password@example.com"));
   assert.throws(()=>createSandbox("http://example.com"));
 });

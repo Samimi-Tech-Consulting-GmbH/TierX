@@ -30,7 +30,12 @@ export function createSandbox(targetValue, upstreamFetch = fetch) {
       if (request.headers["idempotency-key"]) headers["Idempotency-Key"] = request.headers["idempotency-key"];
       const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 15000);
       try {
-        const result = await upstreamFetch(new URL(path, target), { method: request.method, headers,
+        // Request input can change only the pathname, never the upstream authority.
+        const destination = new URL(target.href);
+        destination.pathname = path;
+        destination.search = "";
+        destination.hash = "";
+        const result = await upstreamFetch(destination, { method: request.method, headers,
           body: request.method === "GET" ? undefined : Buffer.concat(chunks), redirect: "manual", signal: controller.signal });
         if (result.status >= 300 && result.status < 400) return send(502, '{"detail":"Upstream redirects are not allowed"}');
         const blocks = []; let length = 0;
