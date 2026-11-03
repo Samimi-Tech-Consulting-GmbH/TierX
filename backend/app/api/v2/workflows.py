@@ -21,6 +21,7 @@ from tierx_workflows.examples import examples
 from app.api.dependencies.auth import (
     get_current_user,
     require_tenant_admin,
+    require_platform_admin,
     verify_tenant_access,
 )
 from app.db.mongodb import DatabaseManager
@@ -110,7 +111,7 @@ class AlertInput(BaseModel):
 
 def resources(db, graph, tenant_id):
     """Resolve and pin resources; cross-tenant IDs cannot resolve."""
-    result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}}
+    result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}, "connectors": {}}
     platform = DatabaseManager.get_tenant_database("soc_mind_platform")
     for node in graph["nodes"]:
         cfg, kind = node.get("config", {}), node["type"]
@@ -128,7 +129,10 @@ def resources(db, graph, tenant_id):
             query = {"playbook_id": cfg["playbook_id"], "deleted_at": None}
             if cfg.get("version"):
                 query["version"] = cfg["version"]
-            result["playbooks"][node["id"]] = found(db.playbooks, query)
+            row = db.playbooks.find_one(query, {"_id": 0}, sort=[("version", -1)])
+            if not row:
+                raise HTTPException(422, "Referenced playbook unavailable")
+            result["playbooks"][node["id"]] = row
         codes = (
             [cfg["action_code"]]
             if kind == "enrichment_action" and cfg.get("action_code")
@@ -153,7 +157,21 @@ def resources(db, graph, tenant_id):
                 for k, v in action.items()
                 if k not in {"ciphertext", "nonce", "secret"}
             }
-        if kind in {"llm_analysis", "llm_tools"}:
+        connector_refs = []
+        if kind in {"tool_call", "webhook"}:
+            connector_refs.append((cfg["connector_code"], cfg["tool_name"]))
+        for tool in cfg.get("tools", []):
+            if tool.startswith("connector:"):
+                _, code, tool_name = tool.split(":")
+                connector_refs.append((code, tool_name))
+        for code, tool_name in connector_refs:
+            connector = found(platform.v2_connectors, {"connector_code": code, "enabled": True})
+            if tenant_id not in connector["tenant_ids"]:
+                raise HTTPException(403, "Connector not authorized for tenant")
+            if not any(tool["name"] == tool_name for tool in connector["tools"]):
+                raise HTTPException(422, "Tool schema is not explicitly approved")
+            result["connectors"][code] = {k: v for k, v in connector.items() if k not in {"credentials", "_id"}}
+        if kind in {"llm_analysis", "llm_tools", "playbook_selector"} and cfg.get("profile_code"):
             profile = found(
                 platform.v2_llm_profiles,
                 {"profile_code": cfg["profile_code"], "enabled": True},

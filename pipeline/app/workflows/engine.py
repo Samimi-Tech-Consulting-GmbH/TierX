@@ -12,6 +12,7 @@ from tierx_workflows import checksum
 from tierx_workflows.llm import ModelError
 from app.db.mongodb import get_client, get_database
 from app.workflows.tools import Tools, NodeFailure, NodeWaiting
+from app.workflows.runtime import WorkflowTools
 
 logger = logging.getLogger("workflow-v2")
 
@@ -25,7 +26,7 @@ class Engine:
         self.owner = str(uuid4())
         self.tasks = set()
         self.stopping = False
-        self.tools = Tools()
+        self.tools = WorkflowTools()
         self.tenant_cursor = 0
 
     async def enqueue(self, db, run, node_id, path=(), ancestors=None, error=None):
@@ -59,6 +60,8 @@ class Engine:
                     "status": "RECEIVED",
                     "kafka_state": "RECEIVED",
                     "run_id": run["run_id"],
+                    "workflow_format": run["graph"].get("format_version", "1.0"),
+                    "source_reference": run.get("source_reference"),
                 }
             },
             upsert=True,
@@ -188,6 +191,7 @@ class Engine:
                         "state": state,
                         "completed_at": now(),
                         "terminal_node": node["id"],
+                        "output": job.get("output", {}).get("result"),
                         **({"error": job["error"]} if job.get("error") else {}),
                     }
                 },
@@ -197,6 +201,7 @@ class Engine:
                 e
                 for e in run["graph"]["edges"]
                 if e["source"] == node["id"]
+                and e.get("sourceHandle") != "tool"
                 and (
                     node["type"] == "fork"
                     or e.get("sourceHandle", "success") == job["port"]

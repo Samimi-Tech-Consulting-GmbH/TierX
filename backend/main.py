@@ -135,6 +135,12 @@ from app.api.v2.workflows import router as workflows_v2_router
 app.include_router(workflows_v2_router, prefix="/api/v2")
 from app.api.v2.llm_profiles import router as llm_profiles_v2_router
 app.include_router(llm_profiles_v2_router, prefix="/api/v2")
+from app.api.v2.connectors import router as connectors_v2_router
+app.include_router(connectors_v2_router, prefix="/api/v2")
+from app.api.v2.definitions import router as definitions_v2_router
+app.include_router(definitions_v2_router, prefix="/api/v2")
+from app.api.v2.entrypoints import router as workflow_entry_router
+app.include_router(workflow_entry_router, prefix="/api/v2")
 
 
 @app.middleware("http")

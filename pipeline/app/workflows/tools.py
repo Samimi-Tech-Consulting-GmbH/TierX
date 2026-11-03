@@ -333,7 +333,7 @@ class Tools:
                 for field, path in mapping.items()
                 if (value := resolve_path(alert["raw_payload"], path)) is not None
             }
-            if not alert.get("validated"):
+            if not alert.get("validated") and run.get("graph", {}).get("format_version") != "2.0":
                 raise NodeFailure("VALIDATED_ALERT_REQUIRED")
             if len(json.dumps(normalized).encode()) > 256 * 1024:
                 raise NodeFailure("NORMALIZED_ALERT_TOO_LARGE")
@@ -916,7 +916,7 @@ class Tools:
             return
         self.last_schedule[db.name] = now()
         for cohort in await db.v2_clusters.distinct(
-            "cohort", {"is_open_for_grouping": True}
+            "cohort", {"is_open_for_grouping": True, "workflow_format": {"$ne": "2.0"}}
         ):
             root = await db.v2_runs.find_one(
                 {"cohort": cohort}, sort=[("created_at", 1)]
