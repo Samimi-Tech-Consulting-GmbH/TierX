@@ -130,7 +130,7 @@ def main():
         report={"status":"PASS","tenant_id":tenant_id,"workflow":workflow,"run_id":first["run_id"],"related_run_id":related["run_id"],"duplicate_run_id":duplicate["run_id"],"invalid_run_id":invalid["run_id"],"flow_version":first["workflow_version"],"real_model":"phi3:latest"}
         (STATE/"report.json").write_text(json.dumps(report,indent=2));print(json.dumps(report),flush=True)
         if args.serve:
-            start(["node","server.mjs"],ROOT/"examples/workflow-sandbox",{"TIERX_TARGET":saved["target"]})
+            start(["node","server.mjs"],ROOT/"examples/workflow-sandbox",{"TIERX_TARGET":saved["target"],"TIERX_UI_ORIGIN":"http://127.0.0.1:13004"})
             print("Sandbox: http://127.0.0.1:4174 ; copy-once local credentials: " + str(credentials),flush=True)
             while True: time.sleep(10)
     finally:

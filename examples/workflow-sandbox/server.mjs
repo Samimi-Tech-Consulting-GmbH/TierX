@@ -6,8 +6,10 @@ export function allowed(method, path) {
   return (method === "POST" && (path === "/api/v1/auth/login" || /^\/api\/v2\/workflows\/[a-z0-9][a-z0-9_-]{0,63}\/tenants\/[a-zA-Z0-9_-]+\/ingest$/.test(path))) ||
     (method === "GET" && (/^\/api\/v2\/tenants\/[a-zA-Z0-9_-]+\/runs\/[a-zA-Z0-9_-]+$/.test(path) || path === "/api/v1/auth/me"));
 }
-export function createSandbox(targetValue, upstreamFetch = fetch) {
+export function createSandbox(targetValue, upstreamFetch = fetch, uiValue = targetValue) {
   const target = new URL(targetValue);
+  const ui = new URL(uiValue);
+  if (ui.username || ui.password || ui.search || ui.hash || ui.pathname !== "/" || !["http:", "https:"].includes(ui.protocol)) throw new Error("Use a UI origin without credentials or a path.");
   if (target.username || target.password || target.search || target.hash || target.pathname !== "/" ||
       !(target.protocol === "https:" || target.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(target.hostname))) throw new Error("Use a public HTTPS origin or a local HTTP origin.");
   return createServer(async (request, response) => {
@@ -19,7 +21,7 @@ export function createSandbox(targetValue, upstreamFetch = fetch) {
     try {
     if (!localOrigins.some(origin => new URL(origin).host === request.headers.host) || request.headers.origin && !localOrigins.includes(request.headers.origin)) return send(403, '{"detail":"Local same-origin access required"}');
     const url = new URL(request.url, localOrigins[0]);
-    if (url.pathname === "/config" && request.method === "GET") return send(200, JSON.stringify({ target: target.origin }));
+    if (url.pathname === "/config" && request.method === "GET") return send(200, JSON.stringify({ target: target.origin, ui_origin: ui.origin }));
     if (url.pathname.startsWith("/proxy/")) {
       const path = url.pathname.slice(6);
       if (url.search || !allowed(request.method, path)) return send(403, '{"detail":"Proxy route is not permitted"}');
@@ -57,5 +59,6 @@ export function createSandbox(targetValue, upstreamFetch = fetch) {
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.SANDBOX_PORT || 4174);
-  createSandbox(process.env.TIERX_TARGET || "http://127.0.0.1:8080").listen(port, "127.0.0.1", () => console.log(`TierX Workflow Sandbox: http://127.0.0.1:${port}`));
+  const target = process.env.TIERX_TARGET || "http://127.0.0.1:8080";
+  createSandbox(target, fetch, process.env.TIERX_UI_ORIGIN || target).listen(port, "127.0.0.1", () => console.log(`TierX Workflow Sandbox: http://127.0.0.1:${port}`));
 }

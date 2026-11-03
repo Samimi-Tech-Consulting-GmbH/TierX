@@ -7,7 +7,7 @@ npm install
 TIERX_TARGET=https://your-instance.example npm run dev
 ```
 
-Open `http://127.0.0.1:4174`. The default target is `http://127.0.0.1:8080` for local development. Set `SANDBOX_PORT` to change the local port. It binds only to localhost; do not expose it as a public service.
+Open `http://127.0.0.1:4174`. The default target is `http://127.0.0.1:8080` for local development. Set `SANDBOX_PORT` to change the local port. If your local frontend uses a different origin from the API, set `TIERX_UI_ORIGIN` to the frontend origin so Debug links open correctly. It binds only to localhost; do not expose it as a public service.
 
 1. Prepare a disposable tenant and a published, assigned workflow. Its entry must match the raw JSON you send. The supplied payload is synthetic, not a real customer alert.
 2. Log in with an account authorized to inspect that tenant. The observer JWT stays in page memory, not local/session storage or files.
