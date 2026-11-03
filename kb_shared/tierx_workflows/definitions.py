@@ -16,6 +16,8 @@ def validate_definition(kind, configuration):
         graph = validate_graph(configuration)
         if graph["format_version"] != "2.0":
             raise GraphError("Shared definitions require graph format 2.0")
+        if any(node["type"] in {"playbook", "enrichment_action", "knowledge_base"} for node in graph["nodes"]):
+            raise GraphError("Use shared playbook calls, REST/MCP tools, and explicit KB retrieval nodes")
         if kind == "workflow" and set(graph.get("input_capabilities", ["raw"])) != {"raw"}:
             raise GraphError("Workflow ingestion provides raw input only")
         return graph
@@ -27,6 +29,8 @@ def validate_definition(kind, configuration):
     cfg.setdefault("max_rounds", 5)
     cfg.setdefault("max_calls", 10)
     cfg.setdefault("output_schema", {"type": "object"})
+    if any(str(tool).startswith("action:") for tool in cfg["tools"]):
+        raise GraphError("Use approved REST/MCP connectors instead of legacy action references")
     validate_schema(cfg["output_schema"])
     # Validate agents with exactly the same bounded node contract as execution.
     validate_graph(agent_graph(cfg))
@@ -93,7 +97,49 @@ def compile_bundle(root, resolve, tenant_id, resolve_resources):
         return identity
 
     identity = visit(root)
+    validate_parallel_effects(bundle)
     result = {"root": identity, "definitions": bundle}
     if len(canonical(result)) > 4 * 1024 * 1024:
         raise GraphError("Compiled definition bundle exceeds 4 MiB")
     return result
+
+
+def validate_parallel_effects(bundle):
+    """Resolve subflow effects before allowing parallel writes to the same alert."""
+    effect_names = {"normalization": "normalization", "validation": "validation", "fingerprint": "fingerprint",
+        "correlation": "correlation", "persist_analysis": "analysis", "playbook": "legacy_playbook",
+        "knowledge_base": "knowledge", "kb_deterministic": "knowledge", "kb_semantic": "knowledge"}
+    cache = {}
+    def effects(identity):
+        if identity not in cache:
+            item = bundle[identity]
+            cache[identity] = set().union(*(node_effects(item, node) for node in item["graph"]["nodes"]))
+        return cache[identity]
+    def node_effects(item, node):
+        result = {effect_names[node["type"]]} if node["type"] in effect_names else set()
+        for slot, reference in item["references"].items():
+            if slot == node["id"] or slot.startswith(node["id"] + ":"):
+                result |= effects(reference)
+        return result
+    for item in bundle.values():
+        graph = item["graph"]
+        by_id = {node["id"]: node for node in graph["nodes"]}
+        edges = [edge for edge in graph["edges"] if edge.get("sourceHandle") != "tool"]
+        for node in graph["nodes"]:
+            if node["type"] != "fork":
+                continue
+            branches = []
+            for edge in edges:
+                if edge["source"] != node["id"]:
+                    continue
+                found, pending, writes = set(), [edge["target"]], set()
+                while pending:
+                    identity = pending.pop()
+                    if identity in found or identity == node["config"]["join_id"]:
+                        continue
+                    found.add(identity)
+                    writes |= node_effects(item, by_id[identity])
+                    pending.extend(edge["target"] for edge in edges if edge["source"] == identity)
+                if any(writes & existing for existing in branches):
+                    raise GraphError("Conflicting parallel writes through nested definitions")
+                branches.append(writes)

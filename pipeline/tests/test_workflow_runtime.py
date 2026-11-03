@@ -7,6 +7,7 @@ import pytest
 from tierx_workflows.graph import checksum
 from app.workflows.engine import Engine
 from app.workflows.runtime import WorkflowTools, reserve
+from app.workflows.storage import WorkflowDatabase
 from app.workflows.tools import NodeFailure
 from workflow_database import Database
 
@@ -24,7 +25,7 @@ def node(identity, kind, **config):
 def environment(monkeypatch):
     from app.workflows import runtime
     mongo = mongomock.MongoClient(tz_aware=True)
-    db, platform = Database(mongo.tenant), Database(mongo.platform)
+    db, platform = WorkflowDatabase(Database(mongo.tenant)), Database(mongo.platform)
     monkeypatch.setattr(runtime, "get_database", lambda: platform)
     mongo.platform.workflow_definitions.insert_many([
         {"kind": kind, "code": code, "enabled": True, "tenant_ids": ["one"]}
@@ -74,7 +75,8 @@ async def test_nested_playbook_releases_parent_and_returns_output(environment):
     assert result["state"] == "SUCCEEDED"
     assert result["output"] == {"host.name": "synthetic"}
     assert mongo.tenant.v2_runs.count_documents({}) == 2
-    assert mongo.tenant.alerts.count_documents({}) == 0
+    assert mongo.tenant.alerts.count_documents({}) == 1
+    assert mongo.tenant.v2_alerts.count_documents({}) == 0
 
 
 @pytest.mark.asyncio
@@ -82,19 +84,19 @@ async def test_correlation_shares_pool_but_does_not_overwrite_analyses(environme
     mongo, db = environment
     tools = WorkflowTools()
     for identity in ["a", "b", "isolated"]:
-        mongo.tenant.v2_alerts.insert_one({"alert_id": identity, "workflow_format": "2.0", "tenant_id": "one",
+        mongo.tenant.alerts.insert_one({"alert_id": identity, "workflow_format": "2.0", "tenant_id": "one",
             "created_at": datetime.now(timezone.utc), "normalized_payload": {"source.ip": "192.0.2.1"},
             "alert_analysis": {"result": identity}, "status": "ANALYZED"})
         mongo.tenant.v2_jobs.insert_one({"job_id": identity})
-        alert = mongo.tenant.v2_alerts.find_one({"alert_id": identity})
+        alert = mongo.tenant.alerts.find_one({"alert_id": identity})
         await tools.correlate(db, {"tenant_id": "one"}, node("c", "correlation", group="other" if identity == "isolated" else None), {"job_id": identity}, alert)
-    first, second, isolated = [mongo.tenant.v2_alerts.find_one({"alert_id": key}) for key in ["a", "b", "isolated"]]
+    first, second, isolated = [mongo.tenant.alerts.find_one({"alert_id": key}) for key in ["a", "b", "isolated"]]
     assert first["cluster_id"] == second["cluster_id"] != isolated["cluster_id"]
     assert first["clustering_status"] == second["clustering_status"] == "CORRELATED"
     assert first["alert_analysis"] == {"result": "a"}
     assert first["status"] == "ANALYZED"
     assert second["correlation_result"]["correlated_alert_ids"] == ["a"]
-    assert mongo.tenant.v2_clusters.count_documents({}) == 2
+    assert mongo.tenant.clusters.count_documents({}) == 2
 
 
 @pytest.mark.asyncio
@@ -114,11 +116,66 @@ async def test_analysis_persistence_is_alert_owned_and_preserves_history(environ
     parent = run(graph)
     parent["state"] = "RUNNING"
     mongo.tenant.v2_runs.insert_one(deepcopy(parent))
-    mongo.tenant.v2_alerts.insert_one({"alert_id": "r", "normalized_payload": {"host.name": "synthetic"}})
+    mongo.tenant.alerts.insert_one({"alert_id": "r", "normalized_payload": {"host.name": "synthetic"}})
     mongo.tenant.v2_jobs.insert_one({"job_id": "model", "state": "SUCCEEDED", "output": {"result": {"headline": "Evidence-based result"}}})
     output, _ = await WorkflowTools().execute(db, parent, node("save", "persist_analysis", input_path="nodes.model.output.result"),
         {"job_id": "persist", "ancestors": {"model": {"job_id": "model", "state": "SUCCEEDED"}}})
     assert output["state"] == "SUCCEEDED"
-    assert mongo.tenant.v2_alerts.find_one({"alert_id": "r"})["alert_analysis"]["result"]["headline"] == "Evidence-based result"
-    assert mongo.tenant.v2_clusters.count_documents({}) == 0
+    assert mongo.tenant.alerts.find_one({"alert_id": "r"})["alert_analysis"]["headline"] == "Evidence-based result"
+    assert mongo.tenant.clusters.count_documents({}) == 0
     assert mongo.tenant.v2_alert_analyses.count_documents({}) == 1
+
+
+@pytest.mark.asyncio
+async def test_real_http_tool_agent_and_alert_owned_result(environment, monkeypatch, tmp_path):
+    """Real REST/MCP HTTP protocol fixture, deliberately not a real LLM."""
+    import base64
+    import importlib.util
+    from pathlib import Path
+    from threading import Thread
+    from http.server import ThreadingHTTPServer
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from app.workflows import runtime
+    spec = importlib.util.spec_from_file_location("synthetic_provider", Path(__file__).resolve().parents[2] / "examples/workflow-providers/server.py")
+    provider = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(provider)
+    monkeypatch.setenv("EXAMPLE_PROVIDER_TOKEN", "synthetic-protocol-test")
+    monkeypatch.setenv("EXAMPLE_DB", str(tmp_path / "deliveries.sqlite"))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), provider.Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    origin = f"http://127.0.0.1:{server.server_port}"
+    monkeypatch.setenv("TIERX_V2_LOCAL_CONNECTOR_ORIGINS", origin)
+    encoded = base64.urlsafe_b64encode(b"s" * 32).decode()
+    monkeypatch.setattr(runtime.settings, "webhook_secret_encryption_key", encoded)
+    nonce = b"n" * 12
+    mongo, db = environment
+    connector = {"connector_code": "assets", "kind": "mcp", "url": origin + "/mcp", "timeout_seconds": 5,
+        "tenant_ids": ["one"], "enabled": True, "tools": [{"name": "asset_context", "description": "Synthetic assets",
+        "input_schema": provider.INPUT, "output_schema": provider.OUTPUT, "retry_safe": True}]}
+    mongo.platform.v2_connectors.insert_one({**connector, "credentials": {"nonce": nonce.hex(),
+        "ciphertext": AESGCM(b"s" * 32).encrypt(nonce, b"synthetic-protocol-test", b"tierx:connector:v1:assets").hex()}})
+    profile = {"provider": "openai", "base_url": origin + "/v1", "model": "synthetic-protocol-fixture", "profile_code": "synthetic",
+        "revision": 1, "tool_mode": "native", "timeout_seconds": 5}
+    async def configured_profile(self, run, code):
+        return profile, "synthetic-protocol-test"
+    monkeypatch.setattr(WorkflowTools, "profile", configured_profile)
+    schema = {"type": "object", "properties": {"headline": {"type": "string"}}, "required": ["headline"], "additionalProperties": False}
+    graph = linear([node("entry", "entry"), node("map", "normalization", field_mapping={"host.name": "host"}),
+        node("agent", "llm_tools", profile_code="synthetic", tools=["connector:assets:asset_context"], output_schema=schema),
+        node("save", "persist_analysis", input_path="nodes.agent.output"), node("notify", "notify_jira"), node("done", "complete")])
+    parent = run(graph)
+    parent["resources"]["connectors"] = {"assets": connector}
+    try:
+        result = await drive(mongo, db, parent)
+        assert result["state"] == "SUCCEEDED", result
+        alert = mongo.tenant.alerts.find_one({"alert_id": "r"})
+        assert alert["status"] == "ANALYZED"
+        assert alert["alert_analysis"]["model"] == "synthetic-protocol-fixture"
+        assert mongo.tenant.v2_tool_calls.count_documents({"state": "SUCCEEDED"}) == 1
+        assert mongo.tenant.v2_model_calls.count_documents({}) == 2
+        assert mongo.tenant.v2_jobs.find_one({"node_id": "notify"})["output"]["state"] == "SKIPPED"
+        assert not alert.get("cluster_id")
+    finally:
+        server.shutdown()
+        server.server_close()

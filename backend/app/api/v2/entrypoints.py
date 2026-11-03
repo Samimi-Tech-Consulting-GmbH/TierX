@@ -5,15 +5,18 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pymongo.errors import DuplicateKeyError
+from pydantic import BaseModel, Field
 from tierx_runtime import env_value
 from tierx_workflows.graph import canonical, value_at
 from tierx_workflows.definitions import GraphError
 
 from app.api.v2.definitions import platform, published
-from app.api.v2.workflows import AlertInput, db_for, enabled
+from app.api.v2.workflows import AlertInput, db_for, engine_enabled as enabled
 from app.models.tenant import Tenant
+from app.api.v1.jira_integrations import require_jira_integration
+from app.schemas.jira_integration import JiraSubmissionCreate, JiraCommentReceipt
 
 router = APIRouter(prefix="/workflows", tags=["Workflow ingestion"])
 
@@ -61,8 +64,10 @@ def envelope(revision, body):
     return payload
 
 
-def enqueue(code, tenant_id, body, *, identity, idempotency_key=None, source_reference=None):
+def enqueue(code, tenant_id, body, *, identity, idempotency_key=None, source_reference=None, expected_revision=None):
     db, revision = active(code, tenant_id)
+    if expected_revision is not None and expected_revision != revision["revision"]:
+        raise HTTPException(409, "Workflow changed during submission; retry")
     payload = envelope(revision, body)
     tenant = Tenant.objects(tenant_id=tenant_id).first()
     if payload["source_system"] not in tenant.allowed_source_systems:
@@ -112,3 +117,102 @@ def ingest(code: str, tenant_id: str, body: dict, authorization: str = Header(de
            idempotency_key: str | None = Header(default=None)):
     entry = authorize(code, tenant_id, authorization)
     return enqueue(code, tenant_id, body, identity="workflow-entry:" + entry["token_hash"], idempotency_key=idempotency_key)
+
+
+def jira_entry(code, tenant_id, integration):
+    enabled()
+    entry = platform().workflow_entries.find_one({"code": code, "tenant_id": tenant_id, "enabled": True,
+        "jira_connection_ids": integration["integration_id"]})
+    if not entry:
+        raise HTTPException(403, "Jira connection is not authorized for this workflow")
+    return active(code, tenant_id)
+
+
+def jira_record(code, tenant_id, submission_id, integration):
+    jira_entry(code, tenant_id, integration)
+    row = platform().workflow_jira_submissions.find_one({"submission_id": submission_id,
+        "workflow_code": code, "tenant_id": tenant_id, "integration_id": integration["integration_id"]}, {"_id": 0})
+    if not row:
+        raise HTTPException(404, "Submission not found")
+    run = db_for(tenant_id).v2_runs.find_one({"run_id": row["run_id"]})
+    state = row["state"]
+    delivery = platform().workflow_jira_deliveries.find_one({"submission_id": submission_id, "state": "PENDING"}, sort=[("created_at", 1), ("_id", 1)])
+    if delivery:
+        state = "DELIVERY_REQUESTED"
+        row["analysis"], row["delivery_id"] = delivery["analysis"], str(delivery["_id"])
+        row["comments"] = {key: value for key, value in row.get("comments", {}).items() if key != "FINAL"}
+    if state not in {"DELIVERY_REQUESTED", "DELIVERED", "FAILED"} and run:
+        if run["state"] in {"FAILED", "CANCELLED"}:
+            state = "FAILED"
+            row["failure"] = {"failed_stage": "WORKFLOW", "error_type": (run.get("error") or {}).get("type", run["state"])}
+        elif run["state"] in {"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS"}:
+            state = "COMPLETED"
+    return {**{key: row.get(key) for key in ["submission_id", "alert_id", "run_id", "issue_key", "issue_updated_at",
+                "comments", "source_system", "alert_type", "failure", "delivery_id"]},
+        "state": state, "result": row.get("analysis"),
+        "trace_path": f"/dashboard/admin/workflows/runs/{tenant_id}/{row['run_id']}",
+        "alert_path": f"/dashboard/{tenant_id}/alerts/{row['alert_id']}"}
+
+
+@router.get("/{code}/tenants/{tenant_id}/jira/connection")
+def jira_connection(code: str, tenant_id: str, integration=Depends(require_jira_integration)):
+    _, revision = jira_entry(code, tenant_id, integration)
+    return {"jira_cloud_id": integration["jira_cloud_id"], "name": integration["name"],
+            "workflow_code": code, "revision": revision["revision"], "tenant_id": tenant_id}
+
+
+@router.post("/{code}/tenants/{tenant_id}/jira/submissions", status_code=202)
+def jira_submit(code: str, tenant_id: str, body: JiraSubmissionCreate, integration=Depends(require_jira_integration)):
+    _, revision = jira_entry(code, tenant_id, integration)
+    if body.jira_cloud_id != integration["jira_cloud_id"] or str(body.jira_site_url).rstrip("/") != str(integration.get("jira_site_url", "")).rstrip("/"):
+        raise HTTPException(403, "Jira site does not match connection")
+    cfg = next(node["config"] for node in revision["graph"]["nodes"] if node["type"] == "entry")
+    if cfg.get("input_mode") != "raw":
+        raise HTTPException(409, "Jira requires a workflow configured for raw source alerts")
+    digest = hashlib.sha256(canonical(body.raw_alert)).hexdigest()
+    submission_id = hashlib.sha256(canonical([integration["integration_id"], code, tenant_id,
+        body.issue_id, digest, revision["revision"]])).hexdigest()
+    provenance = {"type": "JIRA", "submission_id": submission_id, "integration_id": integration["integration_id"],
+        "cloud_id": body.jira_cloud_id, "site_url": str(body.jira_site_url).rstrip("/"),
+        "issue_id": body.issue_id, "issue_key": body.issue_key, "project_key": body.project_key,
+        "content_source": body.raw_alert_source.kind, "content_sha256": digest}
+    # Store the submission before queueing so a fast notify node always has a destination.
+    collection = platform().workflow_jira_submissions
+    collection.create_index("submission_id", unique=True)
+    collection.update_one({"submission_id": submission_id}, {"$setOnInsert": {
+        **provenance, "workflow_code": code, "tenant_id": tenant_id, "state": "PROCESSING", "comments": {},
+        "issue_updated_at": body.issue_updated_at, "created_at": datetime.now(timezone.utc)}}, upsert=True)
+    accepted = enqueue(code, tenant_id, body.raw_alert, identity="jira:" + integration["integration_id"],
+        idempotency_key=submission_id, source_reference=provenance, expected_revision=revision["revision"])
+    collection.update_one({"submission_id": submission_id}, {"$set": {
+        "alert_id": accepted["alert_id"], "run_id": accepted["run_id"],
+        "source_system": cfg["source_system"], "alert_type": cfg["alert_type"]}})
+    return jira_record(code, tenant_id, submission_id, integration)
+
+
+@router.get("/{code}/tenants/{tenant_id}/jira/submissions/{submission_id}")
+def jira_status(code: str, tenant_id: str, submission_id: str, integration=Depends(require_jira_integration)):
+    return jira_record(code, tenant_id, submission_id, integration)
+
+
+class WorkflowJiraReceipt(JiraCommentReceipt):
+    delivery_id: str | None = Field(default=None, max_length=64)
+
+
+@router.post("/{code}/tenants/{tenant_id}/jira/submissions/{submission_id}/comments")
+def jira_receipt(code: str, tenant_id: str, submission_id: str, body: WorkflowJiraReceipt, integration=Depends(require_jira_integration)):
+    row = jira_record(code, tenant_id, submission_id, integration)
+    kind = body.kind.value
+    if kind == "FINAL" and row["state"] not in {"DELIVERY_REQUESTED", "DELIVERED"}:
+        raise HTTPException(409, "No explicit workflow notification is pending")
+    if kind == "FINAL":
+        if not body.delivery_id:
+            raise HTTPException(422, "Explicit notification delivery ID required")
+        changed = platform().workflow_jira_deliveries.update_one({"_id": body.delivery_id,
+            "submission_id": submission_id, "integration_id": integration["integration_id"]},
+            {"$set": {"state": "DELIVERED", "jira_comment_id": body.jira_comment_id}})
+        if not changed.matched_count:
+            raise HTTPException(404, "Notification delivery not found")
+    else:
+        platform().workflow_jira_submissions.update_one({"submission_id": submission_id}, {"$set": {f"comments.{kind}": body.jira_comment_id}})
+    return jira_record(code, tenant_id, submission_id, integration)

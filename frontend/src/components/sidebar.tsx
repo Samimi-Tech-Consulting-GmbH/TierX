@@ -85,6 +85,8 @@ function navItemActive(pathname: string, item: NavItem): boolean {
 }
 
 const navItems: NavItem[] = [
+  { href: "/dashboard/admin/workflows", label: "Workflows", icon: SlidersHorizontal,
+    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
   {
     href: "/dashboard/admin",
     label: "Dashboard",
@@ -120,6 +122,7 @@ function settingsMenuItems(
           },
       { href: "/users", label: "Users", icon: Users },
       { href: "/dashboard/admin/settings/platform", label: "Platform settings", icon: SlidersHorizontal },
+      { href: "/dashboard/admin/settings/connectors", label: "REST / MCP tools", icon: Plug },
       {
         href: "/dashboard/admin/integrations/jira",
         label: "Jira integration",

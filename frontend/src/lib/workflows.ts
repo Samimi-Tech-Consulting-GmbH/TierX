@@ -12,9 +12,11 @@ export interface FlowEdge {
   source: string;
   target: string;
   sourceHandle?: string;
+  targetHandle?: string;
 }
 export interface FlowGraph {
-  format_version: "1.0";
+  format_version: "1.0" | "2.0";
+  input_capabilities?: string[];
   nodes: FlowNode[];
   edges: FlowEdge[];
   viewport?: { x: number; y: number; zoom: number };
@@ -70,6 +72,7 @@ export async function workflowRequest<T>(
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
+  if (r.status === 204) return undefined as T;
   if (r.status === 401) {
     clearToken();
     throw new Error("Session expired; please sign in again.");

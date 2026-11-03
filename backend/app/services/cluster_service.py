@@ -191,6 +191,8 @@ class ClusterService:
         cls, tenant_id: str, cluster_id: str, verdict: str
     ) -> ClusterDocument:
         current = cls._cluster(tenant_id, cluster_id)
+        if current.get("workflow_format") == "2.0":
+            raise HTTPException(409, "Workflow verdicts belong to individual alerts, not clusters")
         if current.get("status") not in {"CLOSED", "FALSE_POSITIVE"}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

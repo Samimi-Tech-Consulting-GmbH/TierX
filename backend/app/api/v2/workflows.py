@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo import ReturnDocument
 from bson.codec_options import CodecOptions
@@ -17,6 +17,7 @@ from tierx_workflows import (
     validate_graph,
 )
 from tierx_workflows.examples import examples
+from tierx_workflows.safety import sanitize
 
 from app.api.dependencies.auth import (
     get_current_user,
@@ -29,14 +30,24 @@ from app.models.tenant import Tenant
 
 
 def enabled():
-    if not boolean(env_value("ingestion_v2_enabled") or False):
+    if not (boolean(env_value("ingestion_v2_enabled") or False) or boolean(env_value("workflow_engine_enabled") or False)):
         raise HTTPException(404, "Ingestion V2 is disabled")
+
+
+def engine_enabled():
+    if not boolean(env_value("workflow_engine_enabled") or False):
+        raise HTTPException(404, "Workflow engine is disabled")
+
+
+def legacy_mutation(request: Request):
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and boolean(env_value("workflow_engine_enabled") or False):
+        raise HTTPException(410, "Use platform Workflow Studio and a fixed workflow ingestion URL")
 
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}",
     tags=["Ingestion V2"],
-    dependencies=[Depends(enabled)],
+    dependencies=[Depends(enabled), Depends(legacy_mutation)],
 )
 
 
@@ -70,6 +81,16 @@ def found(collection, query):
     if not row:
         raise HTTPException(404, "Resource not found")
     return row
+
+
+def trace_view(value):
+    """Debug metadata is not a second raw-document or full-prompt endpoint."""
+    if isinstance(value, list):
+        return [trace_view(item) for item in value]
+    if isinstance(value, dict):
+        return {key: trace_view(item) for key, item in sanitize(value).items() if key not in {
+            "raw_payload", "prompt", "prompt_footer", "context_text", "text", "playbook_snapshot", "bundle", "resources"}}
+    return value
 
 
 def check(graph):
@@ -492,7 +513,7 @@ def runs(
     user=Depends(get_current_user),
 ):
     db = db_for(tenant_id)
-    projection = {"_id": 0, "input": 0, "resources": 0, "graph": 0}
+    projection = {"_id": 0, "input": 0, "resources": 0, "graph": 0, "bundle": 0}
     return {
         "items": list(
             db.v2_runs.find({}, projection)
@@ -523,8 +544,20 @@ def run_detail(
         {"alert_id": run["alert_id"]},
         {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0},
     )
+    if run["graph"].get("format_version") == "2.0":
+        run["alert"] = db.alerts.find_one({"alert_id": run["alert_id"]}, {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0})
+        run["children"] = list(db.v2_runs.find({"parent_run_id": run_id},
+            {"_id": 0, "input": 0, "resources": 0, "bundle": 0, "graph": 0}).sort("created_at", 1))
+        run["graph"] = __import__("copy").deepcopy(run["graph"])
+        for node in run["graph"]["nodes"]:
+            node.get("config", {}).pop("prompt", None)
+    run.pop("bundle", None)
+    run["tool_calls"] = list(db.v2_tool_calls.find({"run_id": run_id}, {"output": 0}).sort("started_at", 1))
+    for call in run["tool_calls"]:
+        call["call_id"] = str(call.pop("_id"))
+    run["model_calls"] = list(db.v2_model_calls.find({"run_id": run_id}, {"_id": 0, "response": 0}).sort("created_at", 1))
     if run["alert"] and run["alert"].get("cluster_id"):
-        run["cluster"] = db.v2_clusters.find_one(
+        run["cluster"] = db["clusters" if run["graph"].get("format_version") == "2.0" else "v2_clusters"].find_one(
             {"cluster_id": run["alert"]["cluster_id"]}, {"_id": 0}
         )
-    return run
+    return trace_view(run)

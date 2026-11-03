@@ -44,6 +44,7 @@ def test_connector_permissions_encryption_and_revision(setup, monkeypatch):
 
 
 def test_entry_token_scope_rotation_and_raw_timestamp(setup, monkeypatch):
+    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED", "true")
     from app.api.v2 import definitions, entrypoints
     from app.api.v2 import workflows
     monkeypatch.setattr(entrypoints, "Tenant", workflows.Tenant)
@@ -62,6 +63,8 @@ def test_entry_token_scope_rotation_and_raw_timestamp(setup, monkeypatch):
     root = "/api/v2/admin/workflow-definitions/workflow/raw"
     assert client.put(root, json={"name": "Raw workflow", "tenant_ids": ["one"], "configuration": graph}).status_code == 200
     assert client.post(root + "/publish").status_code == 200
+    # Publication, not a content-edit counter, pins newly resolved child/resources.
+    assert client.post(root + "/publish").json()["revision"] == 2
     credential = client.post(
         root + "/entry-credentials", json={"tenant_id": "one"}
     )

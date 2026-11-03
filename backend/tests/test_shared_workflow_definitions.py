@@ -57,3 +57,10 @@ def test_agent_and_selector_budgets_and_fallback_are_validated():
         validate_definition("agent", {**agent, "max_calls": 999})
     with pytest.raises(GraphError):
         validate_graph(graph({"id": "select", "type": "playbook_selector", "config": {"candidates": ["network"]}}, capabilities=["normalization"]))
+
+
+def test_editable_templates_validate_without_installing_resources():
+    from tierx_workflows.templates import templates
+    from tierx_workflows.definitions import validate_definition
+    for template in templates():
+        validate_definition(template["kind"], template["configuration"])

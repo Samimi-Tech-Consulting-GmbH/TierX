@@ -27,7 +27,7 @@ function document(content) {
 }
 
 export function commentMarker(submission, kind) {
-  return `TierX reference: ${kind}/${submission.submission_id}`;
+  return `TierX reference: ${kind}/${submission.submission_id}${kind === "FINAL" && submission.delivery_id ? "/" + submission.delivery_id : ""}`;
 }
 
 export function acknowledgementComment(submission, config, submittedBy) {
@@ -60,7 +60,7 @@ export function finalComment(submission, config) {
     content.push(paragraph(text("Recommended actions:")));
     content.push(bulletList(result.recommended_actions));
   }
-  const resultPath = submission.cluster_path || submission.alert_path;
+  const resultPath = submission.alert_path;
   content.push(paragraph(link("Open result in TierX", `${config.baseUrl}${resultPath}`)));
   content.push(paragraph(text(commentMarker(submission, "FINAL"))));
   return document(content);
@@ -90,7 +90,7 @@ export function inputFailureComment(requestId, detail) {
     paragraph(
       text(
         "Put the unwrapped source alert JSON in the description or one .json/.txt " +
-          "attachment. Tenant, source system, and alert type come from the TierX project route.",
+          "attachment. Tenant, source system, and alert type come from the configured TierX workflow.",
       ),
     ),
     paragraph(text(`TierX reference: INPUT/${requestId}`)),

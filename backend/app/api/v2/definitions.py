@@ -13,11 +13,11 @@ from tierx_workflows.definitions import compile_bundle, validate_definition
 from tierx_workflows.graph import GraphError, NODE_TYPES, checksum
 
 from app.api.dependencies.auth import require_platform_admin
-from app.api.v2.workflows import db_for, enabled, resources
+from app.api.v2.workflows import db_for, engine_enabled, resources
 from app.db.mongodb import DatabaseManager
 
 router = APIRouter(prefix="/admin/workflow-definitions", tags=["Workflow studio"],
-                   dependencies=[Depends(enabled), Depends(require_platform_admin)])
+                   dependencies=[Depends(engine_enabled), Depends(require_platform_admin)])
 
 
 def now():
@@ -58,9 +58,10 @@ def published(kind, code, revision=None):
 
 @router.get("")
 def listing(kind: Literal["workflow", "playbook", "agent"] | None = None):
+    from tierx_workflows.templates import templates
     query = {"deleted_at": None, **({"kind": kind} if kind else {})}
     return {"items": list(platform().workflow_definitions.find(query, {"_id": 0}).sort([("kind", 1), ("code", 1)])),
-            "node_types": sorted(NODE_TYPES)}
+            "node_types": sorted(NODE_TYPES), "templates": templates()}
 
 
 @router.put("/{kind}/{code}")
@@ -89,7 +90,7 @@ def save(kind: Literal["workflow", "playbook", "agent"], code: str, body: Defini
                 raise HTTPException(409, "Definition changed; reload")
     except DuplicateKeyError as exc:
         raise HTTPException(409, "Definition already exists") from exc
-    return row
+    return collection.find_one({"kind": kind, "code": code}, {"_id": 0})
 
 
 @router.get("/{kind}/{code}/revisions")
@@ -104,7 +105,12 @@ def publish(kind: str, code: str, user=Depends(require_platform_admin)):
     draft = db.workflow_definitions.find_one({"kind": kind, "code": code, "deleted_at": None}, {"_id": 0})
     if not draft or not draft["enabled"]:
         raise HTTPException(404, "Enabled definition not found")
-    revision = draft["draft_version"]
+    draft_version = draft["draft_version"]
+    counter = f"{kind}:{code}"
+    db.workflow_publication_sequences.update_one({"_id": counter},
+        {"$setOnInsert": {"value": draft.get("active_revision", 0)}}, upsert=True)
+    revision = db.workflow_publication_sequences.find_one_and_update({"_id": counter},
+        {"$inc": {"value": 1}}, return_document=ReturnDocument.AFTER)["value"]
     row = {**draft, "revision": revision, "published_at": now(), "published_by": user.user_id}
     compiled = {}
     try:
@@ -125,8 +131,9 @@ def publish(kind: str, code: str, user=Depends(require_platform_admin)):
                 "bundle": bundle, "graph": bundle["definitions"][bundle["root"]]["graph"],
                 "resources": bundle["definitions"][bundle["root"]]["resources"],
                 "published_at": now(), "checksum": checksum(bundle)}}, upsert=True)
-    changed = db.workflow_definitions.update_one({"kind": kind, "code": code, "draft_version": revision,
-                                                  "enabled": True, "deleted_at": None},
+    changed = db.workflow_definitions.update_one({"kind": kind, "code": code, "draft_version": draft_version,
+                                                  "enabled": True, "deleted_at": None,
+                                                  "$or": [{"active_revision": {"$exists": False}}, {"active_revision": {"$lt": revision}}]},
                                                  {"$set": {"active_revision": revision}})
     if not changed.matched_count:
         raise HTTPException(409, "Draft changed during publication; publish the current draft")
@@ -153,6 +160,9 @@ def entry_credentials(code: str, body: EntryCredential, user=Depends(require_pla
     if body.tenant_id not in row["tenant_ids"]:
         raise HTTPException(403, "Workflow not assigned to tenant")
     db_for(body.tenant_id)
+    for integration_id in set(body.jira_connection_ids):
+        if not platform().jira_integrations.find_one({"integration_id": integration_id, "state": "ACTIVE"}):
+            raise HTTPException(422, "Active Jira site connection required")
     token = secrets.token_urlsafe(32)
     platform().workflow_entries.update_one({"code": code, "tenant_id": body.tenant_id},
         {"$set": {"token_hash": hashlib.sha256(token.encode()).hexdigest(),

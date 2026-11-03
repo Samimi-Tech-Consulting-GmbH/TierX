@@ -13,6 +13,8 @@ Verdict = Literal["TRUE_POSITIVE", "FALSE_POSITIVE", "BENIGN"]
 
 
 class ClusterDocument(BaseModel):
+    workflow_format: Optional[str] = None
+    correlation_group: Optional[str] = None
     cluster_id: str
     tenant_id: str
     lead_alert_id: str

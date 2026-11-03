@@ -13,6 +13,7 @@ from tierx_workflows.llm import ModelError
 from app.db.mongodb import get_client, get_database
 from app.workflows.tools import Tools, NodeFailure, NodeWaiting
 from app.workflows.runtime import WorkflowTools
+from app.workflows.storage import for_run
 
 logger = logging.getLogger("workflow-v2")
 
@@ -48,7 +49,7 @@ class Engine:
 
     async def initialize(self, db, run):
         entry = next(node for node in run["graph"]["nodes"] if node["type"] == "entry")
-        await db.v2_alerts.update_one(
+        await for_run(db, run).v2_alerts.update_one(
             {"alert_id": run["alert_id"]},
             {
                 "$setOnInsert": {
@@ -101,7 +102,7 @@ class Engine:
                 )
                 return
             node = next(n for n in run["graph"]["nodes"] if n["id"] == job["node_id"])
-            output, port = await self.tools.execute(db, run, node, job)
+            output, port = await self.tools.execute(for_run(db, run), run, node, job)
             import json
 
             if len(json.dumps(output, default=str).encode()) > 256 * 1024:
@@ -257,6 +258,13 @@ class Engine:
         await db.v2_jobs.update_one(
             {"job_id": job["job_id"]}, {"$set": {"routed": True}}
         )
+        if run["graph"].get("format_version") == "2.0" and not run.get("parent_run_id"):
+            current = await db.v2_runs.find_one({"run_id": run["run_id"]})
+            if current["state"] not in {"PENDING", "RUNNING"}:
+                fields = {"workflow_state": current["state"], "updated_at": now()}
+                if current.get("error"):
+                    fields["workflow_error"] = current["error"]
+                await db.alerts.update_one({"alert_id": run["alert_id"], "run_id": run["run_id"]}, {"$set": fields})
 
     async def arrive(self, db, run, target_id, path, ancestry):
         target = next(n for n in run["graph"]["nodes"] if n["id"] == target_id)
@@ -296,11 +304,18 @@ class Engine:
             db = get_client()[tenant["db_name"]]
             await db.v2_jobs.create_index("job_id", unique=True)
             await db.v2_joins.create_index("join_key", unique=True)
+            await db.clusters.create_index("cluster_id", unique=True)
+            await db.alerts.create_index("alert_id", unique=True)
+            await db.v2_runs.create_index("run_id", unique=True)
+            await db.v2_alert_analyses.create_index("analysis_id", unique=True)
             for run in (
                 await db.v2_runs.find({"state": "PENDING"}).limit(100).to_list(None)
             ):
                 await self.initialize(db, run)
             await self.tools.schedule(db, tenant)
+            await db.clusters.update_many({"workflow_format": "2.0", "is_open_for_grouping": True,
+                "grouping_window_expires_at": {"$lte": now()}},
+                {"$set": {"is_open_for_grouping": False, "closed_at": now()}})
             for job in (
                 await db.v2_jobs.find(
                     {"state": {"$in": ["SUCCEEDED", "FAILED"]}, "routed": False}
@@ -343,7 +358,7 @@ class Engine:
                 task.add_done_callback(self.tasks.discard)
 
     async def run(self):
-        if not boolean(env_value("ingestion_v2_enabled") or False):
+        if not (boolean(env_value("ingestion_v2_enabled") or False) or boolean(env_value("workflow_engine_enabled") or False)):
             logger.info("Ingestion V2 disabled")
             return
         try:
@@ -355,6 +370,9 @@ class Engine:
                 ):
                     try:
                         await self.tick()
+                        await get_database().service_heartbeats.update_one({"service": "workflow-engine"}, {
+                            "$set": {"service": "workflow-engine", "updated_at": now(), "state": "READY",
+                                "active_jobs": len(self.tasks), "worker_id": self.owner}}, upsert=True)
                     except Exception:
                         logger.warning(
                             "V2 scheduling failed; retrying without touching V1"

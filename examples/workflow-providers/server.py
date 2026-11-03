@@ -239,7 +239,7 @@ def synthetic_model(body):
                 "type": "function",
                 "function": {
                     "name": tool["function"]["name"],
-                    "arguments": json.dumps(
+                    "arguments": json.dumps({} if not tool["function"].get("parameters", {}).get("properties") else
                         {
                             "value": "test"
                             if tool["function"]["name"] == "echo"
@@ -255,9 +255,9 @@ def synthetic_model(body):
         schema = body.get("response_format", {}).get("json_schema", {}).get("schema")
         if not schema:
             for item in messages:
-                marker = "Return a JSON final result matching: "
-                if (item.get("content") or "").startswith(marker):
-                    schema = json.loads(item["content"][len(marker) :])
+                for marker in ["Return a JSON final result matching: ", "Final result must match JSON schema: "]:
+                    if (item.get("content") or "").startswith(marker):
+                        schema = json.loads(item["content"][len(marker) :])
 
         def fill(spec):
             if "enum" in spec:

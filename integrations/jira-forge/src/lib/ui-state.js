@@ -1,5 +1,5 @@
 export const TERMINAL_UI_STATES = new Set([
-  "PROCESSING", "CLUSTERED", "ANALYZED", "FAILED", "CANCELLED",
+  "PROCESSING", "CLUSTERED", "ANALYZED", "FAILED", "CANCELLED", "COMPLETED", "DELIVERY_REQUESTED", "DELIVERED",
 ]);
 
 export function permissionCleanupMessage(disconnected) {

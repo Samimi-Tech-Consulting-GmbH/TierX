@@ -27,6 +27,7 @@ NODE_TYPES = {
     "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook",
 }
 MUTATIONS = {
+    "kb_deterministic", "kb_semantic", "persist_analysis",
     "normalization",
     "fingerprint",
     "correlation",
@@ -237,6 +238,8 @@ def validate_graph(graph):
         if kind not in NODE_TYPES:
             raise GraphError("Unknown node type")
         cfg = node.get("config", {})
+        if graph.get("format_version") == "2.0" and "debounce_ms" in cfg:
+            raise GraphError("Workflow correlation does not delay analysis; remove debounce_ms")
         if not isinstance(cfg, dict) or set(cfg) - CONFIG[kind]:
             raise GraphError(f"Invalid configuration for {nid}")
         if kind in {"playbook_call", "agent"} and not re.fullmatch(
@@ -264,6 +267,8 @@ def validate_graph(graph):
             if not isinstance(cfg.get("arguments", {}), dict) or not isinstance(cfg.get("argument_paths", {}), dict):
                 raise GraphError("Invalid tool arguments")
         if kind == "playbook_selector":
+            if not isinstance(cfg.get("mappings", {}), dict) or not isinstance(cfg.get("candidates", []), list) or len(cfg.get("candidates", [])) > 20:
+                raise GraphError("Selector requires a mapping object and at most 20 candidates")
             codes = [*cfg.get("candidates", []), *cfg.get("mappings", {}).values(), cfg.get("fallback")]
             if cfg.get("mode", "static") not in {"static", "model"} or not codes or any(
                 not isinstance(code, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", code) for code in codes

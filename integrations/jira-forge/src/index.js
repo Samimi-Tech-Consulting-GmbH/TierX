@@ -27,7 +27,7 @@ export async function requireJiraAdministrator(accountId, client = api) {
 export const handler = makeResolver({
   prepareConnection: async ({ payload, context }) => {
     await requireJiraAdministrator(context.accountId);
-    return prepareConnection(payload.baseUrl);
+    return prepareConnection(payload.workflowUrl);
   },
   testConnection: async ({ context }) => {
     await requireJiraAdministrator(context.accountId);

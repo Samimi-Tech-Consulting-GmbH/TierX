@@ -1,7 +1,7 @@
 import { kvs, WhereConditions } from "@forge/kvs";
 
 import { addAppComment, commentMarker, failureComment, finalComment } from "./lib/comments.js";
-import { getConfig, tierxRequest, withConnection, TierXRequestError } from "./lib/tierx.js";
+import { getConfig, submissionRequest, withConnection, TierXRequestError } from "./lib/tierx.js";
 import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
 const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
@@ -51,15 +51,15 @@ export async function getPendingPage(storage = kvs) {
   return page;
 }
 
-async function recordComment(submissionId, kind, commentId) {
-  return tierxRequest(`/api/v1/integrations/jira/submissions/${submissionId}/comments`, {
+async function recordComment(submission, kind, commentId) {
+  return submissionRequest(`/${submission.submission_id}/comments`, {
     method: "POST",
-    body: { kind, jira_comment_id: String(commentId) },
+    body: { kind, jira_comment_id: String(commentId), delivery_id: submission.delivery_id },
   });
 }
 
 async function terminalComment(submission, config) {
-  const kind = submission.state === "ANALYZED" ? "FINAL" : "ERROR";
+  const kind = submission.state === "DELIVERY_REQUESTED" ? "FINAL" : "ERROR";
   if (submission.comments?.[kind]) return submission;
   const body =
     kind === "FINAL"
@@ -70,20 +70,11 @@ async function terminalComment(submission, config) {
     body,
     commentMarker(submission, kind),
   );
-  return recordComment(submission.submission_id, kind, comment.id);
+  return recordComment(submission, kind, comment.id);
 }
 
-export async function refreshPendingSubmission(pending, request = tierxRequest) {
-  let submission = await request(
-    `/api/v1/integrations/jira/submissions/${pending.submissionId}`,
-  );
-  if (submission.state === "FINALIZING") {
-    submission = await request(
-      `/api/v1/integrations/jira/submissions/${pending.submissionId}/finalize`,
-      { method: "POST", body: {} },
-    );
-  }
-  return submission;
+export async function refreshPendingSubmission(pending, request = submissionRequest) {
+  return request(`/${pending.submissionId}`);
 }
 
 export async function handler() {
@@ -102,10 +93,11 @@ export async function handler() {
         state: submission.state,
         tracePath: submission.trace_path,
       });
-      if (submission.state === "ANALYZED" || submission.state === "FAILED") {
+      if (submission.state === "DELIVERY_REQUESTED" || submission.state === "FAILED") {
         submission = await terminalComment(submission, config);
-        await kvs.delete(item.key);
+        if (submission.state === "FAILED") await kvs.delete(item.key);
       }
+      if (["COMPLETED", "DELIVERED"].includes(submission.state)) await kvs.delete(item.key);
     } catch (error) {
       if (error instanceof ConnectionChangedError) {
         await cancelConnectionJob(kvs, pending);

@@ -144,6 +144,16 @@ jobs:
       - run: python -m unittest -v test_server.py
       - run: python -m compileall -q .
 
+  workflow-provider:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - run: pytest examples/workflow-providers/test_server.py -q
+
   configuration:
     runs-on: ubuntu-latest
     steps:
@@ -193,7 +203,7 @@ jobs:
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
       )
-    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, configuration, kb-semantic]
+    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, workflow-provider, configuration, kb-semantic]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.next.outputs.version }}
