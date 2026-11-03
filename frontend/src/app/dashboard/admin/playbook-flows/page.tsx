@@ -1,5 +1,2 @@
-import { WorkflowStudio } from "@/components/workflow-studio";
-
-export default function Page() {
-  return <WorkflowStudio initialKind="playbook" />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/admin/playbooks"); }

@@ -4,6 +4,14 @@
 
 Platform administrators manage shared definitions and tenant grants in **Workflow Studio**. A workflow is the outer graph; a playbook is an executable nested graph; an agent is a reusable prompt, tested model profile, output schema and bounded tool allowlist.
 
+Workflows, Playbooks and Agents use the same icon-based node kit, categorized
+searchable palette, typed settings and advanced JSON escape hatch. The separate
+Ingestion V2 editor is retired; its entry URLs redirect to the Studio. Selecting
+a direct call or selector reveals all referenced subflows, including static
+mappings, model candidates and fallback roles. Expand a bordered preview or open
+the nested definition, then return using breadcrumbs. These are current editable
+definition previews; Debug displays the immutable revisions actually executed.
+
 Publication activates a revision for new ingestion. Existing runs pin the entire dependency bundle: workflow, playbooks, agents, schemas, connectors and profiles. Republish a workflow to adopt updated children. Immediate enable/grant revocation prevents further calls even from pinned revisions.
 
 Graphs are acyclic, with explicit conditions, paired parallel fork/join nodes and error routes. Agent reasoning is a bounded internal loop. No business stage is permanently locked at the front. Typed prerequisites still require normalized evidence before correlation, retrieval or reasoning. Tenant, authentication and safety invariants cannot be disabled in a graph.

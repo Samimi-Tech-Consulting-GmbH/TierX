@@ -30,9 +30,11 @@ an indexed synthetic Markdown Knowledge Base, and success/correlation/duplicate/
 validation examples. Re-running updates the demo definitions without adding the
 same initial alert batch again. It accepts only the isolated localhost target.
 
-Use **Operations → Workflows / Playbook flows / Agents** for the new graph
-libraries. The older **Configuration → Legacy playbooks / Legacy Ingestion V2** screens show
-legacy records, not these definitions. Start with `demo-fast-triage` for an
+Use **Workflows**, **Playbooks**, and **Agents** for the unified graph libraries.
+The former Ingestion V2 entry URLs redirect to this Studio; there is no separate
+editor. Select a playbook/agent node to preview or open its subflow. Select a
+playbook selector to inspect its mapped, candidate and fallback playbooks.
+Start with `demo-fast-triage` for an
 interactive test; its reasoning is explicitly a protocol fixture. Use
 `demo-real-triage` for actual phi3 inference, which can take several minutes.
 

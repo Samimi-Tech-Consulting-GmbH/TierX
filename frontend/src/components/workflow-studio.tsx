@@ -8,6 +8,8 @@ import "@xyflow/react/dist/style.css";
 import { useAuth } from "@/lib/auth";
 import { UserRole } from "@/lib/types";
 import { workflowRequest, outputPorts, type FlowGraph, type FlowNode } from "@/lib/workflows";
+import { NODE_DESIGN, NodeGallery, NodeFields, type AvailableConnector } from "@/components/workflow-node-kit";
+import { Workflow, Layers, Maximize2, Minimize2, ChevronRight } from "lucide-react";
 
 type Kind = "workflow" | "playbook" | "agent";
 interface Definition { kind: Kind; code: string; name: string; description: string; enabled: boolean;
@@ -22,23 +24,46 @@ const blank = (kind: Kind): Record<string, unknown> => kind === "agent" ? {
           { id: "done", type: "complete", config: {}, position: { x: 500, y: 80 } }],
   edges: [{ id: "start", source: "entry", target: "done" }] };
 
-function Tile({ data }: NodeProps<StudioNode>) {
+function Tile({ data, selected }: NodeProps<StudioNode>) {
   const definition = data.definition;
   const ports = [...outputPorts(definition), ...(definition.type === "tool_call" ? ["tool"] : [])];
   const subflow = ["agent", "playbook_call", "playbook_selector"].includes(definition.type);
-  return <div className={`min-w-44 rounded-xl border-2 bg-card p-3 shadow-sm ${subflow ? "border-violet-500" : "border-border"}`}>
+  const design = NODE_DESIGN[definition.type]; const Icon = design?.icon || Workflow;
+  return <div className={`w-60 rounded-xl border bg-card text-card-foreground shadow-lg transition-shadow ${selected ? "border-primary ring-2 ring-primary/25" : "border-border"}`}>
     {definition.type !== "entry" && <Handle type="target" position={Position.Left} />}
     {definition.type === "llm_tools" && <Handle id="tools" type="target" position={Position.Bottom} />}
-    <div className="text-xs uppercase text-muted-foreground">{subflow ? "Subflow / agent" : definition.type.replaceAll("_", " ")}</div>
-    <strong>{definition.label || definition.id}</strong>
-    {typeof definition.config.definition_code === "string" && <p className="text-xs">↳ {definition.config.definition_code}</p>}
-    {data.state && <p role="status" className="text-xs font-semibold">{data.state}</p>}
+    <div className="flex items-center gap-3 p-3.5"><span className="rounded-lg p-2" style={{color:design?.color,background:`${design?.color || "#888888"}18`}}><Icon size={20}/></span><div className="min-w-0"><strong className="block text-sm">{definition.label || design?.title || definition.id}</strong><span className="text-[10px] text-muted-foreground">{design?.title || definition.type}</span></div>{subflow && <Layers size={15} className="ml-auto text-violet-400"/>}</div>
+    <div className="border-t border-border/50 px-3.5 py-2 text-xs text-muted-foreground">{typeof definition.config.definition_code === "string" ? `↳ ${definition.config.definition_code}` : definition.type === "playbook_selector" ? `Fallback: ${definition.config.fallback || "not configured"}` : design?.description || definition.id}</div>
+    {data.state && <p role="status" className="px-3.5 pb-2 text-xs font-semibold">{data.state}</p>}
     {ports.map((port, i) => <Handle key={port} id={port} type="source" position={Position.Right}
       style={{ top: `${(i + 1) * 100 / (ports.length + 1)}%`, background: port === "error" ? "#dc2626" : port === "tool" ? "#9333ea" : "#2563eb" }} title={port} />)}
-    <p className="text-xs text-muted-foreground">{ports.join(" · ")}</p>
+    <p className="flex justify-end gap-2 border-t border-border/50 px-3 py-1.5 text-[10px] text-muted-foreground">{ports.join(" · ")}</p>
   </div>;
 }
 const nodeTypes = { studio: Tile };
+
+export function subflowReferences(node: FlowNode): {kind: Kind; code: string; role: string}[] {
+  const cfg=node.config, result: {kind: Kind; code: string; role: string}[]=[];
+  if (["agent","playbook_call"].includes(node.type) && typeof cfg.definition_code === "string") result.push({kind:node.type==="agent"?"agent":"playbook",code:cfg.definition_code,role:"Direct call"});
+  if (node.type === "playbook_selector") {
+    if (typeof cfg.fallback === "string") result.push({kind:"playbook",code:cfg.fallback,role:"Fallback"});
+    for (const [type,code] of Object.entries((cfg.mappings || {}) as Record<string,string>)) result.push({kind:"playbook",code,role:`Static: ${type}`});
+    for (const code of (cfg.candidates || []) as string[]) result.push({kind:"playbook",code,role:"Model candidate"});
+  }
+  for (const tool of (cfg.tools || []) as string[]) { const [kind,code]=tool.split(":"); if ((kind==="agent" || kind==="playbook") && code) result.push({kind,code,role:"Agent capability"}); }
+  return result;
+}
+
+export function SubflowPanel({node, definitions, onOpen}: {node:FlowNode;definitions:Definition[];onOpen:(row:Definition)=>void}) {
+  const [expanded,setExpanded]=useState<string|null>(null);
+  const refs=subflowReferences(node); if (!refs.length) return null;
+  const unique=[...new Set(refs.map(ref=>`${ref.kind}:${ref.code}`))];
+  return <section aria-label="Nested playbooks and agents" className="space-y-3 rounded-xl border border-violet-500/40 bg-violet-500/5 p-4"><h3 className="flex items-center gap-2 font-semibold"><Layers size={18}/>Nested playbooks & agents</h3><p className="text-xs text-muted-foreground">Reusable subflows execute inside this node. Previews show current definitions; each execution pins its published dependency revisions.</p>
+    {unique.map(identity=>{const roles=refs.filter(ref=>`${ref.kind}:${ref.code}`===identity), ref=roles[0], target=definitions.find(row=>row.kind===ref.kind&&row.code===ref.code);const graph=target?.configuration.nodes?target.configuration as unknown as FlowGraph:null;
+      return <div key={identity} className="rounded-lg border bg-card p-3"><div className="flex flex-wrap items-center gap-3"><Layers className="text-violet-400" size={18}/><div className="flex-1"><strong>{target?.name || ref.code}</strong><p className="text-xs text-muted-foreground">{roles.map(row=>row.role).join(" · ")} · {target?.active_revision?`published r${target.active_revision}`:"not published"}</p></div>{target?<><button className="rounded border px-3 py-2 text-xs" onClick={()=>setExpanded(expanded===identity?null:identity)}>{expanded===identity?"Collapse":"Preview subflow"}</button><button className="flex items-center gap-1 rounded bg-violet-500/15 px-3 py-2 text-xs" onClick={()=>onOpen(target)}>Open {ref.kind}<ChevronRight size={14}/></button></>:<p role="alert">Referenced definition unavailable</p>}</div>
+        {expanded===identity&&target&&<div className="mt-3 border-t pt-3">{graph?<WorkflowCanvas graph={graph}/>:<div className="space-y-2 text-sm"><p>Bounded agent · profile {String(target.configuration.profile_code || "not configured")}</p><p>Tools: {((target.configuration.tools || []) as string[]).join(", ") || "none"}</p><p className="whitespace-pre-wrap">{String(target.configuration.prompt || "")}</p></div>}</div>}</div>;
+    })}</section>;
+}
 
 export function GraphJsonEditor({ graph, readOnly, onApply }: { graph: FlowGraph; readOnly: boolean; onApply: (value: FlowGraph) => void }) {
   const serialized = pretty(graph);
@@ -58,7 +83,7 @@ export function WorkflowCanvas({ graph, onChange, onSelect, states = {} }: {
   graph: FlowGraph; onChange?: (value: FlowGraph) => void; onSelect?: (node: FlowNode) => void; states?: Record<string, string>;
 }) {
   const nodes: StudioNode[] = graph.nodes.map((definition, i) => ({ id: definition.id, type: "studio",
-    data: { definition, state: states[definition.id] }, position: definition.position || { x: i * 230, y: 60 } }));
+    data: { definition, state: states[definition.id] }, position: definition.position || { x: i * 300, y: 60 } }));
   const edges: Edge[] = graph.edges.map(edge => ({ ...edge, style: edge.sourceHandle === "tool" ? { strokeDasharray: "5 4", stroke: "#9333ea" } : undefined }));
   function connect(value: Connection) {
     if (!onChange || !value.source || !value.target) return;
@@ -81,7 +106,7 @@ export function WorkflowCanvas({ graph, onChange, onSelect, states = {} }: {
         ...(edge.sourceHandle ? { sourceHandle: edge.sourceHandle } : {}),
         ...(edge.targetHandle ? { targetHandle: edge.targetHandle } : {}),
       })) }); }}>
-      <Background /><Controls />
+      <Background /><Controls className="!border-border !shadow-lg [&>button]:!border-border [&>button]:!bg-card [&>button]:!text-foreground [&_svg]:!fill-current" />
     </ReactFlow>
   </div>;
 }
@@ -93,7 +118,8 @@ export function WorkflowStudio({ initialKind = "workflow" }: { initialKind?: Kin
   const [kind, setKind] = useState<Kind>(initialKind), [draft, setDraft] = useState<Definition | null>(null);
   const [selected, setSelected] = useState<string | null>(null), [nodeJson, setNodeJson] = useState("{}");
   const [agentJson, setAgentJson] = useState("{}"), [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false), [nodeKind, setNodeKind] = useState("llm_analysis");
+  const [busy, setBusy] = useState(false);
+  const [wide,setWide]=useState(false), [profiles,setProfiles]=useState<{profile_code:string;model:string}[]>([]), [connectors,setConnectors]=useState<AvailableConnector[]>([]);
   const [versions, setVersions] = useState<Definition[]>([]), [readOnly, setReadOnly] = useState(false);
   const [breadcrumbs, setBreadcrumbs] = useState<Definition[]>([]);
   const [entryTenant, setEntryTenant] = useState(""), [jiraConnections, setJiraConnections] = useState("");
@@ -101,8 +127,16 @@ export function WorkflowStudio({ initialKind = "workflow" }: { initialKind?: Kin
   const [runTenant, setRunTenant] = useState(""), [runRows, setRunRows] = useState<{ run_id: string; alert_id: string; state: string; created_at: string }[]>([]);
   const load = useCallback(async () => { const result = await workflowRequest<{ items: Definition[]; node_types: string[]; templates: Definition[] }>("/admin/workflow-definitions"); setItems(result.items); setCatalog(result.node_types.filter(kind => !["playbook", "knowledge_base", "enrichment_action"].includes(kind))); setTemplates(result.templates || []); }, []);
   useEffect(() => { if (user?.role === UserRole.PLATFORM_ADMIN) load().catch(error => setMessage(error.message)); }, [user?.role, load]);
+  useEffect(()=>{if(user?.role!==UserRole.PLATFORM_ADMIN)return;let active=true;Promise.all([workflowRequest<{items:typeof profiles}>("/admin/llm-profiles"),workflowRequest<{items:AvailableConnector[]}>("/admin/connectors")]).then(([p,c])=>{if(active){setProfiles(p.items);setConnectors(c.items);}}).catch(()=>{if(active)setMessage("Model/tool catalogues are unavailable; existing configuration was preserved.");});return()=>{active=false;};},[user?.role]);
   function open(row: Definition, nested = false) {
-    if (nested && draft) setBreadcrumbs(previous => [...previous, structuredClone(draft)]);
+    if (nested && draft) {
+      const parent=structuredClone(draft);
+      if (parent.kind === "agent") {
+        try { parent.configuration=JSON.parse(agentJson); }
+        catch { setMessage("Fix the agent JSON before opening a nested definition; your edits were preserved."); return; }
+      }
+      setBreadcrumbs(previous => [...previous, parent]);
+    }
     else setBreadcrumbs([]);
     setKind(row.kind); setDraft(structuredClone(row)); setAgentJson(pretty(row.configuration));
     setSelected(null); setCredential(null); setVersions([]); setReadOnly(false);
@@ -140,16 +174,21 @@ export function WorkflowStudio({ initialKind = "workflow" }: { initialKind?: Kin
           <label>Authorized tenant IDs (comma-separated)<input className={`${field} block w-full`} value={draft.tenant_ids.join(",")} disabled={readOnly} onChange={event => setDraft({ ...draft, tenant_ids: event.target.value.split(",").map(s => s.trim()).filter(Boolean) })} /></label>
           <label>Description<input className={`${field} block w-full`} value={draft.description} disabled={readOnly} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label></div>
         <label><input type="checkbox" checked={draft.enabled} disabled={readOnly} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} /> Enabled (revocation takes effect immediately when saved)</label>
-        {graph ? <><div className="flex flex-wrap gap-2"><select aria-label="Node type" className={field} value={nodeKind} disabled={readOnly} onChange={e => setNodeKind(e.target.value)}>{catalog.map(value => <option key={value}>{value}</option>)}</select>
-          <button className={field} disabled={readOnly} onClick={() => { const id = `${nodeKind}-${crypto.randomUUID().slice(0, 8)}`; setDraft({ ...draft, configuration: { ...graph, nodes: [...graph.nodes, { id, type: nodeKind, config: {}, position: { x: graph.nodes.length * 100, y: 250 } }] } }); }}>Add node</button></div>
-          <WorkflowCanvas graph={graph} onChange={readOnly ? undefined : value => setDraft({ ...draft, configuration: value as unknown as Record<string, unknown> })}
-            onSelect={value => { setSelected(value.id); setNodeJson(pretty(value.config)); }} />
-          {selected && <div className="space-y-2 rounded border p-3"><h3 className="font-semibold">{selected} configuration</h3><p className="text-xs">Configure registered codes and typed inputs; never paste credentials here.</p>
-            <textarea className={`${field} min-h-40 w-full font-mono`} aria-label="Node configuration" value={nodeJson} readOnly={readOnly} onChange={event => setNodeJson(event.target.value)} />
-            <button className={field} disabled={readOnly} onClick={() => { try { const config = JSON.parse(nodeJson); setDraft({ ...draft, configuration: { ...graph, nodes: graph.nodes.map(n => n.id === selected ? { ...n, config } : n) } }); setMessage("Node configuration applied to draft."); } catch { setMessage("Node configuration must be valid JSON."); } }}>Apply node settings</button>
-            {(() => { const n = graph.nodes.find(n => n.id === selected); const code = n?.config.definition_code; const target = items.find(row => row.code === code && row.kind === (n?.type === "agent" ? "agent" : "playbook")); return target && <button className={`${field} ml-2`} onClick={() => open(target, true)}>Open {target.kind} subflow</button>; })()}</div>}
+        {graph ? <><div className={wide?"fixed inset-3 z-50 overflow-auto rounded-2xl border bg-background p-5 shadow-2xl":"space-y-3"}>
+          <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 font-semibold"><Workflow size={18}/>{draft.kind === "playbook"?"Playbook subflow":"Workflow canvas"}</h2><button className={field} onClick={()=>setWide(!wide)}>{wide?<Minimize2 size={16}/>:<Maximize2 size={16}/>}<span>{wide?"Close expanded canvas":"Expand canvas"}</span></button></div>
+          <div className={`grid gap-4 ${readOnly?"":"xl:grid-cols-[250px_minmax(0,1fr)]"}`}>
+            {!readOnly&&<NodeGallery catalog={catalog} hasEntry={graph.nodes.some(n=>n.type==="entry")} onAdd={type=>{const id=`${type}-${crypto.randomUUID().slice(0,8)}`;setDraft({...draft,configuration:{...graph,nodes:[...graph.nodes,{id,type,config:{},position:{x:280,y:graph.nodes.length*60}}]}});setSelected(id);setNodeJson("{}");}}/>}
+            <WorkflowCanvas graph={graph} onChange={readOnly ? undefined : value => setDraft({ ...draft, configuration: value as unknown as Record<string, unknown> })}
+              onSelect={value => { setSelected(value.id); setNodeJson(pretty(value.config)); }} />
+          </div>
+          {selected && (()=>{const node=graph.nodes.find(n=>n.id===selected);if(!node)return null;return <div className="grid gap-4 xl:grid-cols-2"><div className="space-y-3 rounded-xl border bg-card p-4"><h3 className="font-semibold">{NODE_DESIGN[node.type]?.title || selected} settings</h3><p className="text-xs text-muted-foreground">Configure registered codes and typed inputs; credentials belong in integrations.</p>
+            <fieldset disabled={readOnly}><NodeFields node={node} value={node.config} profiles={profiles} connectors={connectors} definitions={items} onChange={config=>{setDraft({...draft,configuration:{...graph,nodes:graph.nodes.map(n=>n.id===selected?{...n,config}:n)}});setNodeJson(pretty(config));}}/></fieldset>
+            <details><summary>Advanced node JSON</summary><textarea className={`${field} min-h-40 w-full font-mono`} aria-label="Node configuration" value={nodeJson} readOnly={readOnly} onChange={event => setNodeJson(event.target.value)} />
+            <button className={field} disabled={readOnly} onClick={() => { try { const config = JSON.parse(nodeJson); setDraft({ ...draft, configuration: { ...graph, nodes: graph.nodes.map(n => n.id === selected ? { ...n, config } : n) } }); setMessage("Node configuration applied to draft."); } catch { setMessage("Node configuration must be valid JSON."); } }}>Apply node settings</button></details></div>
+            <SubflowPanel key={selected} node={node} definitions={items} onOpen={target=>{setWide(false);open(target,true);}}/></div>;})()}
+          </div>
           <GraphJsonEditor graph={graph} readOnly={readOnly} key={`${draft.kind}:${draft.code}:${draft.draft_version}:${readOnly}`} onApply={value => setDraft({ ...draft, configuration: value as unknown as Record<string, unknown> })} />
-        </> : <label>Agent configuration (prompt, model profile, schemas, tool allowlist and budgets)<textarea aria-label="Agent configuration" className={`${field} block min-h-96 w-full font-mono`} value={agentJson} readOnly={readOnly} onChange={event => setAgentJson(event.target.value)} /></label>}
+        </> : <>{(()=>{try{const cfg=JSON.parse(agentJson);return <div className="grid gap-4 xl:grid-cols-2"><fieldset disabled={readOnly} className="rounded-xl border bg-card p-4"><legend>Agent · prompt, model, tools and budgets</legend><NodeFields node={{id:"agent",type:"llm_tools",config:cfg}} value={cfg} profiles={profiles} connectors={connectors} definitions={items} onChange={value=>setAgentJson(pretty(value))}/></fieldset><SubflowPanel node={{id:"agent",type:"llm_tools",config:cfg}} definitions={items} onOpen={target=>open(target,true)}/></div>;}catch{return <p role="alert">Fix the agent JSON below to use the structured editor.</p>;}})()}<details><summary>Advanced agent JSON</summary><label>Agent configuration<textarea aria-label="Agent configuration" className={`${field} block min-h-96 w-full font-mono`} value={agentJson} readOnly={readOnly} onChange={event => setAgentJson(event.target.value)} /></label></details></>}
         <div className="flex flex-wrap gap-2"><button className={field} disabled={busy || readOnly} onClick={() => action(save)}>Save draft</button>
           <button className={field} disabled={busy || readOnly || !draft.draft_version || unsaved} onClick={() => action(async () => { const result = await workflowRequest<{ revision: number }>(`/admin/workflow-definitions/${draft.kind}/${draft.code}/publish`, "POST"); setDraft({ ...draft, active_revision: result.revision }); setMessage("Published and activated for new runs."); await load(); })}>Publish and activate</button>
           <button className={field} disabled={busy || !draft.draft_version} onClick={() => action(async () => { const result = await workflowRequest<{ items: Definition[] }>(`/admin/workflow-definitions/${draft.kind}/${draft.code}/revisions`); setVersions(result.items); })}>Version history</button>

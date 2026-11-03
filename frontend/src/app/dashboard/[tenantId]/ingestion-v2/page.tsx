@@ -1,7 +1,2 @@
-"use client";
-import { useParams } from "next/navigation";
-import { WorkflowBuilder } from "@/components/workflow-builder";
-export default function Page() {
-  const { tenantId } = useParams<{ tenantId: string }>();
-  return <WorkflowBuilder tenantId={tenantId} />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/admin/workflows"); }
