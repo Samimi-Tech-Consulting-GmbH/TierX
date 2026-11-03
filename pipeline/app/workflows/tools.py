@@ -420,6 +420,8 @@ class Tools:
                         sort=[("version", -1), ("playbook_id", 1)],
                     )
             metadata = {
+                "playbook_id": pb.get("playbook_id") if pb else None,
+                "playbook_version": pb.get("version") if pb else None,
                 "matched_playbook_id": pb.get("playbook_id") if pb else None,
                 "matched_playbook_version": pb.get("version") if pb else None,
                 "playbook_snapshot": pb,

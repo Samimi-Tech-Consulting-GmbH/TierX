@@ -387,7 +387,7 @@ def get_cluster(
     requests = list(
         db.v2_cluster_requests.find(
             {"message.cluster_id": cluster_id}, {"_id": 0}
-        ).sort("requested_analysis_version", 1)
+        ).sort("message.requested_analysis_version", 1)
     )
     return {"cluster": cluster, "members": members, "requests": requests}
 

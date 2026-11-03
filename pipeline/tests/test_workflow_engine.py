@@ -12,6 +12,31 @@ from workflow_database import Database, Client
 
 
 @pytest.mark.asyncio
+async def test_selected_playbook_is_used_by_analysis_prompt_assembly():
+    from app.workers.analysis_worker import AgenticAnalysisWorker
+
+    mongo = mongomock.MongoClient(tz_aware=True)
+    db = Database(mongo.tenant)
+    playbook = {"tenant_id": "t", "playbook_id": "pb", "version": 2,
+                "prompt": "Use the synthetic playbook evidence.", "is_active": True}
+    mongo.tenant.playbooks.insert_one(dict(playbook))
+    mongo.tenant.v2_alerts.insert_one({"alert_id": "a", "tenant_id": "t",
+                                    "alert_type": "synthetic",
+                                    "normalized_payload": {"host.name": "synthetic"}})
+    await Tools().execute(db, {"alert_id": "a", "resources": {
+        "playbooks": {"pb-node": playbook}}},
+        {"id": "pb-node", "type": "playbook", "config": {}}, {"ancestors": {}})
+    alert = mongo.tenant.v2_alerts.find_one({"alert_id": "a"})
+    assert alert["playbook_id"] == alert["matched_playbook_id"] == "pb"
+    assert alert["playbook_version"] == alert["matched_playbook_version"] == 2
+    assembler = AgenticAnalysisWorker()
+    assembler._system_prompt = AsyncMock(side_effect=AssertionError("unexpected fallback"))
+    prompt, _, provenance, _ = await assembler._prompt_sources(db, [alert])
+    assert playbook["prompt"] in prompt
+    assert provenance[0]["playbook_id"] == "pb"
+
+
+@pytest.mark.asyncio
 async def test_failed_completion_validation_cannot_succeed_run():
     mongo = mongomock.MongoClient(tz_aware=True)
     db = Database(mongo.tenant)

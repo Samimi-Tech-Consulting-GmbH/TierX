@@ -101,6 +101,19 @@ def setup(monkeypatch):
     return TestClient(app), mongo, user
 
 
+def test_cluster_requests_are_ordered_by_nested_analysis_version(setup):
+    client, mongo, _ = setup
+    db = mongo.tenant_one
+    db.v2_clusters.insert_one({"cluster_id": "c", "tenant_id": "one"})
+    for version in [3, 1, 2]:
+        db.v2_cluster_requests.insert_one({"message": {
+            "cluster_id": "c", "requested_analysis_version": version}})
+    response = client.get("/api/v2/tenants/one/clusters/c")
+    assert response.status_code == 200
+    assert [row["message"]["requested_analysis_version"]
+            for row in response.json()["requests"]] == [1, 2, 3]
+
+
 def test_draft_conflict_publication_and_bindings(setup):
     client, mongo, _ = setup
     root = "/api/v2/tenants/one"
