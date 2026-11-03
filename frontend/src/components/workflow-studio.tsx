@@ -69,23 +69,28 @@ export function WorkflowCanvas({ graph, onChange, onSelect, states = {} }: {
     <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView nodesDraggable={Boolean(onChange)}
       nodesConnectable={Boolean(onChange)} edgesReconnectable={Boolean(onChange)} onConnect={connect}
       onNodeClick={(_, selected) => onSelect?.(selected.data.definition)}
-      onNodesChange={changes => { if (!onChange) return; const next = applyNodeChanges(changes, nodes); const ids = new Set(next.map(n => n.id));
+      onNodesChange={changes => { if (!onChange) return;
+        const edits = changes.filter(change => change.type === "position" || change.type === "remove");
+        if (!edits.length) return;
+        const next = applyNodeChanges(edits, nodes); const ids = new Set(next.map(n => n.id));
         onChange({ ...graph, nodes: next.map(n => ({ ...n.data.definition, position: n.position })), edges: graph.edges.filter(e => ids.has(e.source) && ids.has(e.target)) }); }}
-      onEdgesChange={changes => onChange?.({ ...graph, edges: applyEdgeChanges(changes, edges).map(edge => ({
+      onEdgesChange={changes => { const edits = changes.filter(change => change.type !== "select");
+        if (!edits.length) return;
+        onChange?.({ ...graph, edges: applyEdgeChanges(edits, edges).map(edge => ({
         id: edge.id, source: edge.source, target: edge.target,
         ...(edge.sourceHandle ? { sourceHandle: edge.sourceHandle } : {}),
         ...(edge.targetHandle ? { targetHandle: edge.targetHandle } : {}),
-      })) })}>
+      })) }); }}>
       <Background /><Controls />
     </ReactFlow>
   </div>;
 }
 
-export function WorkflowStudio() {
+export function WorkflowStudio({ initialKind = "workflow" }: { initialKind?: Kind }) {
   const { user } = useAuth();
   const [items, setItems] = useState<Definition[]>([]), [catalog, setCatalog] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Definition[]>([]);
-  const [kind, setKind] = useState<Kind>("workflow"), [draft, setDraft] = useState<Definition | null>(null);
+  const [kind, setKind] = useState<Kind>(initialKind), [draft, setDraft] = useState<Definition | null>(null);
   const [selected, setSelected] = useState<string | null>(null), [nodeJson, setNodeJson] = useState("{}");
   const [agentJson, setAgentJson] = useState("{}"), [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false), [nodeKind, setNodeKind] = useState("llm_analysis");
@@ -102,6 +107,7 @@ export function WorkflowStudio() {
     setKind(row.kind); setDraft(structuredClone(row)); setAgentJson(pretty(row.configuration));
     setSelected(null); setCredential(null); setVersions([]); setReadOnly(false);
     setEntryTenant(row.tenant_ids[0] || "");
+    setRunTenant(row.tenant_ids[0] || ""); setRunRows([]);
   }
   async function action(operation: () => Promise<void>) { setBusy(true); setMessage(""); try { await operation(); } catch (error) { setMessage(error instanceof Error ? error.message : "Request failed"); } finally { setBusy(false); } }
   async function save() {
@@ -152,6 +158,7 @@ export function WorkflowStudio() {
         {readOnly && <p>Historical revision — read only. Open the definition from the library to edit its current draft.</p>}
         {draft.kind === "workflow" && draft.active_revision && <section className="space-y-2 rounded border p-4"><h2 className="font-semibold">Workflow entry</h2>
           <label>Tenant<select className={`${field} ml-2`} value={entryTenant} onChange={event => { setEntryTenant(event.target.value); setCredential(null); }}>{draft.tenant_ids.map(id => <option key={id}>{id}</option>)}</select></label>
+          {entryTenant && <p>Fixed REST entry: <code className="break-all">/api/v2/workflows/{draft.code}/tenants/{entryTenant}/ingest</code></p>}
           <label className="block">Allowed Jira connection IDs (comma-separated)<input className={`${field} ml-2`} value={jiraConnections} onChange={event => setJiraConnections(event.target.value)} /></label>
           <button className={field} disabled={busy || !entryTenant} onClick={() => action(async () => { setCredential(await workflowRequest(`/admin/workflow-definitions/workflow/${draft.code}/entry-credentials`, "POST", { tenant_id: entryTenant, jira_connection_ids: jiraConnections.split(",").map(s => s.trim()).filter(Boolean) })); })}>Generate / rotate entry credential</button>
           {credential && <div className="space-y-2"><p>Copy once. Kept in page memory only; rotation immediately invalidates the previous token.</p><code className="block break-all">{credential.token}</code><button className={field} onClick={() => navigator.clipboard.writeText(credential.token)}>Copy token</button><p>REST: <code>{credential.path}</code></p><p>Jira workflow URL: <code>{credential.jira_path}</code></p><button className={field} onClick={() => setCredential(null)}>Hide credential</button></div>}

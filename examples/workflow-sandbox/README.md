@@ -20,3 +20,21 @@ Cards show the immutable workflow revision, application release, node state, rou
 The local proxy permits only login, identity, fixed workflow ingestion and tenant run inspection against the startup-configured origin. It rejects foreign browser origins, redirects, arbitrary proxy paths and oversized payloads. It never logs or stores credentials. Do not use production alert data in a sandbox.
 
 `npm test` checks proxy routing, origin boundaries, credential forwarding and redirect rejection. Zip this directory without `node_modules` to share it; it has no runtime dependencies. Never include credentials or a local environment file in the archive.
+
+## Populate the disposable acceptance instance
+
+From an application checkout, after `acceptance.py --serve` has prepared the dedicated local stack, run
+`python seed_demo.py` with the application Python dependencies. It adds a named
+demo tenant, fast and real-model workflows, reusable playbook flows and an agent,
+an indexed synthetic Markdown Knowledge Base, and success/correlation/duplicate/
+validation examples. Re-running updates the demo definitions without adding the
+same initial alert batch again. It accepts only the isolated localhost target.
+
+Use **Operations → Workflows / Playbook flows / Agents** for the new graph
+libraries. The older **Configuration → Legacy playbooks / Legacy Ingestion V2** screens show
+legacy records, not these definitions. Start with `demo-fast-triage` for an
+interactive test; its reasoning is explicitly a protocol fixture. Use
+`demo-real-triage` for actual phi3 inference, which can take several minutes.
+
+The Python harnesses require an application checkout and its Python dependencies;
+they are not part of the sender-only ZIP. Ordinary sender use needs only Node.js.

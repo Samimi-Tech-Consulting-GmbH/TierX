@@ -87,6 +87,10 @@ function navItemActive(pathname: string, item: NavItem): boolean {
 const navItems: NavItem[] = [
   { href: "/dashboard/admin/workflows", label: "Workflows", icon: SlidersHorizontal,
     group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
+  { href: "/dashboard/admin/playbook-flows", label: "Playbook flows", icon: Book,
+    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
+  { href: "/dashboard/admin/agents", label: "Agents", icon: SlidersHorizontal,
+    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
   {
     href: "/dashboard/admin",
     label: "Dashboard",
@@ -183,7 +187,7 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
     },
     {
       href: sectionHref("playbooks", tenantId, isPlatformAdmin),
-      label: "Playbooks",
+      label: isPlatformAdmin ? "Legacy playbooks" : "Playbooks",
       icon: Book,
       group: "Configuration",
     },
@@ -195,7 +199,7 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
     },
     {
       href: sectionHref("ingestion-v2", tenantId, isPlatformAdmin),
-      label: "Ingestion V2",
+      label: isPlatformAdmin ? "Legacy Ingestion V2" : "Ingestion V2",
       icon: ScanSearch,
       group: "Configuration",
     },
