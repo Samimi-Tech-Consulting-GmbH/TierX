@@ -10,6 +10,15 @@ or data migration is included in this review.
 
 ## Automated checks
 
+Reconciliation checks on 3 November 2026: backend 249 passed/3 environment-
+dependent skips, pipeline 148 passed, frontend 101 passed, lint passed with four
+existing navigation warnings, and production frontend build passed. Python
+tests use pytest 8.4; pytest 9.2 changed monkeypatch handling for dynamic settings
+and application-state proxies, causing teardown failures and cross-test leakage.
+Backend/pipeline test dependencies are bounded to the compatible pytest major.
+Current npm audits report development-chain advisories; merge clearance is
+blocked until they are remediated or an explicit policy decision is approved.
+
 Local results on 13 October 2026:
 
 | Check | Result |
