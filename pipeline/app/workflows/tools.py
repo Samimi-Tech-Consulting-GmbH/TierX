@@ -304,6 +304,10 @@ class Tools:
             mapping = cfg.get("field_mapping", schema.get("field_mapping", {}))
             fields = cfg.get("critical_fields", schema.get("critical_fields", []))
             if kind == "validation":
+                checks = [{"field": field, "source_path": mapping.get(field),
+                    "passed": bool(mapping.get(field)) and resolve_path(alert["raw_payload"], mapping[field]) is not None} for field in fields]
+                await db.v2_jobs.update_one({"job_id": job["job_id"]}, {"$set": {"decisions": {
+                    "schema_id": schema.get("schema_id"), "schema_version": schema.get("version"), "critical_field_checks": checks}}})
                 missing = [
                     field
                     for field in fields
@@ -333,7 +337,7 @@ class Tools:
                 for field, path in mapping.items()
                 if (value := resolve_path(alert["raw_payload"], path)) is not None
             }
-            if not alert.get("validated"):
+            if not alert.get("validated") and run.get("graph", {}).get("format_version") != "2.0":
                 raise NodeFailure("VALIDATED_ALERT_REQUIRED")
             if len(json.dumps(normalized).encode()) > 256 * 1024:
                 raise NodeFailure("NORMALIZED_ALERT_TOO_LARGE")
@@ -369,6 +373,9 @@ class Tools:
             ).hexdigest()
             key = checksum([run["cohort"], fingerprint])
             existing = await db.v2_fingerprints.find_one({"_id": key})
+            await db.v2_jobs.update_one({"job_id": job["job_id"]}, {"$set": {"decisions": {
+                "fingerprint": fingerprint, "fields": fields, "window_hours": cfg.get("window_hours", 24),
+                "previous_alert_id": (existing or {}).get("alert_id")}}})
             if (
                 existing
                 and existing["expires_at"] > now()
@@ -916,7 +923,7 @@ class Tools:
             return
         self.last_schedule[db.name] = now()
         for cohort in await db.v2_clusters.distinct(
-            "cohort", {"is_open_for_grouping": True}
+            "cohort", {"is_open_for_grouping": True, "workflow_format": {"$ne": "2.0"}}
         ):
             root = await db.v2_runs.find_one(
                 {"cohort": cohort}, sort=[("created_at", 1)]

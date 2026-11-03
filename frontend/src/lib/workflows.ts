@@ -12,9 +12,11 @@ export interface FlowEdge {
   source: string;
   target: string;
   sourceHandle?: string;
+  targetHandle?: string;
 }
 export interface FlowGraph {
-  format_version: "1.0";
+  format_version: "1.0" | "2.0";
+  input_capabilities?: string[];
   nodes: FlowNode[];
   edges: FlowEdge[];
   viewport?: { x: number; y: number; zoom: number };
@@ -26,6 +28,19 @@ export interface FlowDraft {
   draft_version: number;
 }
 export interface WorkflowJob {
+  node_type?: string;
+  label?: string;
+  definition_ref?: string;
+  input_snapshot?: unknown;
+  output_snapshot?: unknown;
+  selection?: unknown;
+  decisions?: unknown;
+  port?: string;
+  first_started_at?: string;
+  completed_at?: string;
+  attempt_count?: number;
+  node_elapsed_ms?: number;
+  execution_duration_ms?: number;
   job_id: string;
   node_id: string;
   state: string;
@@ -70,6 +85,7 @@ export async function workflowRequest<T>(
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
+  if (r.status === 204) return undefined as T;
   if (r.status === 401) {
     clearToken();
     throw new Error("Session expired; please sign in again.");

@@ -21,7 +21,7 @@ from app.db.mongodb import DatabaseManager
 router = APIRouter(
     prefix="/admin/llm-profiles",
     tags=["V2 LLM profiles"],
-    dependencies=[Depends(enabled), Depends(require_platform_admin)],
+    dependencies=[Depends(require_platform_admin)],
 )
 
 
@@ -37,6 +37,7 @@ class Profile(BaseModel):
     tool_mode: str = "disabled"
     temperature: float = Field(0, ge=0, le=2)
     max_tokens: int = Field(2048, ge=32, le=8192)
+    context_tokens: int = Field(2048, ge=512, le=32768)
     timeout_seconds: int = Field(120, ge=1, le=300)
     api_key: str | None = Field(None, max_length=4096)
     expected_revision: int = Field(0, ge=0)

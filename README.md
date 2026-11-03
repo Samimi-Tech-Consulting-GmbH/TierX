@@ -8,10 +8,13 @@ the deployed build. Build and installation details are in [`SOURCE.md`](SOURCE.m
 
 Copyright © 2026 SAMIMI Tech Consulting GmbH.
 
-The private Jira integration is documented in
+The Jira integration is documented in
 [`integrations/jira-forge/README.md`](integrations/jira-forge/README.md). It
 routes one raw alert from a Jira project into a configured tenant, source
 system, and alert type while keeping the ingestion proxy private.
+The new platform-managed graph runtime, fixed workflow URLs, nested playbooks,
+agents, and REST/MCP tools are documented in [Workflow Studio](docs/workflows.md).
+It is disabled by default pending an explicit installation cutover.
 
 The Docker Compose stack includes:
 

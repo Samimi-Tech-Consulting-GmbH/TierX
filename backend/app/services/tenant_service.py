@@ -445,6 +445,13 @@ class TenantService:
             last_analysis_requested_at=raw.get("last_analysis_requested_at"),
             last_analyzed_at=raw.get("last_analyzed_at"),
             alert_analysis=raw.get("alert_analysis"),
+            workflow_format=raw.get("workflow_format"),
+            workflow_state=raw.get("workflow_state"),
+            workflow_error=raw.get("workflow_error"),
+            run_id=raw.get("run_id"),
+            correlation_group=raw.get("correlation_group"),
+            verdict=raw.get("verdict"),
+            analyst_decision=raw.get("analyst_decision"),
             created_at=raw.get("created_at"),
             updated_at=raw.get("updated_at"),
         )

@@ -81,6 +81,9 @@ async def test_explicit_provider_protocols_and_key_not_in_body(
     assert captured[0].headers["authorization"] == "Bearer synthetic-test-key"
     if provider == "ollama":
         assert captured[0].url.path == ("/api/chat" if native else "/api/generate")
+        payload = json.loads(captured[0].content)
+        assert payload["options"]["num_ctx"] == 2048
+        assert payload["options"]["num_batch"] == 32
 
 
 @pytest.mark.asyncio

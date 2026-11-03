@@ -4,6 +4,22 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 scope = ContextVar("tierx_workflow_storage", default=None)
+
+
+class WorkflowDatabase:
+    """New workflows use canonical records; historical experimental runs stay isolated."""
+    def __init__(self, raw):
+        self.raw, self.name = raw, raw.name
+
+    def __getitem__(self, name):
+        return self.raw[{"v2_alerts": "alerts", "v2_clusters": "clusters"}.get(name, name)]
+
+    def __getattr__(self, name):
+        return self[name]
+
+
+def for_run(db, run):
+    return WorkflowDatabase(db) if run["graph"].get("format_version") == "2.0" and not isinstance(db, WorkflowDatabase) else db
 ALIASES = {
     "alerts": "v2_alerts",
     "clusters": "v2_clusters",

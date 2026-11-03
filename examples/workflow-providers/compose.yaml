@@ -1,0 +1,19 @@
+services:
+  context-provider:
+    build: .
+    environment:
+      EXAMPLE_PROVIDER_TOKEN: ${EXAMPLE_PROVIDER_TOKEN:?Set a disposable example token}
+    ports:
+      - "127.0.0.1:18090:8090"
+    volumes:
+      - deliveries:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+volumes:
+  deliveries:

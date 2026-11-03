@@ -3,6 +3,7 @@ import ipaddress
 import json
 import math
 import re
+from datetime import datetime, timezone
 from collections import defaultdict, deque
 
 NODE_TYPES = {
@@ -22,8 +23,12 @@ NODE_TYPES = {
     "catch",
     "complete",
     "dead_letter",
+    "playbook_call", "playbook_selector", "agent", "tool_call",
+    "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook",
 }
+MODERN_NODE_TYPES = {"playbook_call", "playbook_selector", "agent", "tool_call", "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook"}
 MUTATIONS = {
+    "kb_deterministic", "kb_semantic", "persist_analysis",
     "normalization",
     "fingerprint",
     "correlation",
@@ -50,15 +55,15 @@ PORTS = {
     "dead_letter": set(),
 }
 CONFIG = {
-    "entry": set(),
+    "entry": {"input_mode", "source_system", "alert_type", "timestamp_path"},
     "validation": {"schema_id", "schema_version", "critical_fields", "field_mapping"},
     "normalization": {"schema_id", "schema_version", "field_mapping"},
     "fingerprint": {"fields", "window_hours"},
     "playbook": {"playbook_id", "version"},
     "knowledge_base": {"top_k", "retrieval_mode"},
     "enrichment_action": {"action_code"},
-    "correlation": {"lookback_hours", "debounce_ms", "grouping_hours"},
-    "llm_analysis": {"profile_code", "prompt", "output_schema"},
+    "correlation": {"lookback_hours", "debounce_ms", "grouping_hours", "group"},
+    "llm_analysis": {"profile_code", "prompt", "output_schema", "input_scope"},
     "llm_tools": {
         "profile_code",
         "prompt",
@@ -66,13 +71,23 @@ CONFIG = {
         "tools",
         "max_rounds",
         "max_calls",
+        "input_scope",
     },
     "decision": {"path", "operator", "value"},
     "fork": {"branches", "join_id"},
     "join": {"fork_id"},
     "catch": {"replacement", "output_schema"},
-    "complete": set(),
+    "complete": {"output_path", "output_schema"},
     "dead_letter": set(),
+    "playbook_call": {"definition_code", "revision"},
+    "agent": {"definition_code", "revision"},
+    "playbook_selector": {"mode", "mappings", "candidates", "fallback", "profile_code", "threshold"},
+    "tool_call": {"connector_code", "tool_name", "arguments", "argument_paths"},
+    "kb_deterministic": {"top_k"},
+    "kb_semantic": {"top_k"},
+    "persist_analysis": {"input_path"},
+    "notify_jira": {"input_path", "missing_origin"},
+    "webhook": {"connector_code", "tool_name", "input_path"},
 }
 
 
@@ -81,12 +96,17 @@ class GraphError(ValueError):
 
 
 def canonical(value):
+    def encode(item):
+        if isinstance(item, datetime):
+            return (item.replace(tzinfo=timezone.utc) if item.tzinfo is None else item.astimezone(timezone.utc)).isoformat()
+        raise TypeError(f"Unsupported canonical value: {type(item).__name__}")
     return json.dumps(
         value,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
         allow_nan=False,
+        default=encode,
     ).encode()
 
 
@@ -157,10 +177,18 @@ def validate_graph(graph):
         "nodes",
         "edges",
         "viewport",
+        "input_capabilities",
     }:
         raise GraphError("Unknown graph fields")
-    if graph.get("format_version") != "1.0":
+    if graph.get("format_version") not in {"1.0", "2.0"}:
         raise GraphError("Unsupported graph format")
+    modern = graph["format_version"] == "2.0"
+    capabilities = graph.get("input_capabilities", ["raw"])
+    if not isinstance(capabilities, list) or any(
+        item not in {"raw", "validation", "normalization", "fingerprint", "correlation"}
+        for item in capabilities
+    ):
+        raise GraphError("Invalid input capabilities")
 
     def coordinates(value, viewport=False):
         keys = {"x", "y", "zoom"} if viewport else {"x", "y"}
@@ -211,8 +239,52 @@ def validate_graph(graph):
         if kind not in NODE_TYPES:
             raise GraphError("Unknown node type")
         cfg = node.get("config", {})
+        if graph.get("format_version") != "2.0" and (kind in MODERN_NODE_TYPES or any(
+            str(tool).startswith(("connector:", "agent:", "playbook:")) for tool in cfg.get("tools", []) or []
+        )):
+            raise GraphError("Modern nodes and tools require workflow format 2.0")
+        if graph.get("format_version") == "2.0" and "debounce_ms" in cfg:
+            raise GraphError("Workflow correlation does not delay analysis; remove debounce_ms")
         if not isinstance(cfg, dict) or set(cfg) - CONFIG[kind]:
             raise GraphError(f"Invalid configuration for {nid}")
+        if kind in {"playbook_call", "agent"} and not re.fullmatch(
+            r"[a-z0-9][a-z0-9_-]{0,63}", str(cfg.get("definition_code", ""))
+        ):
+            raise GraphError("Definition reference required")
+        if kind == "entry" and cfg.get("input_mode", "envelope") not in {"raw", "envelope"}:
+            raise GraphError("Invalid ingestion mode")
+        if kind == "entry" and cfg.get("input_mode") == "raw" and any(
+            not isinstance(cfg.get(key), str) or not cfg[key].strip()
+            for key in ("source_system", "alert_type", "timestamp_path")
+        ):
+            raise GraphError("Raw ingestion needs source, alert type and timestamp path")
+        if "input_scope" in cfg and cfg["input_scope"] not in {"alert", "correlated"}:
+            raise GraphError("Invalid analysis evidence scope")
+        if "group" in cfg and cfg["group"] is not None and not re.fullmatch(
+            r"[a-z0-9][a-z0-9_-]{0,63}", str(cfg["group"])
+        ):
+            raise GraphError("Invalid correlation group")
+        if kind in {"tool_call", "webhook"}:
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", str(cfg.get("connector_code", ""))) or not re.fullmatch(
+                r"[a-zA-Z0-9_-]{1,64}", str(cfg.get("tool_name", ""))
+            ):
+                raise GraphError("Registered connector and tool required")
+            if not isinstance(cfg.get("arguments", {}), dict) or not isinstance(cfg.get("argument_paths", {}), dict):
+                raise GraphError("Invalid tool arguments")
+        if kind == "playbook_selector":
+            if not isinstance(cfg.get("mappings", {}), dict) or not isinstance(cfg.get("candidates", []), list) or len(cfg.get("candidates", [])) > 20:
+                raise GraphError("Selector requires a mapping object and at most 20 candidates")
+            codes = [*cfg.get("candidates", []), *cfg.get("mappings", {}).values(), cfg.get("fallback")]
+            if cfg.get("mode", "static") not in {"static", "model"} or not codes or any(
+                not isinstance(code, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", code) for code in codes
+            ) or len(codes) > 101:
+                raise GraphError("Selector requires valid candidates and fallback")
+            if not isinstance(cfg.get("threshold", 0.7), (float, int)) or isinstance(cfg.get("threshold"), bool) or not 0 <= cfg.get("threshold", 0.7) <= 1:
+                raise GraphError("Invalid selector threshold")
+            if cfg.get("mode") == "model" and not cfg.get("profile_code"):
+                raise GraphError("Model selector requires a profile")
+        if kind == "persist_analysis" and not isinstance(cfg.get("input_path"), str):
+            raise GraphError("Analysis persistence requires an input path")
         for resource in ("profile_code", "action_code", "playbook_id", "schema_id"):
             if resource in cfg and (
                 not isinstance(cfg[resource], str)
@@ -241,7 +313,8 @@ def validate_graph(graph):
             for tool in cfg.get("tools", []):
                 if not isinstance(tool, str) or (
                     tool not in {"knowledge_base", "alert_evidence", "cluster_evidence"}
-                    and not re.fullmatch(r"action:[a-z0-9][a-z0-9_-]{0,63}", tool)
+                    and not re.fullmatch(r"(?:action|agent|playbook):[a-z0-9][a-z0-9_-]{0,63}", tool)
+                    and not re.fullmatch(r"connector:[a-z0-9][a-z0-9_-]{0,63}:[a-zA-Z0-9_-]{1,64}", tool)
                 ):
                     raise GraphError("Unknown tool reference")
             if (
@@ -350,12 +423,15 @@ def validate_graph(graph):
     if len(entries) != 1:
         raise GraphError("Exactly one entry required")
     connections = set()
+    tool_only = set()
+    execution_targets = {edge.get("target") for edge in edges if edge.get("sourceHandle") != "tool"}
     for edge in edges:
         if not isinstance(edge, dict) or set(edge) - {
             "id",
             "source",
             "target",
             "sourceHandle",
+            "targetHandle",
         }:
             raise GraphError("Invalid edge fields")
         src, dst, port = (
@@ -365,6 +441,15 @@ def validate_graph(graph):
         )
         if src not in by_id or dst not in by_id or dst == entries[0]:
             raise GraphError("Invalid edge endpoint")
+        if port == "tool":
+            if by_id[src]["type"] != "tool_call" or by_id[dst]["type"] != "llm_tools":
+                raise GraphError("Capability edges connect tools to a tool-calling agent")
+            reference = f"connector:{by_id[src]['config']['connector_code']}:{by_id[src]['config']['tool_name']}"
+            if reference not in by_id[dst].get("config", {}).get("tools", []):
+                raise GraphError("Capability edge must match the explicit agent allowlist")
+            if src not in execution_targets:
+                tool_only.add(src)
+            continue
         ports = PORTS.get(by_id[src]["type"], {"success", "error"})
         if ports is not None and port not in ports:
             raise GraphError("Invalid output port")
@@ -394,7 +479,7 @@ def validate_graph(graph):
             walk(dst)
 
     walk(entries[0])
-    if reachable != set(by_id):
+    if reachable | tool_only != set(by_id):
         raise GraphError("Unreachable nodes")
     guaranteed = {}
     for nid in order:
@@ -402,9 +487,12 @@ def validate_graph(graph):
         before = (
             set.intersection(*(guaranteed[p] for p in predecessors))
             if predecessors
-            else set()
+            else set(capabilities) if modern else set()
         )
         kind = by_id[nid]["type"]
+        if nid in tool_only:
+            guaranteed[nid] = set()
+            continue
         requirements = {
             "normalization": {"validation"},
             "fingerprint": {"normalization"},
@@ -415,6 +503,16 @@ def validate_graph(graph):
             "llm_analysis": {"correlation"},
             "llm_tools": {"normalization"},
         }
+        if modern:
+            requirements = {
+                "normalization": {"raw"}, "fingerprint": {"normalization"},
+                "playbook": {"normalization"}, "playbook_call": {"normalization"},
+                "playbook_selector": {"normalization"}, "agent": {"normalization"},
+                "knowledge_base": {"normalization"}, "kb_deterministic": {"normalization"},
+                "kb_semantic": {"normalization"}, "enrichment_action": {"normalization"},
+                "tool_call": {"normalization"}, "correlation": {"normalization"},
+                "llm_analysis": {"normalization"}, "llm_tools": {"normalization"},
+            }
         if not requirements.get(kind, set()) <= before:
             raise GraphError(f"Missing required upstream stage for {nid}")
         if (
@@ -423,7 +521,7 @@ def validate_graph(graph):
                 name.startswith("action:")
                 for name in by_id[nid].get("config", {}).get("tools", [])
             )
-            and "fingerprint" not in before
+            and "fingerprint" not in before and not modern
         ):
             raise GraphError("Action tools require an upstream fingerprint")
         guaranteed[nid] = before | {kind}
@@ -431,6 +529,8 @@ def validate_graph(graph):
         raise GraphError("Only one correlation node per graph")
     for node in nodes:
         nid, kind, cfg = node["id"], node["type"], node.get("config", {})
+        if nid in tool_only:
+            continue
         if len(incoming[nid]) > 1 and kind not in {
             "join",
             "catch",

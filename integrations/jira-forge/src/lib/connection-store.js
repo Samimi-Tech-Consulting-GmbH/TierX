@@ -48,7 +48,7 @@ export function createConnectionStore(storage, verify) {
       // One encrypted atomic value prevents concurrent saves mixing URLs and secrets.
       const current = await storage.getSecret(CONNECTION_KEY);
       if (current?.revision !== previous?.revision) throw new ConnectionChangedError();
-      const same = previous?.baseUrl === candidate.baseUrl && previous?.integrationId === candidate.integrationId;
+      const same = previous?.baseUrl === candidate.baseUrl && previous?.integrationId === candidate.integrationId && previous?.workflowPath === candidate.workflowPath;
       const record = {
         ...candidate, identity: same ? previous.identity : randomUUID(),
         revision: randomUUID(), connectionName: info.name,

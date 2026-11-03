@@ -131,6 +131,9 @@ def test_token_hash_consumption_and_permanent_closure(db, monkeypatch):
     admin = db.users.find_one({})
     assert admin["created_at"] == admin["updated_at"]
     assert admin["updated_by"] == "installation"
+    # Bootstrap audit metadata must remain readable through the strict ODM model.
+    from app.models.user import User
+    assert User._from_son(admin).updated_by == "installation"
 
 
 def test_generated_token_is_logged_only_once(db, monkeypatch, caplog):

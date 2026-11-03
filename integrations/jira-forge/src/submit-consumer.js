@@ -15,13 +15,13 @@ import {
   resolveRawAlert,
 } from "./lib/embedded-alert.js";
 import { downloadAttachment, readIssueSnapshot } from "./lib/jira.js";
-import { getConfig, TierXRequestError, tierxRequest, withConnection } from "./lib/tierx.js";
+import { getConfig, TierXRequestError, submissionRequest, withConnection } from "./lib/tierx.js";
 import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
-async function reportComment(submissionId, kind, commentId) {
-  return tierxRequest(`/api/v1/integrations/jira/submissions/${submissionId}/comments`, {
+async function reportComment(submission, kind, commentId) {
+  return submissionRequest(`/${submission.submission_id}/comments`, {
     method: "POST",
-    body: { kind, jira_comment_id: String(commentId) },
+    body: { kind, jira_comment_id: String(commentId), delivery_id: submission.delivery_id },
   });
 }
 
@@ -32,7 +32,7 @@ async function postOnce(submission, kind, body) {
     body,
     commentMarker(submission, kind),
   );
-  return reportComment(submission.submission_id, kind, comment.id);
+  return reportComment(submission, kind, comment.id);
 }
 
 export async function handler(event) {
@@ -51,7 +51,7 @@ async function consume(event) {
       snapshot,
       (attachment) => downloadAttachment(accountId, attachment),
     );
-    const submissionRequest = {
+    const submissionPayload = {
       jira_cloud_id: snapshot.jira_cloud_id,
       jira_site_url: snapshot.jira_site_url,
       issue_id: snapshot.issue_id,
@@ -64,9 +64,9 @@ async function consume(event) {
       raw_alert_source: resolvedAlert.source,
     };
     await kvs.set(`job:${requestId}`, { requestId, issueKey, state: "CREATING_SUBMISSION" });
-    submission = await tierxRequest("/api/v1/integrations/jira/submissions", {
+    submission = await submissionRequest("", {
       method: "POST",
-      body: submissionRequest,
+      body: submissionPayload,
     });
 
     try {
@@ -84,10 +84,6 @@ async function consume(event) {
       await kvs.set(`job:${requestId}:comment-warning`, safeError(commentError));
     }
 
-    submission = await tierxRequest(
-      `/api/v1/integrations/jira/submissions/${submission.submission_id}/finalize`,
-      { method: "POST", body: {} },
-    );
     if (submission.state === "FAILED") {
       try {
         submission = await postOnce(
@@ -109,9 +105,10 @@ async function consume(event) {
       });
       return;
     }
-    if (submission.state === "ANALYZED") {
+    if (submission.state === "DELIVERY_REQUESTED") {
       submission = await postOnce(submission, "FINAL", finalComment(submission, config));
-    } else {
+    }
+    if (!["COMPLETED", "DELIVERED"].includes(submission.state)) {
       await kvs.set(`pending:${submission.submission_id}`, {
         connectionIdentity: config.identity,
         submissionId: submission.submission_id,
@@ -150,19 +147,8 @@ async function consume(event) {
     const detail = safeError(error);
     if (submission?.submission_id) {
       try {
-        submission = await tierxRequest(
-          `/api/v1/integrations/jira/submissions/${submission.submission_id}/fail`,
-          {
-            method: "POST",
-            body: {
-              failed_stage: "JIRA_TRANSFER",
-              error_type: error?.name || "JIRA_TRANSFER_FAILED",
-              error_detail: detail,
-            },
-          },
-        );
-        const config = await getConfig();
-        await postOnce(submission, "ERROR", failureComment(submission, config));
+        // Transport failures must not change server-side workflow state or request
+        // an implicit final notification. Preserve the safe local job failure.
       } catch {
         // The job record remains the durable operator-visible failure if comment reporting also fails.
       }

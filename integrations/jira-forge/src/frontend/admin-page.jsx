@@ -28,7 +28,7 @@ function App() {
 
   useEffect(() => {
     invoke("getConfig").then((config) => {
-      setBaseUrl(config.baseUrl || "");
+      setBaseUrl(config.workflowUrl || "");
       setIntegrationId(config.integrationId || "");
       if (config.configured) {
         setResult(config);
@@ -42,11 +42,11 @@ function App() {
     setWarning(null);
     try {
       if (!integrationId.trim() || !secret.trim()) throw new Error("Connection ID and secret are required.");
-      const destination = await invoke("prepareConnection", { baseUrl });
+      const destination = await invoke("prepareConnection", { workflowUrl: baseUrl });
       await approveDestination(permissions.egress, destination);
-      const info = await invoke("saveConfig", { baseUrl: destination.baseUrl, integrationId, secret });
+      const info = await invoke("saveConfig", { workflowUrl: destination.workflowUrl, integrationId, secret });
       setResult(info);
-      setBaseUrl(info.baseUrl);
+      setBaseUrl(info.workflowUrl);
       setWarning(permissionCleanupMessage(false));
     } catch (reason) {
       setError(String(reason?.message || reason));
@@ -93,13 +93,13 @@ function App() {
         <SectionMessage appearance="success" title="Connected">
           <Text>Site connection: {result.connectionName || "Configured Jira site"}</Text>
           <Text>Saved server: {result.baseUrl}</Text>
-          <Text>Configured project routes: {result.routeCount ?? 0}</Text>
+          <Text>Workflow: {result.workflowUrl}</Text>
         </SectionMessage>
       )}
       <Form onSubmit={submit}>
         <FormHeader title="TierX connection" />
         <FormSection>
-          <Label labelFor="base-url">TierX server URL<RequiredAsterisk /></Label>
+          <Label labelFor="base-url">TierX Jira workflow URL<RequiredAsterisk /></Label>
           <Textfield id="base-url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
           <Label labelFor="integration-id">Connection ID<RequiredAsterisk /></Label>
           <Textfield id="integration-id" value={integrationId} onChange={(event) => setIntegrationId(event.target.value)} />

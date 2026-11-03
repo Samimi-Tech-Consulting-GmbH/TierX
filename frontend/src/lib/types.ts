@@ -453,6 +453,12 @@ export interface AlertTypeSchemaListResponse {
 export type AlertSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
 
 export interface AlertDocument {
+  verdict?: string | null;
+  analyst_decision?: Record<string, unknown> | null;
+  workflow_format?: string | null;
+  workflow_state?: string | null;
+  run_id?: string | null;
+  correlation_group?: string | null;
   id: string;
   alert_id: string;
   tenant_id: string;
@@ -620,6 +626,8 @@ export interface AnalysisRetryResponse {
 }
 
 export interface ClusterDocument {
+  workflow_format?: string | null;
+  correlation_group?: string | null;
   cluster_id: string;
   tenant_id: string;
   lead_alert_id: string;

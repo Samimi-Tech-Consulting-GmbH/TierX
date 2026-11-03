@@ -16,6 +16,7 @@ from app.schemas.alert import (
 from app.services.kafka_publisher import kafka_publisher
 from app.services.tenant_cache import tenant_cache
 from app.core.brand_compat import compatible_header
+from tierx_runtime import boolean, env_value
 
 router = APIRouter()
 
@@ -62,6 +63,8 @@ async def _dead_letter(
     },
 )
 async def ingest_alert(request: Request):
+    if boolean(env_value("workflow_engine_enabled") or False):
+        return JSONResponse(status_code=410, content={"detail": "Legacy ingestion is retired; use your fixed authenticated workflow URL."})
     parsed = await request.json()
     raw: dict = parsed if isinstance(parsed, dict) else {"payload": parsed}
     requested_alert_id = compatible_header(request, "requested-alert-id")
