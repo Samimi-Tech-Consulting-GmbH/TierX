@@ -16,8 +16,10 @@ existing navigation warnings, and production frontend build passed. Python
 tests use pytest 8.4; pytest 9.2 changed monkeypatch handling for dynamic settings
 and application-state proxies, causing teardown failures and cross-test leakage.
 Backend/pipeline test dependencies are bounded to the compatible pytest major.
-Current npm audits report development-chain advisories; merge clearance is
-blocked until they are remediated or an explicit policy decision is approved.
+Development-chain advisories were remediated by removing the shadcn CLI chain,
+retaining its licensed CSS, and using patched minimatch/glob versions with a
+checked legacy-export adapter for ESLint. Both npm trees now audit clean locally;
+fresh CI and review are still required for merge clearance.
 
 Local results on 13 October 2026:
 
