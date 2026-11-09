@@ -124,7 +124,8 @@ function settingsMenuItems(
           },
       { href: "/users", label: "Users", icon: Users },
       { href: "/dashboard/admin/settings/platform", label: "Platform settings", icon: SlidersHorizontal },
-      { href: "/dashboard/admin/settings/connectors", label: "REST / MCP tools", icon: Plug },
+      { href: "/dashboard/admin/settings/connectors", label: "Tools & integrations", icon: Plug },
+      { href: "/dashboard/admin/settings/llm-profiles", label: "Model profiles", icon: SlidersHorizontal },
       {
         href: "/dashboard/admin/integrations/jira",
         label: "Jira integration",

@@ -2,7 +2,34 @@
 
 ## Definitions and ownership
 
-Platform administrators manage shared definitions and tenant grants in **Workflow Studio**. A workflow is the outer graph; a playbook is an executable nested graph; an agent is a reusable prompt, tested model profile, output schema and bounded tool allowlist.
+Platform administrators manage shared definitions and tenant grants in the
+Workflows, Playbooks, and Agents libraries. A workflow is the outer graph; a
+playbook is an executable nested graph; an agent is a reusable prompt, tested
+model profile, output schema and bounded tool allowlist.
+
+## Editor experience
+
+Each library opens with search, status cards and one create action. Select an
+item to edit it; templates create an unpublished copy. The editor separates
+the canvas/agent setup from Settings, Ingestion (workflows only), Executions and
+Versions. Save draft stores edits; Publish activates an immutable revision for
+new runs. Publication and credential rotation require explicit confirmation.
+
+Add step opens the palette on demand. Selecting a node opens its inspector;
+each node also has a keyboard-focusable Inspect control. The connection manager
+offers a keyboard alternative to dragging edges. Advanced graph/agent JSON is
+collapsed, and invalid imports preserve the graph. Unsaved changes are guarded
+when returning to the library or leaving the page. Tenant grants use a searched,
+paged name selector rather than a comma-separated UUID field.
+
+Tools & integrations and Model profiles are under Settings and have separate
+searchable libraries and editors. Credentials remain write-only. Test saved
+profiles and discover saved MCP tools only after saving changes. Execution
+inspection keeps the pinned flow version prominent and technical identifiers
+under an expandable section. The execution tab shows matching runs from the
+recent tenant run page, not an unbounded historical search.
+
+## Definitions and runtime
 
 Workflows, Playbooks and Agents use the same icon-based node kit, categorized
 searchable palette, typed settings and advanced JSON escape hatch. The separate

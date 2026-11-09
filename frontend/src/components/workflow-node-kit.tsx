@@ -32,14 +32,62 @@ type Definition = {
   color: string;
 };
 export const NODE_DESIGN: Record<string, Definition> = {
-  playbook_call: { title: "Playbook subflow", description: "Run a reusable investigation flow", group: "Gather context", icon: BookOpen, color: "#a78bfa" },
-  playbook_selector: { title: "Select playbook", description: "Static or model selection with an explicit fallback", group: "Gather context", icon: GitBranch, color: "#a78bfa" },
-  agent: { title: "Specialist agent", description: "Delegate to a bounded reusable agent", group: "Investigate", icon: Bot, color: "#fbbf24" },
-  kb_deterministic: { title: "Deterministic knowledge", description: "Exact entities, CIDRs and lexical evidence", group: "Gather context", icon: Database, color: "#a78bfa" },
-  kb_semantic: { title: "Semantic knowledge", description: "Retrieve related document evidence", group: "Gather context", icon: Search, color: "#a78bfa" },
-  persist_analysis: { title: "Save analysis", description: "Persist the initiating alert's result", group: "Finish", icon: ArchiveX, color: "#34d399" },
-  notify_jira: { title: "Notify Jira", description: "Deliver the chosen result to the originating issue", group: "Finish", icon: Webhook, color: "#38bdf8" },
-  webhook: { title: "Webhook output", description: "Deliver structured output through an approved connector", group: "Finish", icon: Webhook, color: "#38bdf8" },
+  playbook_call: {
+    title: "Playbook subflow",
+    description: "Run a reusable investigation flow",
+    group: "Gather context",
+    icon: BookOpen,
+    color: "#a78bfa",
+  },
+  playbook_selector: {
+    title: "Select playbook",
+    description: "Static or model selection with an explicit fallback",
+    group: "Gather context",
+    icon: GitBranch,
+    color: "#a78bfa",
+  },
+  agent: {
+    title: "Specialist agent",
+    description: "Delegate to a bounded reusable agent",
+    group: "Investigate",
+    icon: Bot,
+    color: "#fbbf24",
+  },
+  kb_deterministic: {
+    title: "Deterministic knowledge",
+    description: "Exact entities, CIDRs and lexical evidence",
+    group: "Gather context",
+    icon: Database,
+    color: "#a78bfa",
+  },
+  kb_semantic: {
+    title: "Semantic knowledge",
+    description: "Retrieve related document evidence",
+    group: "Gather context",
+    icon: Search,
+    color: "#a78bfa",
+  },
+  persist_analysis: {
+    title: "Save analysis",
+    description: "Persist the initiating alert's result",
+    group: "Finish",
+    icon: ArchiveX,
+    color: "#34d399",
+  },
+  notify_jira: {
+    title: "Notify Jira",
+    description: "Deliver the chosen result to the originating issue",
+    group: "Finish",
+    icon: Webhook,
+    color: "#38bdf8",
+  },
+  webhook: {
+    title: "Webhook output",
+    description: "Deliver structured output through an approved connector",
+    group: "Finish",
+    icon: Webhook,
+    color: "#38bdf8",
+  },
   entry: {
     title: "Alert entry",
     description: "Receive an alert and start this flow",
@@ -292,7 +340,7 @@ export function NodeFields({
   onChange: (value: Record<string, unknown>) => void;
   profiles: { profile_code: string; model: string }[];
   connectors?: AvailableConnector[];
-  definitions?: {kind: string; code: string; name: string}[];
+  definitions?: { kind: string; code: string; name: string }[];
 }) {
   const set = (key: string, item: unknown) =>
     onChange({ ...value, [key]: item });
@@ -358,20 +406,97 @@ export function NodeFields({
   );
   return (
     <div className="space-y-4">
-      {["agent", "playbook_call"].includes(node.type) && <>
-        <label className="block space-y-1.5 text-xs">{node.type === "agent" ? "Agent" : "Playbook"}<select className={inputClass} value={String(value.definition_code || "")} onChange={e=>set("definition_code",e.target.value)}><option value="">Select a published definition</option>{definitions.filter(item=>item.kind===(node.type==="agent"?"agent":"playbook")).map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
-        {value.revision ? number("revision", "Pinned revision", 1, 1, 100000) : null}
-      </>}
-      {node.type === "playbook_selector" && <>
-        <label className="block space-y-1.5 text-xs">Selection mode<select className={inputClass} value={String(value.mode || "static")} onChange={e=>set("mode",e.target.value)}><option value="static">Static mapping</option><option value="model">Static first, then model</option></select></label>
-        <MappingFields legend="Static routing · alert type → playbook code" targetLabel="Alert type" sourceLabel="Playbook code" value={(value.mappings || {}) as Record<string,string>} onChange={mapping=>set("mappings",mapping)} />
-        <label className="block space-y-1.5 text-xs">Fallback playbook<select className={inputClass} value={String(value.fallback || "")} onChange={e=>set("fallback",e.target.value)}><option value="">Select required fallback</option>{definitions.filter(item=>item.kind==="playbook").map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
-        {value.mode === "model" && <>{text("profile_code", "Routing model profile")}{list("candidates", "Candidate playbook codes")}{number("threshold", "Minimum selection confidence", 0.7, 0, 1)}</>}
-      </>}
-      {["kb_deterministic", "kb_semantic"].includes(node.type) && number("top_k", "Maximum retrieved chunks", 5, 1, 20)}
-      {node.type === "persist_analysis" && text("input_path", "Analysis result path", "nodes.analysis.output")}
-      {node.type === "notify_jira" && text("input_path", "Result to notify (optional)", "alert.alert_analysis")}
-      {node.type === "webhook" && <>{text("connector_code", "Approved connector code")}{text("tool_name", "Approved tool")}{text("input_path", "Output path", "alert.alert_analysis")}</>}
+      {["agent", "playbook_call"].includes(node.type) && (
+        <>
+          <label className="block space-y-1.5 text-xs">
+            {node.type === "agent" ? "Agent" : "Playbook"}
+            <select
+              className={inputClass}
+              value={String(value.definition_code || "")}
+              onChange={(e) => set("definition_code", e.target.value)}
+            >
+              <option value="">Select a published definition</option>
+              {definitions
+                .filter(
+                  (item) =>
+                    item.kind ===
+                    (node.type === "agent" ? "agent" : "playbook"),
+                )
+                .map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {value.revision
+            ? number("revision", "Pinned revision", 1, 1, 100000)
+            : null}
+        </>
+      )}
+      {node.type === "playbook_selector" && (
+        <>
+          <label className="block space-y-1.5 text-xs">
+            Selection mode
+            <select
+              className={inputClass}
+              value={String(value.mode || "static")}
+              onChange={(e) => set("mode", e.target.value)}
+            >
+              <option value="static">Static mapping</option>
+              <option value="model">Static first, then model</option>
+            </select>
+          </label>
+          <MappingFields
+            legend="Static routing · alert type → playbook code"
+            targetLabel="Alert type"
+            sourceLabel="Playbook code"
+            value={(value.mappings || {}) as Record<string, string>}
+            onChange={(mapping) => set("mappings", mapping)}
+          />
+          <label className="block space-y-1.5 text-xs">
+            Fallback playbook
+            <select
+              className={inputClass}
+              value={String(value.fallback || "")}
+              onChange={(e) => set("fallback", e.target.value)}
+            >
+              <option value="">Select required fallback</option>
+              {definitions
+                .filter((item) => item.kind === "playbook")
+                .map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {value.mode === "model" && (
+            <>
+              {text("profile_code", "Routing model profile")}
+              {list("candidates", "Candidate playbook codes")}
+              {number("threshold", "Minimum selection confidence", 0.7, 0, 1)}
+            </>
+          )}
+        </>
+      )}
+      {["kb_deterministic", "kb_semantic"].includes(node.type) &&
+        number("top_k", "Maximum retrieved chunks", 5, 1, 20)}
+      {node.type === "persist_analysis" &&
+        text("input_path", "Analysis result path", "nodes.analysis.output")}
+      {node.type === "notify_jira" &&
+        text(
+          "input_path",
+          "Result to notify (optional)",
+          "alert.alert_analysis",
+        )}
+      {node.type === "webhook" && (
+        <>
+          {text("connector_code", "Approved connector code")}
+          {text("tool_name", "Approved tool")}
+          {text("input_path", "Output path", "alert.alert_analysis")}
+        </>
+      )}
       {node.type === "entry" && (
         <>
           <p className="rounded-lg bg-sky-500/10 p-3 text-xs leading-5 text-muted-foreground">
@@ -555,7 +680,84 @@ export function NodeFields({
           </label>
           {node.type === "llm_tools" && (
             <>
-              {list("tools", "Authorized tools")}
+              <fieldset className="space-y-3 rounded-lg border p-3">
+                <legend className="px-1 text-xs font-medium">
+                  Approved capabilities
+                </legend>
+                <p className="text-xs text-muted-foreground">
+                  Select up to ten tools or reusable investigators. The agent
+                  cannot call anything outside this list.
+                </p>
+                {[
+                  { code: "alert_evidence", name: "Current alert evidence" },
+                  {
+                    code: "cluster_evidence",
+                    name: "Related cluster evidence",
+                  },
+                  { code: "knowledge_base", name: "Search tenant knowledge" },
+                  ...connectors.flatMap((c) =>
+                    c.tools.map((t) => ({
+                      code: `connector:${c.connector_code}:${t.name}`,
+                      name: `${c.name} · ${t.name}`,
+                    })),
+                  ),
+                  ...definitions
+                    .filter((d) => ["agent", "playbook"].includes(d.kind))
+                    .map((d) => ({
+                      code: `${d.kind}:${d.code}`,
+                      name: `${d.kind === "agent" ? "Agent" : "Playbook"} · ${d.name}`,
+                    })),
+                  ...((value.tools || []) as string[])
+                    .filter(
+                      (code) =>
+                        ![
+                          "alert_evidence",
+                          "cluster_evidence",
+                          "knowledge_base",
+                        ].includes(code) &&
+                        !connectors.some((c) =>
+                          c.tools.some(
+                            (t) =>
+                              code ===
+                              `connector:${c.connector_code}:${t.name}`,
+                          ),
+                        ) &&
+                        !definitions.some(
+                          (d) => code === `${d.kind}:${d.code}`,
+                        ),
+                    )
+                    .map((code) => ({
+                      code,
+                      name: `Unavailable capability · ${code}`,
+                    })),
+                ].map((tool) => {
+                  const chosen = (value.tools || []) as string[];
+                  return (
+                    <label
+                      key={tool.code}
+                      className="flex items-start gap-2 text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={chosen.includes(tool.code)}
+                        disabled={
+                          !chosen.includes(tool.code) && chosen.length >= 10
+                        }
+                        onChange={(e) =>
+                          set(
+                            "tools",
+                            e.target.checked
+                              ? [...chosen, tool.code]
+                              : chosen.filter((code) => code !== tool.code),
+                          )
+                        }
+                      />
+                      <span>{tool.name}</span>
+                    </label>
+                  );
+                })}
+              </fieldset>
               {number("max_rounds", "Maximum model rounds", 5, 1, 5)}
               {number("max_calls", "Maximum tool calls", 10, 1, 10)}
             </>
@@ -857,9 +1059,7 @@ function MappingFields({
   const entries = Object.entries(value);
   return (
     <fieldset className="space-y-2">
-      <legend className="mb-2 text-xs text-muted-foreground">
-        {legend}
-      </legend>
+      <legend className="mb-2 text-xs text-muted-foreground">{legend}</legend>
       {entries.map(([target, source], i) => (
         <div key={i} className="flex gap-1">
           <input
