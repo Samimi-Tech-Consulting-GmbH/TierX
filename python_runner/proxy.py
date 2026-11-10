@@ -75,7 +75,9 @@ class PinnedHTTP(http.client.HTTPConnection):
     def connect(self):
         self.sock = socket.create_connection((self.address, self.port), timeout=10)
         if self.secure:
-            self.sock = ssl.create_default_context().wrap_socket(self.sock, server_hostname=self.host)
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            self.sock = context.wrap_socket(self.sock, server_hostname=self.host)
 
 
 def operate(policy, operation, value):

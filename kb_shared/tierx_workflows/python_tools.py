@@ -152,7 +152,7 @@ def output_envelope(value, definition):
         result = {"type": "text", "text": value}
     else:
         try:
-            size = len(json.dumps(value, allow_nan=False, ensure_ascii=False).encode())
+            size = len(json.dumps(value, allow_nan=False, ensure_ascii=False, separators=(",", ":")).encode())
         except (ValueError, TypeError) as exc:
             raise PythonToolError("PYTHON_JSON_OUTPUT_INVALID") from exc
         if not isinstance(value, dict) or size > 65536:

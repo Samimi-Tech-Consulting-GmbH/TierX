@@ -177,7 +177,7 @@ class Broker:
             denied = list(self.denied)
             # No sandbox may target the rootless host gateways or another sandbox.
             for net in json.loads(docker("network", "inspect", *docker("network", "ls", "-q").split())):
-                denied.extend(item["Subnet"] for item in net.get("IPAM", {}).get("Config", []) if item.get("Subnet"))
+                denied.extend(item["Subnet"] for item in (net.get("IPAM", {}).get("Config") or []) if item.get("Subnet"))
             docker("run", "-d", "--name", proxy, "--network", network, *base,
                 "-e", "TIERX_JOB_AUDIT_FILE=/tmp/decisions.json",
                 "-e", "TIERX_JOB_DESTINATIONS=" + json.dumps(definition["destinations"]),
