@@ -1,8 +1,8 @@
 # Run TierX from released images
 
-For the separately built experimental workflow editor and worker, see
-[Ingestion V2](../../docs/ingestion-v2.md). It is disabled by default and is not
-included in the normal released-image startup commands below.
+The standard pipeline service runs the workflow engine. Configure and publish
+an explicit workflow before sending alerts; see [Workflow Studio](../../docs/workflows.md).
+No optional execution profile or tenant-default workflow is installed.
 
 Requires Docker Engine and Compose v2.20+ (Compose `include` support). Copy this
 whole folder, including `compose.common.yaml` and `nginx.conf`. Node 20+ is needed

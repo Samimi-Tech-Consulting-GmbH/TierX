@@ -8,7 +8,7 @@ normalize_environment()
 import httpx
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Request, Depends, status
+from fastapi import FastAPI, Request, Depends, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
@@ -277,7 +277,7 @@ def verify_tenant_active(tenant_id: str):
 
 @app.post("/api/v1/ingest/{tenant_id}/events")
 async def mock_ingest_events(tenant_id: str = Depends(verify_tenant_active)):
-    return {"msg": f"Ingested for {tenant_id}"}
+    raise HTTPException(410, "Use a fixed authenticated workflow ingestion URL")
 
 
 MONGO_URL = os.environ["MONGO_URL"]
@@ -313,6 +313,14 @@ async def health_check():
         client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=2000)
         client.admin.command("ping")
         components["mongodb"] = "green"
+        worker = client.soc_mind_platform.service_heartbeats.find_one({"service": "workflow-engine"})
+        seen = (worker or {}).get("updated_at")
+        if seen and seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        fresh = bool(seen and seen >= datetime.now(timezone.utc) - timedelta(seconds=30))
+        components["workflow_engine"] = ("amber" if worker.get("state") == "DEGRADED" else "green") if fresh and worker.get("state") in {"READY", "DEGRADED"} else "red"
+        if components["workflow_engine"] == "red":
+            overall_status = "UNHEALTHY"
         if KNOWLEDGE_BASE_PROCESSING_ENABLED:
             heartbeat = client.soc_mind_platform.service_heartbeats.find_one(
                 {"service": "knowledge-base-processor"}
