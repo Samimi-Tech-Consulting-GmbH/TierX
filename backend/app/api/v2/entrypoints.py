@@ -102,7 +102,7 @@ def enqueue(code, tenant_id, body, *, identity, idempotency_key=None, source_ref
         if not previous or previous["payload_sha256"] != digest:
             raise HTTPException(409, "Idempotency key was already used for different input")
     return {"alert_id": alert_id, "run_id": run_id, "state": "PENDING",
-            "trace_url": f"/dashboard/admin/workflows/runs/{tenant_id}/{run_id}"}
+            "trace_url": f"/dashboard/{tenant_id}/workflows/runs/{run_id}"}
 
 
 @router.get("/{code}/tenants/{tenant_id}/connection")
@@ -153,7 +153,7 @@ def jira_record(code, tenant_id, submission_id, integration):
     return {**{key: row.get(key) for key in ["submission_id", "alert_id", "run_id", "issue_key", "issue_updated_at",
                 "comments", "source_system", "alert_type", "failure", "delivery_id"]},
         "state": state, "result": row.get("analysis"),
-        "trace_path": f"/dashboard/admin/workflows/runs/{tenant_id}/{row['run_id']}",
+        "trace_path": f"/dashboard/{tenant_id}/workflows/runs/{row['run_id']}",
         "alert_path": f"/dashboard/{tenant_id}/alerts/{row['alert_id']}"}
 
 

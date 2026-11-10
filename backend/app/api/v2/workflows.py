@@ -18,6 +18,7 @@ from tierx_workflows import (
 )
 from tierx_workflows.examples import examples
 from tierx_workflows.graph import MODERN_NODE_TYPES
+from tierx_workflows.tracing import debug_snapshot
 from tierx_workflows.safety import sanitize
 
 from app.api.dependencies.auth import (
@@ -90,12 +91,14 @@ def trace_view(value):
     if isinstance(value, list):
         return [trace_view(item) for item in value]
     if isinstance(value, dict):
-        return {key: trace_view(item) for key, item in sanitize(value).items() if key not in {
+        return {key: trace_view(item) for key, item in sanitize(value).items() if not (key == "context" and isinstance(item, str)) and key not in {
             "raw_payload", "prompt", "prompt_footer", "context_text", "text", "playbook_snapshot", "bundle", "resources"}}
     return value
 
 
 def check(graph):
+    if graph.get("format_version") != "1.0":
+        raise HTTPException(422, "Legacy flow endpoints require format 1.0; use workflow definitions for format 2.0")
     try:
         return validate_graph(graph)
     except (GraphError, TypeError, ValueError) as exc:
@@ -515,7 +518,7 @@ def runs(
     user=Depends(get_current_user),
 ):
     db = db_for(tenant_id)
-    projection = {"_id": 0, "input": 0, "resources": 0, "graph": 0, "bundle": 0}
+    projection = {"_id": 0, "input": 0, "resources": 0, "graph": 0, "bundle": 0, "output": 0}
     return {
         "items": list(
             db.v2_runs.find({}, projection)
@@ -560,9 +563,13 @@ def run_detail(
         {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0},
     )
     if run["graph"].get("format_version") == "2.0":
+        run["output_snapshot"] = debug_snapshot(run.pop("output", None))
+        for job in run["nodes"]:
+            output = job.pop("output", None)
+            job["output_snapshot"] = job.get("output_snapshot") or debug_snapshot(output)
         run["alert"] = db.alerts.find_one({"alert_id": run["alert_id"]}, {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0})
         run["children"] = list(db.v2_runs.find({"parent_run_id": run_id},
-            {"_id": 0, "input": 0, "resources": 0, "bundle": 0, "graph": 0}).sort("created_at", 1))
+            {"_id": 0, "input": 0, "resources": 0, "bundle": 0, "graph": 0, "output": 0}).sort("created_at", 1))
         run["graph"] = __import__("copy").deepcopy(run["graph"])
         for node in run["graph"]["nodes"]:
             node.get("config", {}).pop("prompt", None)

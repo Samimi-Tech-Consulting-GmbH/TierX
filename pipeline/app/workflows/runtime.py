@@ -191,7 +191,7 @@ class WorkflowTools(Tools):
                       "release_sha": run["release_sha"]}
             await db.v2_alert_analyses.update_one({"_id": identity}, {"$setOnInsert": record}, upsert=True)
             root = await db.v2_runs.find_one({"run_id": run.get("root_run_id", run["run_id"])})
-            committed = await db.v2_alerts.update_one({"alert_id": alert["alert_id"], "$or": [
+            committed = await db.v2_alerts.update_one({"alert_id": alert["alert_id"], "workflow_state": {"$nin": ["CANCELLED", "FAILED"]}, "$or": [
                 {"analysis_requested_at": {"$lte": root["created_at"]}}, {"analysis_requested_at": {"$exists": False}}]},
                 {"$set": {"alert_analysis": record, "analysis_requested_at": root["created_at"], "status": "ANALYZED", "analysis_status": "SUCCEEDED", "updated_at": now()}})
             return {"analysis_id": identity, "state": "SUCCEEDED" if committed.modified_count else "SUPERSEDED"}, "success"
@@ -305,7 +305,11 @@ class WorkflowTools(Tools):
 
     async def reason(self, db, run, node, job, alert):
         cfg = node["config"]
-        await db.v2_alerts.update_one({"alert_id": alert["alert_id"]}, {"$set": {"analysis_status": "RUNNING", "status": "ANALYZING"}})
+        started = await db.v2_alerts.update_one(
+            {"alert_id": alert["alert_id"], "workflow_state": {"$nin": ["CANCELLED", "FAILED"]}},
+            {"$set": {"analysis_status": "RUNNING", "status": "ANALYZING"}})
+        if not started.matched_count:
+            raise NodeFailure("ROOT_RUN_TERMINAL")
         profile, key = await self.profile(run, cfg["profile_code"])
         members = [alert]
         if cfg.get("input_scope", "alert") == "correlated" and alert.get("cluster_id"):

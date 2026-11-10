@@ -120,7 +120,7 @@ class Engine:
             result = {"state": "SUCCEEDED", "output": output, "port": port}
         except NodeWaiting as exc:
             await db.v2_jobs.update_one(
-                {"job_id": job["job_id"], "lease_owner": self.owner},
+                {"job_id": job["job_id"], "lease_owner": self.owner, "state": "RUNNING"},
                 {
                     "$set": {
                         "state": "WAITING",
@@ -278,7 +278,7 @@ class Engine:
                     fields["workflow_error"] = current["error"]
                 await db.alerts.update_one({"alert_id": run["alert_id"], "run_id": run["run_id"]}, {"$set": fields})
                 if current["state"] in {"FAILED", "CANCELLED"}:
-                    await db.alerts.update_one({"alert_id": run["alert_id"], "run_id": run["run_id"], "analysis_status": "RUNNING"},
+                    await db.alerts.update_one({"alert_id": run["alert_id"], "run_id": run["run_id"], "analysis_status": {"$ne": "SUCCEEDED"}},
                         {"$set": {"analysis_status": "FAILED", "status": "ERROR", "analysis_error": current.get("error", {"type": current["state"]})}})
 
     async def arrive(self, db, run, target_id, path, ancestry):

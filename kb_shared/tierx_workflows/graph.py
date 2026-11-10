@@ -239,14 +239,14 @@ def validate_graph(graph):
         if kind not in NODE_TYPES:
             raise GraphError("Unknown node type")
         cfg = node.get("config", {})
+        if not isinstance(cfg, dict) or set(cfg) - CONFIG[kind]:
+            raise GraphError(f"Invalid configuration for {nid}")
         if graph.get("format_version") != "2.0" and (kind in MODERN_NODE_TYPES or any(
             str(tool).startswith(("connector:", "agent:", "playbook:")) for tool in cfg.get("tools", []) or []
         )):
             raise GraphError("Modern nodes and tools require workflow format 2.0")
         if graph.get("format_version") == "2.0" and "debounce_ms" in cfg:
             raise GraphError("Workflow correlation does not delay analysis; remove debounce_ms")
-        if not isinstance(cfg, dict) or set(cfg) - CONFIG[kind]:
-            raise GraphError(f"Invalid configuration for {nid}")
         if kind in {"playbook_call", "agent"} and not re.fullmatch(
             r"[a-z0-9][a-z0-9_-]{0,63}", str(cfg.get("definition_code", ""))
         ):
@@ -424,7 +424,7 @@ def validate_graph(graph):
         raise GraphError("Exactly one entry required")
     connections = set()
     tool_only = set()
-    execution_targets = {edge.get("target") for edge in edges if edge.get("sourceHandle") != "tool"}
+    execution_targets = {edge.get("target") for edge in edges if isinstance(edge, dict) and edge.get("sourceHandle") != "tool"}
     for edge in edges:
         if not isinstance(edge, dict) or set(edge) - {
             "id",

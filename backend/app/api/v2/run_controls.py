@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
+from pymongo import ReturnDocument
 
 from app.api.dependencies.auth import get_current_user, require_platform_admin, verify_tenant_access
 from app.api.v2.workflows import db_for, enabled, found
@@ -46,12 +47,21 @@ def cancel(run_id: str, tenant_id=Depends(verify_tenant_access), user=Depends(re
     run = found(db.v2_runs, {"run_id": run_id})
     root = run.get("root_run_id", run_id)
     now = datetime.now(timezone.utc)
+    claimed = db.v2_runs.find_one_and_update(
+        {"run_id": root, "state": {"$in": ["PENDING", "RUNNING"]}},
+        {"$set": {"state": "CANCELLED", "completed_at": now, "cancelled_by": user.user_id}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not claimed:
+        raise HTTPException(409, "Root run is already terminal; cancellation was not applied")
     query = {"$or": [{"run_id": root}, {"root_run_id": root}], "state": {"$in": ["PENDING", "RUNNING"]}}
-    identities = [row["run_id"] for row in db.v2_runs.find(query, {"run_id": 1})]
+    identities = [root, *[row["run_id"] for row in db.v2_runs.find(query, {"run_id": 1})]]
     db.v2_runs.update_many(query, {"$set": {"state": "CANCELLED", "completed_at": now, "cancelled_by": user.user_id}})
     db.v2_jobs.update_many({"run_id": {"$in": identities}, "state": {"$in": ["PENDING", "WAITING", "RUNNING"]}},
         {"$set": {"state": "CANCELLED", "routed": True, "completed_at": now}})
     db.alerts.update_one({"alert_id": run["alert_id"], "run_id": root}, {"$set": {"workflow_state": "CANCELLED"}})
+    db.alerts.update_one({"alert_id": run["alert_id"], "run_id": root, "analysis_status": {"$ne": "SUCCEEDED"}},
+        {"$set": {"analysis_status": "FAILED", "status": "ERROR", "analysis_error": {"type": "CANCELLED"}, "updated_at": now}})
     return {"root_run_id": root, "state": "CANCELLED", "warning": "Already dispatched external requests cannot be recalled."}
 
 

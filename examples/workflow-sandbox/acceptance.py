@@ -23,6 +23,14 @@ ROOT = Path(__file__).resolve().parents[2]
 STATE = Path.home() / ".local/share/tierx-workflow-sandbox"
 
 
+def local_environment():
+    """Never let a deployment shell redirect the disposable acceptance stack."""
+    return {**{key: value for key, value in os.environ.items()
+               if not key.startswith(("TIERX_", "SOC_MIND_"))},
+            "MONGO_URL": "mongodb://127.0.0.1:27028/",
+            "TIERX_MONGO_URL": "mongodb://127.0.0.1:27028/"}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true")
@@ -36,7 +44,7 @@ def main():
         with os.fdopen(os.open(credentials, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as handle:
             json.dump({key:value for key,value in saved.items() if key!="access_token"},handle,indent=2)
     save_credentials()
-    env = {**os.environ, "MONGO_URL": "mongodb://127.0.0.1:27028/", "JWT_SECRET_KEY": secrets.token_hex(32),
+    env = {**local_environment(), "JWT_SECRET_KEY": secrets.token_hex(32),
         "PLATFORM_ADMIN_EMAIL": saved["email"], "PLATFORM_ADMIN_PASSWORD": saved["password"],
         "TIERX_WORKFLOW_ENGINE_ENABLED": "true", "TIERX_OLLAMA_URL": "http://127.0.0.1:11438", "TIERX_OLLAMA_MODEL": "phi3:latest",
         "WEBHOOK_SECRET_ENCRYPTION_KEY": saved["encryption_key"],
