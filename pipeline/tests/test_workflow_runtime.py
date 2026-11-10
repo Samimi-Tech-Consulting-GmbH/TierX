@@ -189,11 +189,13 @@ async def test_cancelled_alert_cannot_restart_reasoning_or_commit_analysis(envir
         await tools.reason(db, parent, node("reason", "llm_analysis", profile_code="model"), {"job_id": "reason"}, {"alert_id": "r"})
     tools.profile.assert_not_awaited()
     assert mongo.tenant.alerts.find_one({})["analysis_status"] == "FAILED"
-    # A result finishing after cancellation remains audit history, not current analysis.
+    # Do not insert a new analysis history item when the root is already cancelled.
+    mongo.tenant.v2_runs.update_one({"run_id": "r"}, {"$set": {"state": "CANCELLED"}})
     tools.context = AsyncMock(return_value={"analysis": {"headline": "Late result"}})
-    await tools.execute(db, parent, node("persist", "persist_analysis", input_path="analysis"), {"job_id": "persist"})
+    with pytest.raises(NodeFailure, match="ROOT_RUN_CANCELLED"):
+        await tools.execute(db, parent, node("persist", "persist_analysis", input_path="analysis"), {"job_id": "persist"})
     assert "alert_analysis" not in mongo.tenant.alerts.find_one({})
-    assert mongo.tenant.v2_alert_analyses.count_documents({}) == 1
+    assert mongo.tenant.v2_alert_analyses.count_documents({}) == 0
 
 
 @pytest.mark.asyncio

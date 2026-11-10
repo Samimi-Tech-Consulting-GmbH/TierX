@@ -189,8 +189,10 @@ class WorkflowTools(Tools):
                       "root_run_id": run.get("root_run_id", run["run_id"]), "definition_ref": run["definition_ref"],
                       "result": result, "created_at": now(), "release_version": run["release_version"],
                       "release_sha": run["release_sha"]}
-            await db.v2_alert_analyses.update_one({"_id": identity}, {"$setOnInsert": record}, upsert=True)
             root = await db.v2_runs.find_one({"run_id": run.get("root_run_id", run["run_id"])})
+            if root["state"] in {"FAILED", "CANCELLED"}:
+                raise NodeFailure("ROOT_RUN_" + root["state"])
+            await db.v2_alert_analyses.update_one({"_id": identity}, {"$setOnInsert": record}, upsert=True)
             committed = await db.v2_alerts.update_one({"alert_id": alert["alert_id"], "workflow_state": {"$nin": ["CANCELLED", "FAILED"]}, "$or": [
                 {"analysis_requested_at": {"$lte": root["created_at"]}}, {"analysis_requested_at": {"$exists": False}}]},
                 {"$set": {"alert_analysis": record, "analysis_requested_at": root["created_at"], "status": "ANALYZED", "analysis_status": "SUCCEEDED", "updated_at": now()}})

@@ -545,7 +545,8 @@ def run_detail(
     run.pop("resources", None)
     run.pop("input", None)
     run["nodes"] = list(
-        db.v2_jobs.find({"run_id": run_id}, {"_id": 0, "lease_owner": 0}).sort(
+        db.v2_jobs.find({"run_id": run_id}, {"_id": 0, "lease_owner": 0,
+            "ancestors": 0, "error_input": 0, "evidence_snapshot": 0}).sort(
             "created_at", 1
         )
     )

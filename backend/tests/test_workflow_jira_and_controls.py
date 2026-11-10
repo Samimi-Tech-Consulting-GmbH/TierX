@@ -2,6 +2,39 @@ from app.api.dependencies.auth import get_current_user
 from app.api.v1.jira_integrations import require_jira_integration
 from app.api.v2 import definitions, entrypoints, run_controls, workflows
 from test_workflows_v2 import setup, minimal
+import os
+import pytest
+
+
+@pytest.mark.skipif(not os.getenv("MONGO44_URL"), reason="requires isolated MongoDB 4.4")
+def test_concurrent_cancellation_has_one_winner_on_mongodb44(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from pymongo import MongoClient
+    from fastapi import HTTPException
+    client = MongoClient(os.environ["MONGO44_URL"], serverSelectionTimeoutMS=3000)
+    db = client["tierx_workflow_cancel_test_" + uuid4().hex]
+    try:
+        db.v2_runs.insert_one({"run_id": "r", "state": "RUNNING", "alert_id": "a"})
+        db.alerts.insert_one({"alert_id": "a", "run_id": "r", "analysis_status": "RUNNING"})
+        monkeypatch.setattr(run_controls, "db_for", lambda _: db)
+        barrier = Barrier(2)
+        def attempt():
+            barrier.wait(timeout=5)
+            try:
+                run_controls.cancel("r", "one", SimpleNamespace(user_id="operator"))
+                return 200
+            except HTTPException as exc:
+                return exc.status_code
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            assert sorted(workers.map(lambda _: attempt(), range(2))) == [200, 409]
+        assert db.v2_runs.find_one({})["state"] == "CANCELLED"
+        assert db.alerts.find_one({})["analysis_status"] == "FAILED"
+    finally:
+        client.drop_database(db.name)
+        client.close()
 
 
 def prepare(setup, monkeypatch):
@@ -154,6 +187,7 @@ def test_debug_uses_bounded_snapshots_and_metadata_lists_exclude_outputs(setup, 
     db.v2_runs.insert_one({"run_id": "r", "root_run_id": "r", "alert_id": "a", "state": "SUCCEEDED", "graph": graph,
         "output": {"context": "PRIVATE EVIDENCE", "large": "x" * 40000}})
     db.v2_jobs.insert_one({"run_id": "r", "job_id": "j", "node_id": "done", "state": "SUCCEEDED",
+        "ancestors": {"unsafe": "INTERNAL"}, "error_input": {"detail": "INTERNAL"}, "evidence_snapshot": ["INTERNAL"],
         "output": {"context": "PRIVATE EVIDENCE", "large": "x" * 40000}})
     listed = client.get("/api/v2/tenants/one/runs").json()
     assert "output" not in listed["items"][0]
@@ -162,6 +196,7 @@ def test_debug_uses_bounded_snapshots_and_metadata_lists_exclude_outputs(setup, 
     assert detail["output_snapshot"]["omitted"]
     job = next(n for n in detail["nodes"] if n["node_id"] == "done")
     assert "output" not in job
+    assert not {"ancestors", "error_input", "evidence_snapshot"} & job.keys()
     assert job["output_snapshot"]["omitted"]
     assert "PRIVATE EVIDENCE" not in str(detail)
     assert "x" * 40000 not in str(detail)
