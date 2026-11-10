@@ -190,13 +190,22 @@ class WorkflowTools(Tools):
                       "result": result, "created_at": now(), "release_version": run["release_version"],
                       "release_sha": run["release_sha"]}
             root = await db.v2_runs.find_one({"run_id": run.get("root_run_id", run["run_id"])})
+            if not root:
+                raise NodeFailure("ROOT_RUN_MISSING")
             if root["state"] in {"FAILED", "CANCELLED"}:
                 raise NodeFailure("ROOT_RUN_" + root["state"])
             await db.v2_alert_analyses.update_one({"_id": identity}, {"$setOnInsert": record}, upsert=True)
             committed = await db.v2_alerts.update_one({"alert_id": alert["alert_id"], "workflow_state": {"$nin": ["CANCELLED", "FAILED"]}, "$or": [
                 {"analysis_requested_at": {"$lte": root["created_at"]}}, {"analysis_requested_at": {"$exists": False}}]},
                 {"$set": {"alert_analysis": record, "analysis_requested_at": root["created_at"], "status": "ANALYZED", "analysis_status": "SUCCEEDED", "updated_at": now()}})
-            return {"analysis_id": identity, "state": "SUCCEEDED" if committed.modified_count else "SUPERSEDED"}, "success"
+            if not committed.matched_count:
+                latest = await db.v2_runs.find_one({"run_id": root["run_id"]})
+                if not latest or latest["state"] in {"FAILED", "CANCELLED"}:
+                    reason = "ROOT_RUN_" + (latest["state"] if latest else "MISSING")
+                    await db.v2_alert_analyses.update_one({"_id": identity}, {"$set": {
+                        "persistence_state": "DISCARDED", "discard_reason": reason, "discarded_at": now()}})
+                    raise NodeFailure(reason)
+            return {"analysis_id": identity, "state": "SUCCEEDED" if committed.matched_count else "SUPERSEDED"}, "success"
         if kind == "notify_jira":
             await reserve(db, run, checksum([job["job_id"], "notify"]))
             origin = run.get("source_reference") or {}

@@ -197,6 +197,7 @@ def test_debug_uses_bounded_snapshots_and_metadata_lists_exclude_outputs(setup, 
     job = next(n for n in detail["nodes"] if n["node_id"] == "done")
     assert "output" not in job
     assert not {"ancestors", "error_input", "evidence_snapshot"} & job.keys()
+    assert job["error_input_snapshot"]["value"] == {"detail": "INTERNAL"}
     assert job["output_snapshot"]["omitted"]
     assert "PRIVATE EVIDENCE" not in str(detail)
     assert "x" * 40000 not in str(detail)

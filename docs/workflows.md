@@ -119,6 +119,12 @@ Use the dependency-free [Workflow Sandbox](../examples/workflow-sandbox/README.m
 
 Tenant-authorized users may inspect runs and analysis history. Only platform admins cancel root runs and descendants. Cancellation cannot recall already dispatched external operations.
 
+If cancellation races an analysis-history write, the uncommitted history item is
+retained for audit with `persistence_state=DISCARDED` and a `discard_reason`.
+It is not the alert's current analysis. Debug uses bounded, sanitized snapshots
+for node inputs, outputs and propagated error input; internal ancestry and evidence
+reference fields are not returned.
+
 ## Rollout
 
 `TIERX_WORKFLOW_ENGINE_ENABLED=false` by default. Deploy disabled, prepare and test profiles/tools, publish subflows and workflows, grant tenants, and generate fixed entry credentials. The private worker runs `python workflow_main.py` from the pipeline image and exposes no port.

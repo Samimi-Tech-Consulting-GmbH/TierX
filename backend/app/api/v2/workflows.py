@@ -546,7 +546,7 @@ def run_detail(
     run.pop("input", None)
     run["nodes"] = list(
         db.v2_jobs.find({"run_id": run_id}, {"_id": 0, "lease_owner": 0,
-            "ancestors": 0, "error_input": 0, "evidence_snapshot": 0}).sort(
+            "ancestors": 0, "evidence_snapshot": 0}).sort(
             "created_at", 1
         )
     )
@@ -566,6 +566,8 @@ def run_detail(
     if run["graph"].get("format_version") == "2.0":
         run["output_snapshot"] = debug_snapshot(run.pop("output", None))
         for job in run["nodes"]:
+            if "error_input" in job:
+                job["error_input_snapshot"] = debug_snapshot(job.pop("error_input"))
             output = job.pop("output", None)
             job["output_snapshot"] = job.get("output_snapshot") or debug_snapshot(output)
         run["alert"] = db.alerts.find_one({"alert_id": run["alert_id"]}, {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0})

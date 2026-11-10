@@ -199,6 +199,41 @@ async def test_cancelled_alert_cannot_restart_reasoning_or_commit_analysis(envir
 
 
 @pytest.mark.asyncio
+async def test_cancellation_between_root_check_and_history_write_marks_discarded(environment, monkeypatch):
+    mongo, db = environment
+    parent = run(linear([node("entry", "entry"), node("done", "complete")]))
+    mongo.tenant.v2_runs.insert_one(deepcopy(parent))
+    mongo.tenant.alerts.insert_one({"alert_id": "r", "workflow_state": "RUNNING"})
+    tools = WorkflowTools()
+    tools.context = AsyncMock(return_value={"analysis": {"headline": "Late result"}})
+    original = mongo.tenant.v2_alert_analyses.update_one
+    def cancel_then_insert(query, update, **kwargs):
+        if "$setOnInsert" in update:
+            mongo.tenant.v2_runs.update_one({"run_id": "r"}, {"$set": {"state": "CANCELLED"}})
+            mongo.tenant.alerts.update_one({"alert_id": "r"}, {"$set": {"workflow_state": "CANCELLED"}})
+        return original(query, update, **kwargs)
+    monkeypatch.setattr(mongo.tenant.v2_alert_analyses, "update_one", cancel_then_insert)
+    with pytest.raises(NodeFailure, match="ROOT_RUN_CANCELLED"):
+        await tools.execute(db, parent, node("persist", "persist_analysis", input_path="analysis"), {"job_id": "persist"})
+    assert "alert_analysis" not in mongo.tenant.alerts.find_one({})
+    history = mongo.tenant.v2_alert_analyses.find_one({})
+    assert history["persistence_state"] == "DISCARDED"
+    assert history["discard_reason"] == "ROOT_RUN_CANCELLED"
+
+
+@pytest.mark.asyncio
+async def test_missing_root_at_persistence_is_structured_failure(environment):
+    mongo, db = environment
+    parent = run(linear([node("entry", "entry"), node("done", "complete")]))
+    mongo.tenant.alerts.insert_one({"alert_id": "r"})
+    tools = WorkflowTools()
+    tools.context = AsyncMock(return_value={"analysis": {"headline": "Result"}})
+    with pytest.raises(NodeFailure, match="ROOT_RUN_MISSING"):
+        await tools.execute(db, parent, node("persist", "persist_analysis", input_path="analysis"), {"job_id": "persist"})
+    assert mongo.tenant.v2_alert_analyses.count_documents({}) == 0
+
+
+@pytest.mark.asyncio
 async def test_waiting_worker_cannot_revive_cancelled_job(environment):
     from app.workflows.tools import NodeWaiting
     mongo, db = environment
