@@ -52,7 +52,9 @@ approved per revision. Every DNS answer is checked at connection time and the
 chosen address is pinned. HTTP redirects are rejected. Loopback, link-local,
 metadata, reserved addresses, rootless network subnets and configured TierX
 infrastructure CIDRs are denied even when explicitly allowed. Each invocation has
-32 connection attempts. TCP checks open then close a connection; no arbitrary TCP
+32 connection attempts. IPv6 transition/NAT64 ranges and CGNAT are also denied.
+Each proxy requires a fresh random invocation capability, so other proxy containers
+cannot use its policy endpoint. TCP checks open then close a connection; no arbitrary TCP
 payload forwarding is supported.
 
 The operator must include all TierX host, service, database, orchestration and
@@ -80,6 +82,10 @@ queue/start/deadline/duration, bounded output and safe destination decisions.
 Completed calls replay without execution. Uncertain requests are not retried:
 approved HTTP requests can have side effects. Cancellation kills containers;
 broker restart marks unfinished calls uncertain and removes orphan resources.
+If container cleanup fails, the broker remains unhealthy and rejects new calls
+until an operator verifies cleanup and restarts it. Oversized stdout/stderr fails
+the invocation rather than preserving or exposing logs. The two-worker queue is
+bounded at 100 calls; execution timeout starts when a queued call becomes running.
 Runner errors follow explicit workflow error edges. Debug omits code, input
 documents, output evidence and stdout/stderr; it exposes metadata and checksums.
 

@@ -1,11 +1,13 @@
 """Trusted private broker. Only this service sees the dedicated rootless socket."""
 import concurrent.futures
+from contextlib import contextmanager
 import hmac
 import ipaddress
 import json
 import os
 import re
 import selectors
+import secrets
 import sqlite3
 import subprocess
 import threading
@@ -41,6 +43,8 @@ def remove_container(name):
 
 
 def preflight():
+    if len(os.environ.get("TIERX_PYTHON_BROKER_TOKEN", "")) < 32:
+        raise BrokerError("STRONG_BROKER_TOKEN_REQUIRED")
     info = json.loads(docker("info", "--format", "{{json .}}"))
     if not any("rootless" in item for item in info.get("SecurityOptions", [])) or info.get("CgroupVersion") != "2" or info.get("CgroupDriver") != "systemd":
         raise BrokerError("ROOTLESS_CGROUP_PREFLIGHT_FAILED")
@@ -127,8 +131,14 @@ class Broker:
         # A broker restart never replays an uncertain side-effecting request.
         self.cleanup_orphans()
 
+    @contextmanager
     def db(self):
-        return sqlite3.connect(self.path, timeout=10)
+        connection = sqlite3.connect(self.path, timeout=10)
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def cleanup_orphans(self):
         for identity in docker("ps", "-aq", "--filter", "label=tierx.python.sandbox=true").split():
@@ -176,10 +186,19 @@ class Broker:
             # Proxy is trusted and contains no instance credentials. Each job gets its own proxy.
             denied = list(self.denied)
             # No sandbox may target the rootless host gateways or another sandbox.
-            for net in json.loads(docker("network", "inspect", *docker("network", "ls", "-q").split())):
-                denied.extend(item["Subnet"] for item in (net.get("IPAM", {}).get("Config") or []) if item.get("Subnet"))
+            for network_id in docker("network", "ls", "-q").split():
+                try:
+                    records = json.loads(docker("network", "inspect", network_id))
+                except BrokerError:
+                    if docker("network", "ls", "-q", "--filter", "id=" + network_id).strip():
+                        raise
+                    continue  # Another job finished and removed its network.
+                for net in records:
+                    denied.extend(item["Subnet"] for item in (net.get("IPAM", {}).get("Config") or []) if item.get("Subnet"))
+            proxy_token = secrets.token_urlsafe(32)
             docker("run", "-d", "--name", proxy, "--network", network, *base,
                 "-e", "TIERX_JOB_AUDIT_FILE=/tmp/decisions.json",
+                "-e", "TIERX_JOB_PROXY_TOKEN=" + proxy_token,
                 "-e", "TIERX_JOB_DESTINATIONS=" + json.dumps(definition["destinations"]),
                 "-e", "TIERX_JOB_DENIED_NETWORKS=" + json.dumps(denied), self.image, "python", "-I", "/runner/proxy.py")
             docker("network", "connect", "bridge", proxy)
@@ -187,7 +206,7 @@ class Broker:
             docker("exec", proxy, "python", "-c", "import socket,time\nfor attempt in range(30):\n try:\n  socket.create_connection(('127.0.0.1',8080),timeout=0.1).close(); break\n except OSError:\n  time.sleep(0.1)\nelse: raise RuntimeError('proxy unavailable')", timeout=5)
             address = json.loads(docker("inspect", proxy))[0]["NetworkSettings"]["Networks"][network]["IPAddress"]
             response = bounded_run(["docker", "run", "--rm", "-i", "--name", name, "--network", network, *base,
-                "-e", f"TIERX_JOB_PROXY=http://{address}:8080", self.image, "python", "-I", "/runner/execute.py"],
+                "-e", f"TIERX_JOB_PROXY=http://{address}:8080/{proxy_token}", self.image, "python", "-I", "/runner/execute.py"],
                 json.dumps({"source": definition["source"], "input": request["input"]}, ensure_ascii=False).encode(), max(0, metadata["deadline"] - time.time()), name,
                 cancelled=lambda: self.get(identity)["state"] == "CANCELLED")
             result = {"result": output_envelope(response["result"], definition), "runtime_digest": self.image}
@@ -231,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
         from tierx_workflows.graph import canonical
         from tierx_workflows.python_tools import INPUT_SCHEMA, validate_definition
         from jsonschema import Draft202012Validator
-        if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + os.environ["TIERX_PYTHON_BROKER_TOKEN"]):
+        if not hmac.compare_digest(self.headers.get("Authorization", "").encode(), ("Bearer " + os.environ["TIERX_PYTHON_BROKER_TOKEN"]).encode()):
             return 401, {"error": "UNAUTHORIZED"}
         if self.path == "/health" and self.command == "GET":
             if self.server.broker.unhealthy:
@@ -258,6 +277,10 @@ class Handler(BaseHTTPRequestHandler):
     def respond(self):
         try:
             status, value = self.handle_request()
+        except BrokerError as exc:
+            code = str(exc)
+            status = 409 if code == "PYTHON_REPLAY_CONFLICT" else 429 if code == "PYTHON_QUEUE_FULL" else 503
+            value = {"error": code}
         except Exception:
             status, value = 422, {"error": "PYTHON_REQUEST_INVALID"}
         encoded = json.dumps(value).encode()

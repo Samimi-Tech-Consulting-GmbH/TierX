@@ -12,8 +12,15 @@ spec.loader.exec_module(broker)
 
 
 def test_rootful_runtime_is_rejected(monkeypatch):
+    monkeypatch.setenv("TIERX_PYTHON_BROKER_TOKEN", "s" * 32)
     monkeypatch.setattr(broker, "docker", lambda *a, **kw: json.dumps({"SecurityOptions": ["seccomp"], "CgroupVersion": "2", "CgroupDriver": "systemd"}))
     with pytest.raises(broker.BrokerError, match="ROOTLESS_CGROUP"):
+        broker.preflight()
+
+
+def test_weak_broker_token_is_rejected(monkeypatch):
+    monkeypatch.setenv("TIERX_PYTHON_BROKER_TOKEN", "")
+    with pytest.raises(broker.BrokerError, match="STRONG_BROKER_TOKEN"):
         broker.preflight()
 
 

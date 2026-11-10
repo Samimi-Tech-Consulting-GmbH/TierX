@@ -14,6 +14,9 @@ async def broker_request(identity, *, request=None, cancel=False):
             response = await client.request("DELETE" if cancel else "POST" if request else "GET", origin + "/calls/" + identity,
                 headers={"Authorization": "Bearer " + token}, json=request)
         if response.status_code != 200:
+            code = response.json().get("error")
+            if code in {"PYTHON_QUEUE_FULL", "PYTHON_REPLAY_CONFLICT", "RUNNER_ISOLATION_UNAVAILABLE"}:
+                raise PythonToolError(code)
             raise PythonToolError("PYTHON_RUNNER_REJECTED")
         result = response.json()
         if result.get("state") not in {"PENDING", "RUNNING", "SUCCEEDED", "FAILED", "UNCERTAIN", "CANCELLED"}:

@@ -88,7 +88,8 @@ def test_proxy_pins_dns_rejects_mixed_answers_and_enforces_budget():
         policy.resolve("allowed.example", 443)
 
 
-@pytest.mark.parametrize("address", ["127.0.0.1", "::1", "169.254.169.254", "::ffff:127.0.0.1", "10.10.1.2"])
+@pytest.mark.parametrize("address", ["127.0.0.1", "::1", "169.254.169.254", "::ffff:127.0.0.1", "10.10.1.2",
+    "100.64.0.1", "64:ff9b::a00:1", "2002:a00:1::1", "2001::1"])
 def test_even_explicit_allow_cannot_override_protected_destinations(address):
     policy = proxy.Policy([{"host": address, "ports": [80]}], ["10.10.0.0/16"])
     with patch.object(proxy.socket, "getaddrinfo", return_value=[(2, 1, 6, "", (address, 80))]):

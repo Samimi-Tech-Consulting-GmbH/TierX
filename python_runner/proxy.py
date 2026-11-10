@@ -1,5 +1,6 @@
 """One-invocation egress proxy. No general forwarding, credentials or redirects."""
 import http.client
+import hmac
 import ipaddress
 import json
 import os
@@ -10,6 +11,8 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
+TRANSITION_DENIALS = [ipaddress.ip_network(value) for value in (
+    "100.64.0.0/10", "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16", "2001::/32")]
 
 class Policy:
     def __init__(self, targets, denied):
@@ -34,7 +37,10 @@ class Policy:
             self.decisions.append({"host": str(host)[:253], "port": port if type(port) is int else None,
                                    "decision": decision, "address": address})
             if os.environ.get("TIERX_JOB_AUDIT_FILE"):
-                Path(os.environ["TIERX_JOB_AUDIT_FILE"]).write_text(json.dumps(self.decisions))
+                path = Path(os.environ["TIERX_JOB_AUDIT_FILE"])
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(self.decisions))
+                temporary.replace(path)
 
     def _resolve(self, host, port):
         if not isinstance(host, str) or type(port) is not int or not 1 <= port <= 65535:
@@ -52,6 +58,8 @@ class Policy:
             if ip.version == 6 and ip.ipv4_mapped:
                 ip = ip.ipv4_mapped
             if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved or any(ip in net for net in self.denied if net.version == ip.version):
+                raise ValueError("DESTINATION_DENIED")
+            if any(ip in net for net in TRANSITION_DENIALS if net.version == ip.version):
                 raise ValueError("DESTINATION_DENIED")
             allowed = False
             for target in self.targets:
@@ -123,11 +131,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            token, separator, operation = self.path.removeprefix("/").partition("/")
+            if not separator or not hmac.compare_digest(token.encode(), os.environ["TIERX_JOB_PROXY_TOKEN"].encode()):
+                raise ValueError("PROXY_UNAUTHORIZED")
             size = int(self.headers.get("Content-Length", "0"))
             if not 0 < size <= 32768:
                 raise ValueError("REQUEST_LIMIT")
-            result = operate(self.server.policy, self.path, json.loads(self.rfile.read(size)))
-        except (ValueError, KeyError, TypeError, OSError) as exc:
+            result = operate(self.server.policy, "/" + operation, json.loads(self.rfile.read(size)))
+        except (ValueError, KeyError, TypeError, OSError, http.client.HTTPException) as exc:
             # Never return exception values (URLs, response bodies, evidence).
             known = {"DESTINATION_DENIED", "DESTINATION_NOT_APPROVED", "NETWORK_BUDGET_EXHAUSTED", "HTTP_REDIRECT_DENIED", "HTTP_RESPONSE_LIMIT"}
             result = {"error": str(exc) if str(exc) in known else "NETWORK_OPERATION_FAILED"}
@@ -139,6 +150,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if len(os.environ.get("TIERX_JOB_PROXY_TOKEN", "")) < 32:
+        raise RuntimeError("Strong invocation capability required")
     server = ThreadingHTTPServer(("0.0.0.0", 8080), Handler)
     server.policy = Policy(json.loads(os.environ["TIERX_JOB_DESTINATIONS"]), json.loads(os.environ["TIERX_JOB_DENIED_NETWORKS"]))
     server.serve_forever()
