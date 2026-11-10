@@ -71,7 +71,7 @@ def preflight():
     # Discover the rootless runtime's upstream/slirp subnet, including its host gateway.
     # This executes only fixed trusted preflight code, never a tool source.
     upstream = json.loads(docker("run", "--rm", "--network=host", "--memory=256m", "--pids-limit=64", image,
-        "python", "-c", "import pathlib,ipaddress,json\nnetworks=[]\nfor row in pathlib.Path('/proc/net/route').read_text().splitlines()[1:]:\n fields=row.split(); mask=int(fields[7],16)\n if mask:\n  address=ipaddress.IPv4Address(int.from_bytes(bytes.fromhex(fields[1]),'little'))\n  networks.append(str(ipaddress.ip_network(str(address)+'/'+str(mask.bit_count()),strict=False)))\nprint(json.dumps(networks))"))
+        "python", "-c", "import pathlib,ipaddress,json\nnetworks=[]\nfor row in pathlib.Path('/proc/net/route').read_text().splitlines()[1:]:\n fields=row.split(); mask=int(fields[7],16)\n if mask:\n  address=ipaddress.IPv4Address(int.from_bytes(bytes.fromhex(fields[1]),'little'))\n  networks.append(str(ipaddress.ip_network(str(address)+'/'+str(mask.bit_count()),strict=False)))\nfor row in pathlib.Path('/proc/net/ipv6_route').read_text().splitlines():\n fields=row.split(); prefix=int(fields[1],16)\n if prefix: networks.append(str(ipaddress.ip_network(str(ipaddress.IPv6Address(int(fields[0],16)))+'/'+str(prefix),strict=False)))\nprint(json.dumps(networks))"))
     denied.extend(upstream)
     return image, denied
 
