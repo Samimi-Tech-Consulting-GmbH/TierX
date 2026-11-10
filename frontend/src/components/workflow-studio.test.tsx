@@ -262,6 +262,17 @@ describe("Graph JSON import", () => {
       await screen.findByRole("button", { name: /Endpoint triage/ }),
     );
     expect(screen.queryByLabelText("Node gallery")).not.toBeInTheDocument();
+    expect(screen.queryByText("Investigate endpoints")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Workflow canvas")).toHaveClass("h-full");
+    fireEvent.click(screen.getByRole("button", { name: "Expand canvas" }));
+    expect(
+      screen.getByRole("dialog", { name: "Expanded workflow editor" }),
+    ).toHaveClass("fixed", "inset-0");
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+    expect(document.body.style.overflow).toBe("hidden");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe("hidden");
     fireEvent.click(screen.getByRole("button", { name: "Add step" }));
     expect(screen.getByLabelText("Node gallery")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));

@@ -15,7 +15,14 @@ the canvas/agent setup from Settings, Ingestion (workflows only), Executions and
 Versions. Save draft stores edits; Publish activates an immutable revision for
 new runs. Publication and credential rotation require explicit confirmation.
 
-Add step opens the palette on demand. Selecting a node opens its inspector;
+Back, title, draft status, Save and Publish occupy the dashboard top bar while
+editing. Descriptions live in Settings. The platform health badge remains on
+ordinary dashboard pages, not in the editor toolbar.
+
+Add step opens an overlay palette on demand. Selecting a node overlays its inspector
+without shrinking the canvas. Expand canvas uses the full viewport and retains
+the editor actions; Escape dismisses the inspector/palette before leaving expanded
+mode. Canvas tools contains the collapsed connection and import controls;
 each node also has a keyboard-focusable Inspect control. The connection manager
 offers a keyboard alternative to dragging edges. Advanced graph/agent JSON is
 collapsed, and invalid imports preserve the graph. Unsaved changes are guarded

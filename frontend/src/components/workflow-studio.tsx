@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ReactFlow,
@@ -42,6 +42,7 @@ import {
   Upload,
 } from "lucide-react";
 import { WorkflowConnections } from "@/components/workflow-connections";
+import { EditorChrome } from "@/components/dashboard/editor-chrome";
 import {
   ResourceLibrary,
   EditorBack,
@@ -392,12 +393,14 @@ export function WorkflowCanvas({
   onChange,
   onSelect,
   selectedId,
+  fill = false,
   states = {},
 }: {
   graph: FlowGraph;
   onChange?: (value: FlowGraph) => void;
   onSelect?: (node: FlowNode) => void;
   selectedId?: string | null;
+  fill?: boolean;
   states?: Record<string, string>;
 }) {
   const nodes: StudioNode[] = graph.nodes.map((definition, i) => ({
@@ -436,7 +439,7 @@ export function WorkflowCanvas({
   }
   return (
     <div
-      className="h-[550px] min-w-0 rounded-xl border bg-muted/20"
+      className={`${fill ? "h-full min-h-0" : "h-[550px]"} min-w-0 rounded-xl border bg-muted/20`}
       aria-label="Workflow canvas"
     >
       <ReactFlow
@@ -546,6 +549,7 @@ export function WorkflowStudio({
   initialKind?: Kind;
 }) {
   const { user } = useAuth();
+  const editorRoot = useRef<HTMLElement>(null);
   const [items, setItems] = useState<Definition[]>([]),
     [catalog, setCatalog] = useState<string[]>([]),
     [templates, setTemplates] = useState<Definition[]>([]);
@@ -577,6 +581,19 @@ export function WorkflowStudio({
   const [runTenant, setRunTenant] = useState(""),
     [runRows, setRunRows] = useState<RunRow[]>([]),
     [runsLoaded, setRunsLoaded] = useState(false);
+  useEffect(() => {
+    if (!wide) return;
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    editorRoot.current
+      ?.querySelector<HTMLButtonElement>("[data-collapse-canvas]")
+      ?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, [wide]);
   const load = useCallback(async () => {
     const result = await workflowRequest<{
       items: Definition[];
@@ -653,7 +670,8 @@ export function WorkflowStudio({
     }
   }
   const unsaved = Boolean(
-    draft && !readOnly &&
+    draft &&
+      !readOnly &&
       (!saved ||
         invalidAgent ||
         comparable(draft, configuration) !== comparable(saved)),
@@ -748,7 +766,9 @@ export function WorkflowStudio({
     const kind = initialKind;
     open({
       kind,
-      code: template ? `${template.code.slice(0,54)}-${crypto.randomUUID().slice(0,8)}` : "",
+      code: template
+        ? `${template.code.slice(0, 54)}-${crypto.randomUUID().slice(0, 8)}`
+        : "",
       name: template?.name || "",
       description: template?.description || "",
       tenant_ids: [],
@@ -854,116 +874,145 @@ export function WorkflowStudio({
     { key: "versions", label: "Versions" },
   ];
   return (
-    <main className="space-y-5 p-4 md:p-6">
-      <header className="space-y-4">
-        <EditorBack
-          onClick={back}
-          label={"Back to " + copy.title.toLowerCase()}
-        />
-        {breadcrumbs.length > 0 && (
-          <nav
-            aria-label="Subflow breadcrumbs"
-            className="flex flex-wrap gap-2 text-sm"
-          >
-            {breadcrumbs.map((row, index) => (
-              <button
-                key={index}
-                className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary"
-                onClick={() => {
-                  if (
-                    unsaved &&
-                    !confirm("Discard changes to this child definition?")
-                  )
-                    return;
-                  const parents = breadcrumbs.slice(0, index);
-                  setDraft(null);
-                  open(row, true);
-                  setBreadcrumbs(parents);
-                }}
+    <main
+      ref={editorRoot}
+      role={wide ? "dialog" : undefined}
+      aria-modal={wide ? true : undefined}
+      aria-label={wide ? "Expanded workflow editor" : undefined}
+      className={
+        wide
+          ? "fixed inset-0 z-[60] flex min-h-0 flex-col gap-3 bg-background p-3"
+          : "flex h-full min-h-0 flex-col gap-3 p-3"
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          if (selected) setSelected(null);
+          else if (palette) setPalette(false);
+          else setWide(false);
+        }
+        if (wide && event.key === "Tab") {
+          const all = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]',
+            ),
+          ).filter((el) => el.offsetParent !== null);
+          const first = all[0],
+            last = all.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+      }}
+    >
+      <EditorChrome local={wide}>
+        <div className="w-full space-y-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <EditorBack
+              onClick={back}
+              label={"Back to " + copy.title.toLowerCase()}
+            />
+            <div className="min-w-0 flex-1">
+              <h1
+                className="truncate text-base font-semibold sm:text-lg"
+                title={draft.name}
               >
-                {row.name}
-                <ChevronRight size={14} />
-              </button>
-            ))}
-            <span>{draft.name}</span>
-          </nav>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">
                 {draft.name || "New " + draft.kind}
               </h1>
-              <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                {readOnly
-                  ? "Read-only v" + draft.revision
-                  : unsaved
-                    ? "Unsaved changes"
-                    : draft.active_revision
-                      ? "Published v" + draft.active_revision
-                      : "Draft"}
-              </span>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {draft.kind === "playbook"
-                ? "Reusable investigation subflow"
-                : draft.kind === "agent"
-                  ? "Model instructions, approved tools, and execution limits"
-                  : "Alert ingestion, investigation, and delivery"}
-              {draft.description ? " · " + draft.description : ""}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={studioButton}
-              disabled={
-                busy || readOnly || invalidAgent || !draft.code || !draft.name
-              }
-              onClick={() => action(save)}
-            >
-              <Save size={15} />
-              {busy ? "Working…" : "Save draft"}
-            </button>
-            <button
-              className={studioPrimary}
-              disabled={busy || readOnly || !draft.draft_version || unsaved}
-              title={
-                unsaved
-                  ? "Save your draft before publishing"
-                  : "Activate an immutable version for new runs"
-              }
-              onClick={() => {
-                if (
-                  !confirm(
-                    "Publish this version for new runs? Existing runs keep their pinned versions.",
+            <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
+              {readOnly
+                ? "Read-only v" + draft.revision
+                : unsaved
+                  ? "Unsaved changes"
+                  : draft.active_revision
+                    ? "Published v" + draft.active_revision
+                    : "Draft"}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={studioButton}
+                disabled={
+                  busy || readOnly || invalidAgent || !draft.code || !draft.name
+                }
+                onClick={() => action(save)}
+              >
+                <Save size={15} />
+                {busy ? "Working…" : "Save draft"}
+              </button>
+              <button
+                className={studioPrimary}
+                disabled={busy || readOnly || !draft.draft_version || unsaved}
+                title={
+                  unsaved
+                    ? "Save your draft before publishing"
+                    : "Activate an immutable version for new runs"
+                }
+                onClick={() => {
+                  if (
+                    !confirm(
+                      "Publish this version for new runs? Existing runs keep their pinned versions.",
+                    )
                   )
-                )
-                  return;
-                action(async () => {
-                  const result = await workflowRequest<{ revision: number }>(
-                    "/admin/workflow-definitions/" +
-                      draft.kind +
-                      "/" +
-                      draft.code +
-                      "/publish",
-                    "POST",
-                  );
-                  await load();
-                  setDraft({ ...draft, active_revision: result.revision });
-                  setMessage(
-                    "Published v" +
-                      result.revision +
-                      ". New runs use this version.",
-                  );
-                });
-              }}
-            >
-              <Upload size={15} />
-              Publish
-            </button>
+                    return;
+                  action(async () => {
+                    const result = await workflowRequest<{ revision: number }>(
+                      "/admin/workflow-definitions/" +
+                        draft.kind +
+                        "/" +
+                        draft.code +
+                        "/publish",
+                      "POST",
+                    );
+                    await load();
+                    setDraft({ ...draft, active_revision: result.revision });
+                    setMessage(
+                      "Published v" +
+                        result.revision +
+                        ". New runs use this version.",
+                    );
+                  });
+                }}
+              >
+                <Upload size={15} />
+                Publish
+              </button>
+            </div>
           </div>
+          {breadcrumbs.length > 0 && (
+            <nav
+              aria-label="Subflow breadcrumbs"
+              className="flex flex-wrap gap-2 text-sm"
+            >
+              {breadcrumbs.map((row, index) => (
+                <button
+                  key={index}
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary"
+                  onClick={() => {
+                    if (
+                      unsaved &&
+                      !confirm("Discard changes to this child definition?")
+                    )
+                      return;
+                    const parents = breadcrumbs.slice(0, index);
+                    setDraft(null);
+                    open(row, true);
+                    setBreadcrumbs(parents);
+                  }}
+                >
+                  {row.name}
+                  <ChevronRight size={14} />
+                </button>
+              ))}
+              <span>{draft.name}</span>
+            </nav>
+          )}
         </div>
-      </header>
+      </EditorChrome>
       {message && (
         <p role="status" className="rounded-lg border bg-card p-3 text-sm">
           {message}
@@ -971,7 +1020,7 @@ export function WorkflowStudio({
       )}
       <nav
         aria-label="Definition sections"
-        className="flex gap-1 overflow-x-auto border-b"
+        className="flex shrink-0 gap-1 overflow-x-auto border-b"
       >
         {tabs.map((t) => (
           <button
@@ -993,7 +1042,7 @@ export function WorkflowStudio({
         ))}
       </nav>
       {tab === "settings" && (
-        <section className="mx-auto max-w-3xl space-y-6">
+        <section className="mx-auto w-full max-w-3xl min-h-0 flex-1 space-y-6 overflow-y-auto pb-6">
           <div className="rounded-xl border bg-card p-5">
             <h2 className="mb-4 text-lg font-semibold">
               About this {draft.kind}
@@ -1120,14 +1169,8 @@ export function WorkflowStudio({
         </section>
       )}
       {tab === "editor" && graph && (
-        <section
-          className={
-            wide
-              ? "fixed inset-3 z-50 overflow-auto rounded-2xl border bg-background p-4 shadow-2xl"
-              : "space-y-4"
-          }
-        >
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               {!readOnly && (
                 <button
@@ -1143,15 +1186,22 @@ export function WorkflowStudio({
                 {graph.nodes.length} steps · select a node to configure it
               </span>
             </div>
-            <button className={studioButton} onClick={() => setWide(!wide)}>
+            <button
+              data-collapse-canvas={wide ? true : undefined}
+              className={studioButton}
+              onClick={() => {
+                setPalette(false);
+                setWide(!wide);
+              }}
+            >
               {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               <span>{wide ? "Close expanded canvas" : "Expand canvas"}</span>
             </button>
           </div>
-          <div className="flex min-w-0 flex-col gap-4 xl:flex-row">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl">
             {palette && !readOnly && (
               <aside
-                className="max-h-[650px] w-full shrink-0 overflow-auto xl:w-64"
+                className="absolute inset-y-3 left-3 z-20 w-[280px] max-w-[90%] overflow-auto rounded-xl shadow-2xl"
                 aria-label="Add steps"
               >
                 <NodeGallery
@@ -1178,8 +1228,9 @@ export function WorkflowStudio({
                 />
               </aside>
             )}
-            <div className="min-w-0 flex-1">
+            <div className="absolute inset-0">
               <WorkflowCanvas
+                fill
                 graph={graph}
                 selectedId={selected}
                 onChange={readOnly ? undefined : setGraph}
@@ -1193,7 +1244,8 @@ export function WorkflowStudio({
             {node && (
               <aside
                 aria-label="Step settings"
-                className="max-h-[700px] w-full shrink-0 space-y-4 overflow-auto rounded-xl border bg-card p-4 xl:w-[350px]"
+                className="absolute inset-y-3 right-3 z-20 space-y-4 overflow-auto rounded-xl border bg-card p-4 shadow-2xl"
+                style={{ width: "min(380px, calc(100% - 24px))" }}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -1294,33 +1346,44 @@ export function WorkflowStudio({
                 </details>
               </aside>
             )}
+            <details
+              className="absolute bottom-3 left-14 z-10 max-h-[70%] overflow-auto rounded-lg border bg-card p-3 shadow-lg"
+              style={{ width: "min(720px, calc(100% - 80px))" }}
+            >
+              <summary className="cursor-pointer text-sm font-medium">
+                Canvas tools
+              </summary>
+              <div className="mt-3">
+                {" "}
+                {!readOnly && (
+                  <WorkflowConnections graph={graph} onChange={setGraph} />
+                )}
+                <details className="mt-4 rounded-lg border p-3">
+                  <summary className="cursor-pointer text-sm text-muted-foreground">
+                    Advanced graph import
+                  </summary>
+                  <GraphJsonEditor
+                    graph={graph}
+                    readOnly={readOnly}
+                    key={
+                      draft.kind +
+                      ":" +
+                      draft.code +
+                      ":" +
+                      draft.draft_version +
+                      ":" +
+                      readOnly
+                    }
+                    onApply={setGraph}
+                  />
+                </details>
+              </div>
+            </details>
           </div>
-          {!readOnly && (
-            <WorkflowConnections graph={graph} onChange={setGraph} />
-          )}
-          <details className="mt-4 rounded-lg border p-3">
-            <summary className="cursor-pointer text-sm text-muted-foreground">
-              Advanced graph import
-            </summary>
-            <GraphJsonEditor
-              graph={graph}
-              readOnly={readOnly}
-              key={
-                draft.kind +
-                ":" +
-                draft.code +
-                ":" +
-                draft.draft_version +
-                ":" +
-                readOnly
-              }
-              onApply={setGraph}
-            />
-          </details>
         </section>
       )}
       {tab === "editor" && draft.kind === "agent" && (
-        <section className="mx-auto max-w-5xl space-y-5">
+        <section className="mx-auto w-full max-w-5xl min-h-0 flex-1 space-y-5 overflow-y-auto pb-6">
           <div className="rounded-xl border bg-card p-5">
             <h2 className="text-lg font-semibold">Investigation behavior</h2>
             <p className="mb-5 mt-1 text-sm text-muted-foreground">
@@ -1366,7 +1429,7 @@ export function WorkflowStudio({
         </section>
       )}
       {tab === "entry" && (
-        <section className="mx-auto max-w-3xl space-y-5 rounded-xl border bg-card p-5">
+        <section className="mx-auto w-full max-w-3xl min-h-0 flex-1 space-y-5 overflow-y-auto rounded-xl border bg-card p-5">
           <h2 className="text-lg font-semibold">Connect an alert source</h2>
           <p className="text-sm text-muted-foreground">
             Each tenant uses a fixed ingestion URL and a separate entry
@@ -1482,7 +1545,7 @@ export function WorkflowStudio({
         </section>
       )}
       {tab === "history" && (
-        <section className="mx-auto max-w-5xl space-y-5">
+        <section className="mx-auto w-full max-w-5xl min-h-0 flex-1 space-y-5 overflow-y-auto pb-6">
           <div>
             <h2 className="text-lg font-semibold">Execution history</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -1550,7 +1613,7 @@ export function WorkflowStudio({
         </section>
       )}
       {tab === "versions" && (
-        <section className="mx-auto max-w-3xl space-y-4">
+        <section className="mx-auto w-full max-w-3xl min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
           <h2 className="text-lg font-semibold">Published versions</h2>
           <p className="text-sm text-muted-foreground">
             Publishing creates an immutable version. Historical runs continue
