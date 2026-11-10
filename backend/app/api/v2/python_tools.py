@@ -8,7 +8,7 @@ from pymongo.errors import DuplicateKeyError
 from jsonschema.exceptions import SchemaError, ValidationError
 from tierx_workflows.graph import checksum
 from tierx_workflows.python_tools import validate_definition, input_snapshot, ALERT_SCHEMA, CLUSTER_SCHEMA, INPUT_SCHEMA
-from tierx_workflows.python_client import broker_request, execution_definition
+from tierx_workflows.python_client import broker_request, execution_definition, validate_with_broker
 from app.api.dependencies.auth import require_platform_admin
 from app.api.v2.workflows import db_for
 from app.db.mongodb import DatabaseManager
@@ -54,7 +54,7 @@ def listing():
 @router.put("/{code}")
 def save(code: str, body: Definition, user=Depends(require_platform_admin)):
     try:
-        value = validate_definition({"code": code, **body.model_dump(exclude={"expected_version"})})
+        value = validate_definition({"code": code, **body.model_dump(exclude={"expected_version"})}, syntax=False)
         for tenant in body.tenant_ids:
             db_for(tenant)
     except (ValueError, TypeError, SchemaError, ValidationError) as exc:
@@ -72,14 +72,19 @@ def save(code: str, body: Definition, user=Depends(require_platform_admin)):
 
 
 @router.post("/{code}/publish")
-def publish(code: str, user=Depends(require_platform_admin)):
+async def publish(code: str, user=Depends(require_platform_admin)):
     db = database()
     row = db.workflow_python_tools.find_one({"code": code}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Python tool not found")
+    try:
+        validation = await validate_with_broker(execution_definition(row))
+    except ValueError as exc:
+        status = 503 if str(exc).startswith(("PYTHON_RUNNER_", "RUNNER_")) else 422
+        raise HTTPException(status, str(exc)) from exc
     revision = row["draft_version"]
     record = {**execution_definition(row), "revision": revision, "checksum": checksum(execution_definition(row)),
-              "published_at": datetime.now(timezone.utc), "published_by": user.user_id}
+              "published_at": datetime.now(timezone.utc), "published_by": user.user_id, "validated_runtime_digest": validation["runtime_digest"]}
     db.workflow_python_tool_revisions.update_one({"code": code, "revision": revision}, {"$setOnInsert": record}, upsert=True)
     if not db.workflow_python_tools.update_one({"code": code, "draft_version": revision}, {"$set": {"active_revision": revision}}).matched_count:
         raise HTTPException(409, "Draft changed during publication")

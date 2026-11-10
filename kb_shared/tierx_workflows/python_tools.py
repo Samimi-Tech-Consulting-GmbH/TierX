@@ -68,7 +68,7 @@ def safe_context(value):
     return sanitize(value)
 
 
-def validate_definition(value):
+def validate_definition(value, *, syntax=True):
     allowed = {"code", "name", "description", "source", "tenant_ids", "enabled", "output_mode",
                "output_schema", "timeout_seconds", "destinations"}
     if not isinstance(value, dict) or set(value) - allowed:
@@ -78,16 +78,17 @@ def validate_definition(value):
     source = value.get("source", "")
     if not isinstance(source, str) or not source.strip() or len(source.encode()) > MAX_CODE:
         raise PythonToolError("INVALID_PYTHON_SOURCE_SIZE")
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as exc:
-        raise PythonToolError("PYTHON_SYNTAX_ERROR") from exc
-    functions = [item for item in tree.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "run"]
-    if len(functions) != 1 or isinstance(functions[0], ast.AsyncFunctionDef):
-        raise PythonToolError("SYNCHRONOUS_RUN_REQUIRED")
-    args = functions[0].args
-    if [arg.arg for arg in args.args] != ["alert", "cluster"] or args.posonlyargs or args.kwonlyargs or args.vararg or args.kwarg:
-        raise PythonToolError("RUN_REQUIRES_ALERT_AND_CLUSTER")
+    if syntax:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError as exc:
+            raise PythonToolError("PYTHON_SYNTAX_ERROR") from exc
+        functions = [item for item in tree.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "run"]
+        if len(functions) != 1 or isinstance(functions[0], ast.AsyncFunctionDef):
+            raise PythonToolError("SYNCHRONOUS_RUN_REQUIRED")
+        args = functions[0].args
+        if [arg.arg for arg in args.args] != ["alert", "cluster"] or args.posonlyargs or args.kwonlyargs or args.vararg or args.kwarg:
+            raise PythonToolError("RUN_REQUIRES_ALERT_AND_CLUSTER")
     if value.get("output_mode") not in {"text", "json"}:
         raise PythonToolError("INVALID_OUTPUT_MODE")
     validate_schema(value.get("output_schema", {"type": "object"}))

@@ -2,7 +2,9 @@
 
 Platform administrators manage these at **Settings → Python tools**. Save a draft,
 select authorized tenants, test with synthetic input, then publish. Draft saves use
-optimistic version checks; publications are immutable. A workflow run pins the
+optimistic version checks; publications are immutable. Publication validates syntax and the entrypoint in the Python
+3.12 broker, not the application's potentially older Python interpreter. An
+unavailable broker prevents publication; drafts can still be edited. A workflow run pins the
 published revision. Saving a disabled tool or removing a tenant grant prevents new
 calls immediately, including calls from previously published workflows.
 

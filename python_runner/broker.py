@@ -14,6 +14,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from tierx_workflows.python_tools import PythonToolError
 
 
 class BrokerError(ValueError):
@@ -62,7 +63,9 @@ def preflight():
     if not {"cpu", "memory", "pids"} <= set(controllers):
         raise BrokerError("CGROUP_CONTROLLERS_NOT_DELEGATED")
     limits = json.loads(docker("run", "--rm", "--network=none", "--memory=256m", "--memory-swap=256m", "--cpus=1", "--pids-limit=64", image,
-        "python", "-c", "import pathlib,json; print(json.dumps({k:pathlib.Path('/sys/fs/cgroup/'+k).read_text().strip() for k in ['memory.max','pids.max','cpu.max']}))"))
+        "python", "-c", "import pathlib,json,sys; print(json.dumps({'python_version':list(sys.version_info[:2]),**{k:pathlib.Path('/sys/fs/cgroup/'+k).read_text().strip() for k in ['memory.max','pids.max','cpu.max']}}))"))
+    if limits["python_version"] != [3, 12]:
+        raise BrokerError("PYTHON_312_RUNTIME_REQUIRED")
     if limits["memory.max"] != "268435456" or limits["pids.max"] != "64" or limits["cpu.max"].split()[0] == "max":
         raise BrokerError("CGROUP_LIMITS_NOT_ENFORCED")
     return image, denied
@@ -256,6 +259,12 @@ class Handler(BaseHTTPRequestHandler):
             if self.server.broker.unhealthy:
                 return 503, {"state": "ISOLATION_UNAVAILABLE"}
             return 200, {"state": "READY", "runtime_digest": self.server.broker.image}
+        if self.path == "/validate" and self.command == "POST":
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 0 < size <= 150000:
+                return 413, {"error": "REQUEST_LIMIT"}
+            validate_definition(json.loads(self.rfile.read(size)))
+            return 200, {"valid": True, "runtime_digest": self.server.broker.image}
         identity = self.path.removeprefix("/calls/")
         if len(identity) != 64 or any(char not in "0123456789abcdef" for char in identity):
             return 404, {"error": "NOT_FOUND"}
@@ -281,6 +290,8 @@ class Handler(BaseHTTPRequestHandler):
             code = str(exc)
             status = 409 if code == "PYTHON_REPLAY_CONFLICT" else 429 if code == "PYTHON_QUEUE_FULL" else 503
             value = {"error": code}
+        except PythonToolError as exc:
+            status, value = 422, {"error": str(exc)}
         except Exception:
             status, value = 422, {"error": "PYTHON_REQUEST_INVALID"}
         encoded = json.dumps(value).encode()

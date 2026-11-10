@@ -17,6 +17,11 @@ def prepare(setup):
     return client, mongo, user
 
 
+@pytest.fixture(autouse=True)
+def runtime_validation(monkeypatch):
+    monkeypatch.setattr(python_tools, "validate_with_broker", AsyncMock(return_value={"valid": True, "runtime_digest": "sha256:" + "a" * 64}))
+
+
 def test_admin_authorization_revision_and_conflict(setup):
     client, mongo, user = prepare(setup)
     root = "/api/v2/admin/python-tools"
@@ -63,3 +68,13 @@ def test_grants_revocation_schema_errors_and_cancel_are_explicit(setup, monkeypa
     assert client.delete(root + "/tests/unknown").status_code == 404
     assert client.put(root, json=value(expected_version=1, enabled=False)).status_code == 200
     assert client.post(root + "/test", json=body).status_code == 404
+
+
+def test_publication_fails_closed_without_python312_validation(setup, monkeypatch):
+    from tierx_workflows.python_tools import PythonToolError
+    client, _, _ = prepare(setup)
+    root = "/api/v2/admin/python-tools/observe"
+    assert client.put(root, json=value()).status_code == 200
+    monkeypatch.setattr(python_tools, "validate_with_broker", AsyncMock(side_effect=PythonToolError("PYTHON_RUNNER_UNAVAILABLE")))
+    assert client.post(root + "/publish").status_code == 503
+    assert client.get(root + "/versions").json()["items"] == []
