@@ -109,6 +109,47 @@ async def test_scheduler_recovers_expired_leases_and_limits_parallel_nodes(monke
 
 
 @pytest.mark.asyncio
+async def test_cancelling_reconciliation_does_not_cancel_claimed_job(monkeypatch):
+    from app.workflows import engine as module
+    from workflow_database import Collection
+    mongo = mongomock.MongoClient(tz_aware=True)
+    raw = Client(mongo)
+    monkeypatch.setattr(module, "get_client", lambda: raw)
+    mongo.tenant.v2_runs.insert_one({"run_id": "r", "state": "RUNNING", "graph": {"format_version": "2.0"}})
+    expired = datetime.now(timezone.utc) - timedelta(seconds=1)
+    mongo.tenant.v2_jobs.insert_one({"job_id": "j", "run_id": "r", "state": "RUNNING", "heartbeat_at": expired, "lease_expires_at": expired, "created_at": expired})
+    reclaiming, claiming_again, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    original = Collection.__getattr__
+    claims = 0
+    def method(collection, name):
+        real = original(collection, name)
+        async def call(*args, **kwargs):
+            nonlocal claims
+            if collection.raw.name == "v2_jobs" and name == "find_one_and_update":
+                claims += 1
+                if claims == 2:
+                    claiming_again.set()
+                    await release.wait()
+            if collection.raw.name == "v2_jobs" and name == "update_one" and "reclaimed_at" in args[1].get("$set", {}):
+                reclaiming.set()
+                await release.wait()
+            return await real(*args, **kwargs)
+        return call
+    monkeypatch.setattr(Collection, "__getattr__", method)
+    engine = Engine()
+    tick = asyncio.create_task(engine.tick_tenant({"db_name": "tenant"}))
+    await asyncio.wait_for(reclaiming.wait(), 1)
+    await asyncio.wait_for(claiming_again.wait(), 1)
+    tick.cancel()
+    await asyncio.gather(tick, return_exceptions=True)
+    tasks = list(engine.tasks)
+    assert len(tasks) == 1 and not tasks[0].done()
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_tenant_failure_isolated_and_reported_in_fresh_heartbeat(monkeypatch):
     from app.workflows import engine as module
     mongo = mongomock.MongoClient(tz_aware=True)

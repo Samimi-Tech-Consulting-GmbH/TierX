@@ -96,6 +96,11 @@ class Engine:
         started = time.monotonic()
         first_started = job.get("first_started_at") or now()
         try:
+            if job.get("heartbeat_at") or job.get("wait_reason"):
+                await db.v2_jobs.update_one(
+                    {"job_id": job["job_id"], "lease_owner": self.owner},
+                    {"$set": {"reclaimed_at": now()}},
+                )
             run = await db.v2_runs.find_one({"run_id": job["run_id"]})
             if not run or run["state"] in {"FAILED", "CANCELLED"}:
                 await db.v2_jobs.update_one(
@@ -315,15 +320,17 @@ class Engine:
             offset = self.tenant_cursor % len(tenants)
             tenants = tenants[offset:] + tenants[:offset]
             self.tenant_cursor += 1
-        self.tenant_errors = 0
+        tenant_errors = 0
         await self.report_heartbeat()
         for tenant in tenants:
             try:
                 await asyncio.wait_for(self.tick_tenant(tenant), timeout=10)
             except Exception:
-                self.tenant_errors += 1
+                tenant_errors += 1
                 logger.warning("Tenant workflow scheduling failed; isolated from other tenants")
             await self.report_heartbeat()
+        self.tenant_errors = tenant_errors
+        await self.report_heartbeat()
         return self.tenant_errors
 
     async def report_heartbeat(self):
@@ -385,11 +392,8 @@ class Engine:
             )
             if not job:
                 break
-            if job.get("heartbeat_at") or job.get("wait_reason"):
-                await db.v2_jobs.update_one(
-                    {"job_id": job["job_id"], "lease_owner": self.owner},
-                    {"$set": {"reclaimed_at": now()}},
-                )
+            # No await between a successful claim and handing it to an independent
+            # task: cancelling tenant reconciliation must not strand a live lease.
             task = asyncio.create_task(self.execute(db, job))
             self.tasks.add(task)
             task.add_done_callback(self.tasks.discard)
@@ -404,7 +408,6 @@ class Engine:
                 ):
                     try:
                         await self.tick()
-                        await self.report_heartbeat()
                     except Exception:
                         logger.warning(
                             "Workflow scheduling failed; retrying"

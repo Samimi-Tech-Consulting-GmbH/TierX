@@ -91,7 +91,6 @@ def test_unknown_tools_and_remote_schema_refs_fail_closed():
 @pytest.fixture
 def setup(monkeypatch):
     mongo = mongomock.MongoClient(tz_aware=True)
-    monkeypatch.setenv("TIERX_INGESTION_V2_ENABLED", "true")
     monkeypatch.setenv(
         "TIERX_WEBHOOK_SECRET_ENCRYPTION_KEY",
         base64.urlsafe_b64encode(b"x" * 32).decode(),

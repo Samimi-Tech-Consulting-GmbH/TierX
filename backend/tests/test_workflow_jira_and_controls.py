@@ -39,7 +39,6 @@ def test_concurrent_cancellation_has_one_winner_on_mongodb44(monkeypatch):
 
 def prepare(setup, monkeypatch):
     client, mongo, user = setup
-    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED", "true")
     monkeypatch.setattr(entrypoints, "Tenant", workflows.Tenant)
     user.role = "PLATFORM_ADMIN"
     client.app.include_router(definitions.router, prefix="/api/v2")
@@ -116,7 +115,6 @@ def test_preparation_is_available_before_cutover_and_debug_reports_pinned_versio
     assert client.get("/api/v2/admin/workflow-definitions").status_code==200
     assert client.get("/api/v2/admin/llm-profiles").status_code==200
     assert client.post("/api/v2/workflows/raw/tenants/one/ingest",json={}).status_code==401
-    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED","true")
     root=mongo.tenant_one.v2_revisions.find_one({"flow_id":"workflow:raw"})
     mongo.tenant_one.v2_runs.insert_one({"run_id":"debug","root_run_id":"debug","alert_id":"a","tenant_id":"one","state":"RUNNING",
         "definition_code":"raw","definition_ref":"workflow:raw@1","revision":1,"graph":root["graph"],"bundle":root["bundle"]})
