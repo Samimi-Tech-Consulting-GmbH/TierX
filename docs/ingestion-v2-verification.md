@@ -1,5 +1,9 @@
 # Ingestion V2 local verification
 
+> Historical experiment record. Current execution and installation instructions
+> are in [Workflow Studio](workflows.md). Old mode flags and separate workers
+> described below no longer select an execution system.
+
 ## Review candidate
 
 The experimental implementation originally started from PR #10 commit

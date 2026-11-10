@@ -124,6 +124,9 @@ def setup(monkeypatch):
         tenant_id="one",
     )
     app.dependency_overrides[get_current_user] = lambda: user
+    # Historical serialization/validation tests call retired handlers explicitly.
+    # The production retirement boundary has its own regression below.
+    app.dependency_overrides[workflows.legacy_mutation] = lambda: None
     return TestClient(app), mongo, user
 
 
@@ -204,7 +207,16 @@ def test_tenant_isolation_operator_roles_and_disabled(setup, monkeypatch):
         == 403
     )
     monkeypatch.setenv("TIERX_INGESTION_V2_ENABLED", "false")
-    assert client.get("/api/v2/tenants/one/flows").status_code == 404
+    assert client.get("/api/v2/tenants/one/flows").status_code == 200
+
+
+def test_legacy_writes_retired_even_when_old_flags_are_false(setup, monkeypatch):
+    client, _, _ = setup
+    client.app.dependency_overrides.pop(workflows.legacy_mutation)
+    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED", "false")
+    monkeypatch.setenv("TIERX_INGESTION_V2_ENABLED", "false")
+    assert client.get("/api/v2/tenants/one/flows").status_code == 200
+    assert client.post("/api/v2/tenants/one/flows", json={"name": "Retired", "graph": minimal()}).status_code == 410
 
 
 def test_exact_binding_precedence_and_cluster_reads(setup):

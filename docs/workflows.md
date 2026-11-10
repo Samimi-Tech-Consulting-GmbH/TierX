@@ -128,8 +128,20 @@ reference fields are not returned.
 
 ## Rollout
 
-`TIERX_WORKFLOW_ENGINE_ENABLED=false` by default. Deploy disabled, prepare and test profiles/tools, publish subflows and workflows, grant tenants, and generate fixed entry credentials. The private worker runs `python workflow_main.py` from the pipeline image and exposes no port.
+Workflows are the only execution system. The standard pipeline service runs the
+workflow scheduler through `python main.py` and exposes no public port. No mode
+flag or optional worker profile is required. Backend readiness requires a fresh
+workflow-worker heartbeat, even before any definitions have been imported.
 
-Before enabling the flag consistently on backend, ingestion proxy and pipeline, drain legacy Kafka and durable analysis/action queues. Enabled cutover retires legacy private ingestion with 410 and stops legacy consumers from starting. No database wipe, implicit default-binding migration, or historical backfill occurs. Do not toggle mid-flight. Historical records remain readable.
+Publish explicitly configured subflows and workflows, grant tenants, and generate
+fixed entry credentials before submitting alerts. There is no built-in default
+workflow. Legacy ingestion and legacy flow mutations return `410 Gone`;
+historical read interfaces remain available. Existing experimental graph-format
+1 runs are not scheduled by the current worker. Upgrade operators must drain or
+archive old Kafka and durable queues before switching releases. No database wipe,
+implicit default-binding migration, or historical backfill occurs automatically.
 
-Rollback requires deliberate draining/cancellation and restoration of the prior ingestion route before re-enabling old consumers. Preserve databases, volumes and encryption keys. Use the normal immutable semantic release workflow; never build an unpinned branch on a server.
+Rollback requires deliberate draining/cancellation and deployment of a previous
+release, not changing an execution-mode flag. Preserve databases, volumes and
+encryption keys. Use immutable semantic releases; never build an unpinned branch
+on a server.

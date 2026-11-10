@@ -46,7 +46,7 @@ def main():
     save_credentials()
     env = {**local_environment(), "JWT_SECRET_KEY": secrets.token_hex(32),
         "PLATFORM_ADMIN_EMAIL": saved["email"], "PLATFORM_ADMIN_PASSWORD": saved["password"],
-        "TIERX_WORKFLOW_ENGINE_ENABLED": "true", "TIERX_OLLAMA_URL": "http://127.0.0.1:11438", "TIERX_OLLAMA_MODEL": "phi3:latest",
+        "TIERX_OLLAMA_URL": "http://127.0.0.1:11438", "TIERX_OLLAMA_MODEL": "phi3:latest",
         "WEBHOOK_SECRET_ENCRYPTION_KEY": saved["encryption_key"],
         "TIERX_APP_RELEASE_VERSION": "development", "TIERX_APP_RELEASE_SHA": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "CORS_ORIGINS": "http://127.0.0.1:13004", "EXAMPLE_PROVIDER_TOKEN": secrets.token_urlsafe(24),

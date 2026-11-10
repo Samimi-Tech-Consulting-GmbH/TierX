@@ -115,7 +115,7 @@ def test_preparation_is_available_before_cutover_and_debug_reports_pinned_versio
     monkeypatch.setenv("TIERX_INGESTION_V2_ENABLED","false")
     assert client.get("/api/v2/admin/workflow-definitions").status_code==200
     assert client.get("/api/v2/admin/llm-profiles").status_code==200
-    assert client.post("/api/v2/workflows/raw/tenants/one/ingest",json={}).status_code==404
+    assert client.post("/api/v2/workflows/raw/tenants/one/ingest",json={}).status_code==401
     monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED","true")
     root=mongo.tenant_one.v2_revisions.find_one({"flow_id":"workflow:raw"})
     mongo.tenant_one.v2_runs.insert_one({"run_id":"debug","root_run_id":"debug","alert_id":"a","tenant_id":"one","state":"RUNNING",

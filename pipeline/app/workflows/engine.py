@@ -324,16 +324,17 @@ class Engine:
             await db.v2_runs.create_index("run_id", unique=True)
             await db.v2_alert_analyses.create_index("analysis_id", unique=True)
             for run in (
-                await db.v2_runs.find({"state": "PENDING"}).limit(100).to_list(None)
+                await db.v2_runs.find({"state": "PENDING", "graph.format_version": "2.0"}).limit(100).to_list(None)
             ):
                 await self.initialize(db, run)
-            await self.tools.schedule(db, tenant)
+            active_runs = await db.v2_runs.find({"graph.format_version": "2.0", "state": {"$in": ["PENDING", "RUNNING"]}}, {"run_id": 1}).to_list(None)
+            active_ids = [run["run_id"] for run in active_runs]
             await db.clusters.update_many({"workflow_format": "2.0", "is_open_for_grouping": True,
                 "grouping_window_expires_at": {"$lte": now()}},
                 {"$set": {"is_open_for_grouping": False, "closed_at": now()}})
             for job in (
                 await db.v2_jobs.find(
-                    {"state": {"$in": ["SUCCEEDED", "FAILED"]}, "routed": False}
+                    {"run_id": {"$in": active_ids}, "state": {"$in": ["SUCCEEDED", "FAILED"]}, "routed": False}
                 )
                 .limit(100)
                 .to_list(None)
@@ -342,6 +343,7 @@ class Engine:
             while len(self.tasks) < 5 and not self.stopping:
                 job = await db.v2_jobs.find_one_and_update(
                     {
+                        "run_id": {"$in": active_ids},
                         "$or": [
                             {"state": "PENDING"},
                             {
@@ -373,9 +375,6 @@ class Engine:
                 task.add_done_callback(self.tasks.discard)
 
     async def run(self):
-        if not (boolean(env_value("ingestion_v2_enabled") or False) or boolean(env_value("workflow_engine_enabled") or False)):
-            logger.info("Ingestion V2 disabled")
-            return
         try:
             while not self.stopping:
                 if installed(
@@ -390,7 +389,7 @@ class Engine:
                                 "active_jobs": len(self.tasks), "worker_id": self.owner}}, upsert=True)
                     except Exception:
                         logger.warning(
-                            "V2 scheduling failed; retrying without touching V1"
+                            "Workflow scheduling failed; retrying"
                         )
                 await asyncio.sleep(1)
         finally:

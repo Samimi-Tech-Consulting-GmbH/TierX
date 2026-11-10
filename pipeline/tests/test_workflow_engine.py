@@ -80,10 +80,14 @@ async def test_scheduler_recovers_expired_leases_and_limits_parallel_nodes(monke
 
     engine.execute = execute
     expired = datetime.now(timezone.utc) - timedelta(seconds=1)
+    mongo.tenant.v2_runs.insert_one({"run_id": "active", "state": "RUNNING", "graph": {"format_version": "2.0"}})
+    mongo.tenant.v2_runs.insert_one({"run_id": "historical", "state": "PENDING", "graph": {"format_version": "1.0"}})
+    mongo.tenant.v2_jobs.insert_one({"job_id": "historical-job", "run_id": "historical", "state": "PENDING", "created_at": expired})
     for index in range(8):
         mongo.tenant.v2_jobs.insert_one(
             {
                 "job_id": str(index),
+                "run_id": "active",
                 "state": "RUNNING" if index == 0 else "PENDING",
                 "lease_expires_at": expired,
                 "heartbeat_at": expired if index == 0 else None,
@@ -96,7 +100,10 @@ async def test_scheduler_recovers_expired_leases_and_limits_parallel_nodes(monke
     assert len(engine.tasks) == 5
     assert len(seen) == 5 and "0" in seen
     assert mongo.tenant.v2_jobs.find_one({"job_id": "0"})["lease_owner"] == engine.owner
-    assert mongo.tenant.v2_jobs.count_documents({"state": "PENDING"}) == 3
+    assert mongo.tenant.v2_jobs.count_documents({"state": "PENDING"}) == 4
+    assert "historical-job" not in seen
+    assert mongo.tenant.v2_runs.find_one({"run_id": "historical"})["state"] == "PENDING"
+    engine.tools.schedule.assert_not_awaited()
     release.set()
     await asyncio.gather(*engine.tasks)
 

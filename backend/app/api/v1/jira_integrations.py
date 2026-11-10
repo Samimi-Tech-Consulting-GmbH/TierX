@@ -39,6 +39,14 @@ def test_jira_connection(
     return JiraIntegrationService.connection_info(integration)
 
 
+def retired_submission(request: Request, integration=Depends(require_jira_integration)):
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        raise HTTPException(410, "Configure Forge with a fixed workflow ingestion URL")
+
+
+router.dependencies.append(Depends(retired_submission))
+
+
 @router.post(
     "/submissions",
     status_code=status.HTTP_202_ACCEPTED,

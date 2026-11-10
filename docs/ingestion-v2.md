@@ -1,5 +1,9 @@
 # TierX Ingestion V2 experimental workflows
 
+> Historical design only. This experiment is retired. Current installations use
+> [Workflow Studio](workflows.md) through the standard pipeline service. The flags,
+> mutation APIs and separate startup commands below are not supported now.
+
 Ingestion V2 executes tenant-owned alert workflows on the server. The React Flow
 canvas edits configuration; it does not execute tools in the browser. V2 is
 disabled by default and is intended for isolated local evaluation, not production
