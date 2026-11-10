@@ -94,7 +94,6 @@ class V2Actions(EnrichmentActionCoordinator):
 
 class Tools:
     def __init__(self):
-        self.last_schedule = {}
         self.logger = logging.getLogger("workflow-tools")
 
     async def materialize(self, db, value, cache=None):
@@ -913,91 +912,3 @@ class Tools:
                     message["role"] = "user"
                 messages.append(message)
         raise NodeFailure("MODEL_ROUND_BUDGET_EXHAUSTED")
-
-    async def schedule(self, db, tenant):
-        # Cluster timers retain the current lifecycle implementation inside the V2 scope.
-        if (
-            now()
-            - self.last_schedule.get(db.name, datetime.min.replace(tzinfo=timezone.utc))
-        ).total_seconds() < 60:
-            return
-        self.last_schedule[db.name] = now()
-        for cohort in await db.v2_clusters.distinct(
-            "cohort", {"is_open_for_grouping": True, "workflow_format": {"$ne": "2.0"}}
-        ):
-            root = await db.v2_runs.find_one(
-                {"cohort": cohort}, sort=[("created_at", 1)]
-            )
-            if not root:
-                continue
-            with isolated(db.name, tenant["tenant_id"], cohort):
-                worker = self.correlation_worker(db, root)
-                await worker._scheduler_tick()
-        for pending in (
-            await db.v2_cluster_requests.find({"continuation_created": {"$ne": True}})
-            .limit(100)
-            .to_list(None)
-        ):
-            parent = await db.v2_runs.find_one({"run_id": pending["parent_run_id"]})
-            if not parent:
-                continue
-            # The live alert graph owns its initial/delta request. A failed attempt
-            # must not acquire an implicit retry through a duplicate continuation.
-            attempted = await db.v2_jobs.find_one(
-                {
-                    "run_id": parent["run_id"],
-                    "analysis_request.requested_analysis_version": pending["message"][
-                        "requested_analysis_version"
-                    ],
-                }
-            )
-            if parent["state"] in {"PENDING", "RUNNING"} or attempted:
-                await db.v2_cluster_requests.update_one(
-                    {"request_id": pending["request_id"]},
-                    {"$set": {"continuation_created": True, "owned_by_parent": True}},
-                )
-                continue
-            correlation = next(
-                (
-                    node
-                    for node in parent["graph"]["nodes"]
-                    if node["type"] == "correlation"
-                ),
-                None,
-            )
-            if not correlation:
-                continue
-            targets = [
-                edge["target"]
-                for edge in parent["graph"]["edges"]
-                if edge["source"] == correlation["id"]
-                and edge.get("sourceHandle", "success") == "success"
-            ]
-            continuation = {
-                k: v
-                for k, v in parent.items()
-                if k not in {"_id", "completed_at", "terminal_node", "error"}
-            }
-            continuation.update(
-                run_id=pending["request_id"],
-                alert_id=pending["message"]["alert_id"],
-                parent_run_id=parent["run_id"],
-                analysis_request=pending["message"],
-                state="RUNNING",
-                created_at=now(),
-                started_at=now(),
-            )
-            await db.v2_runs.update_one(
-                {"run_id": continuation["run_id"]},
-                {"$setOnInsert": continuation},
-                upsert=True,
-            )
-            from app.workflows.engine import Engine
-
-            dispatcher = Engine()
-            for target in targets:
-                await dispatcher.enqueue(db, continuation, target)
-            await db.v2_cluster_requests.update_one(
-                {"request_id": pending["request_id"]},
-                {"$set": {"continuation_created": True}},
-            )

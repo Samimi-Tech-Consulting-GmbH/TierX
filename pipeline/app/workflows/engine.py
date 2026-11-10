@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from pymongo import ReturnDocument
-from tierx_runtime import boolean, env_value, installed
+from tierx_runtime import installed
 from tierx_workflows import checksum
 from tierx_workflows.llm import ModelError
 from app.db.mongodb import get_client, get_database
@@ -96,6 +96,11 @@ class Engine:
         started = time.monotonic()
         first_started = job.get("first_started_at") or now()
         try:
+            if job.get("heartbeat_at") or job.get("wait_reason"):
+                await db.v2_jobs.update_one(
+                    {"job_id": job["job_id"], "lease_owner": self.owner},
+                    {"$set": {"reclaimed_at": now()}},
+                )
             run = await db.v2_runs.find_one({"run_id": job["run_id"]})
             if not run or run["state"] in {"FAILED", "CANCELLED"}:
                 await db.v2_jobs.update_one(
@@ -315,67 +320,85 @@ class Engine:
             offset = self.tenant_cursor % len(tenants)
             tenants = tenants[offset:] + tenants[:offset]
             self.tenant_cursor += 1
+        tenant_errors = 0
+        await self.report_heartbeat()
         for tenant in tenants:
-            db = get_client()[tenant["db_name"]]
-            await db.v2_jobs.create_index("job_id", unique=True)
-            await db.v2_joins.create_index("join_key", unique=True)
-            await db.clusters.create_index("cluster_id", unique=True)
-            await db.alerts.create_index("alert_id", unique=True)
-            await db.v2_runs.create_index("run_id", unique=True)
-            await db.v2_alert_analyses.create_index("analysis_id", unique=True)
-            for run in (
-                await db.v2_runs.find({"state": "PENDING"}).limit(100).to_list(None)
-            ):
-                await self.initialize(db, run)
-            await self.tools.schedule(db, tenant)
-            await db.clusters.update_many({"workflow_format": "2.0", "is_open_for_grouping": True,
-                "grouping_window_expires_at": {"$lte": now()}},
-                {"$set": {"is_open_for_grouping": False, "closed_at": now()}})
-            for job in (
-                await db.v2_jobs.find(
-                    {"state": {"$in": ["SUCCEEDED", "FAILED"]}, "routed": False}
-                )
-                .limit(100)
-                .to_list(None)
-            ):
-                await self.route(db, job)
-            while len(self.tasks) < 5 and not self.stopping:
-                job = await db.v2_jobs.find_one_and_update(
-                    {
-                        "$or": [
-                            {"state": "PENDING"},
-                            {
-                                "state": {"$in": ["RUNNING", "WAITING"]},
-                                "lease_expires_at": {"$lte": now()},
-                            },
-                        ]
-                    },
-                    {
-                        "$set": {
-                            "state": "RUNNING",
-                            "lease_owner": self.owner,
-                            "lease_expires_at": now() + timedelta(seconds=1920),
-                            "started_at": now(),
-                        }
-                    },
-                    return_document=ReturnDocument.AFTER,
-                    sort=[("created_at", 1), ("job_id", 1)],
-                )
-                if not job:
-                    break
-                if job.get("heartbeat_at") or job.get("wait_reason"):
-                    await db.v2_jobs.update_one(
-                        {"job_id": job["job_id"], "lease_owner": self.owner},
-                        {"$set": {"reclaimed_at": now()}},
-                    )
-                task = asyncio.create_task(self.execute(db, job))
-                self.tasks.add(task)
-                task.add_done_callback(self.tasks.discard)
+            try:
+                await asyncio.wait_for(self.tick_tenant(tenant), timeout=10)
+            except Exception:
+                tenant_errors += 1
+                logger.warning("Tenant workflow scheduling failed; isolated from other tenants")
+            await self.report_heartbeat()
+        self.tenant_errors = tenant_errors
+        await self.report_heartbeat()
+        return self.tenant_errors
+
+    async def report_heartbeat(self):
+        await get_database().service_heartbeats.update_one(
+            {"service": "workflow-engine"},
+            {"$set": {"service": "workflow-engine", "updated_at": now(),
+                "state": "DEGRADED" if getattr(self, "tenant_errors", 0) else "READY",
+                "tenant_errors": getattr(self, "tenant_errors", 0),
+                "active_jobs": len(self.tasks), "worker_id": self.owner}}, upsert=True)
+
+    async def tick_tenant(self, tenant):
+        db = get_client()[tenant["db_name"]]
+        await db.v2_jobs.create_index("job_id", unique=True)
+        await db.v2_joins.create_index("join_key", unique=True)
+        await db.clusters.create_index("cluster_id", unique=True)
+        await db.alerts.create_index("alert_id", unique=True)
+        await db.v2_runs.create_index("run_id", unique=True)
+        await db.v2_runs.create_index([("graph.format_version", 1), ("state", 1)])
+        await db.v2_alert_analyses.create_index("analysis_id", unique=True)
+        for run in (
+            await db.v2_runs.find({"state": "PENDING", "graph.format_version": "2.0"}).limit(100).to_list(None)
+        ):
+            await self.initialize(db, run)
+        active_runs = await db.v2_runs.find({"graph.format_version": "2.0", "state": {"$in": ["PENDING", "RUNNING"]}}, {"run_id": 1}).to_list(None)
+        active_ids = [run["run_id"] for run in active_runs]
+        await db.clusters.update_many({"workflow_format": "2.0", "is_open_for_grouping": True,
+            "grouping_window_expires_at": {"$lte": now()}},
+            {"$set": {"is_open_for_grouping": False, "closed_at": now()}})
+        for job in (
+            await db.v2_jobs.find(
+                {"run_id": {"$in": active_ids}, "state": {"$in": ["SUCCEEDED", "FAILED"]}, "routed": False}
+            )
+            .limit(100)
+            .to_list(None)
+        ):
+            await self.route(db, job)
+        while len(self.tasks) < 5 and not self.stopping:
+            job = await db.v2_jobs.find_one_and_update(
+                {
+                    "run_id": {"$in": active_ids},
+                    "$or": [
+                        {"state": "PENDING"},
+                        {
+                            "state": {"$in": ["RUNNING", "WAITING"]},
+                            "lease_expires_at": {"$lte": now()},
+                        },
+                    ]
+                },
+                {
+                    "$set": {
+                        "state": "RUNNING",
+                        "lease_owner": self.owner,
+                        "lease_expires_at": now() + timedelta(seconds=1920),
+                        "started_at": now(),
+                    }
+                },
+                return_document=ReturnDocument.AFTER,
+                sort=[("created_at", 1), ("job_id", 1)],
+            )
+            if not job:
+                break
+            # No await between a successful claim and handing it to an independent
+            # task: cancelling tenant reconciliation must not strand a live lease.
+            task = asyncio.create_task(self.execute(db, job))
+            self.tasks.add(task)
+            task.add_done_callback(self.tasks.discard)
 
     async def run(self):
-        if not (boolean(env_value("ingestion_v2_enabled") or False) or boolean(env_value("workflow_engine_enabled") or False)):
-            logger.info("Ingestion V2 disabled")
-            return
         try:
             while not self.stopping:
                 if installed(
@@ -385,12 +408,9 @@ class Engine:
                 ):
                     try:
                         await self.tick()
-                        await get_database().service_heartbeats.update_one({"service": "workflow-engine"}, {
-                            "$set": {"service": "workflow-engine", "updated_at": now(), "state": "READY",
-                                "active_jobs": len(self.tasks), "worker_id": self.owner}}, upsert=True)
                     except Exception:
                         logger.warning(
-                            "V2 scheduling failed; retrying without touching V1"
+                            "Workflow scheduling failed; retrying"
                         )
                 await asyncio.sleep(1)
         finally:

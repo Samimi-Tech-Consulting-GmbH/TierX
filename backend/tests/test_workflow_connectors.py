@@ -44,7 +44,6 @@ def test_connector_permissions_encryption_and_revision(setup, monkeypatch):
 
 
 def test_entry_token_scope_rotation_and_raw_timestamp(setup, monkeypatch):
-    monkeypatch.setenv("TIERX_WORKFLOW_ENGINE_ENABLED", "true")
     from app.api.v2 import definitions, entrypoints
     from app.api.v2 import workflows
     monkeypatch.setattr(entrypoints, "Tenant", workflows.Tenant)

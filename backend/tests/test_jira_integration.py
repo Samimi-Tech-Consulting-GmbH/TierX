@@ -743,6 +743,7 @@ def test_attachment_api_streams_and_rejects_oversized_body(jira_db):
         ),
     )
     app = FastAPI()
+    app.dependency_overrides[jira_api.retired_submission] = lambda: None
     app.include_router(jira_api.router, prefix="/api/v1")
     client = TestClient(app)
     response = client.put(

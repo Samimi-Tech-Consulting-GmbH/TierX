@@ -169,7 +169,7 @@ def test_tenant_status_suspension():
     )
 
     ingest_r = client.post(f"/api/v1/ingest/{tenant_id}/events")
-    assert ingest_r.status_code == 200
+    assert ingest_r.status_code == 410
 
     client.patch(
         f"/api/v1/admin/tenants/{tenant_id}/status",
