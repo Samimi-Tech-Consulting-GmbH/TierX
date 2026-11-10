@@ -7,6 +7,76 @@ import { once } from "node:events";
 import { createSandbox } from "./server.mjs";
 import { scenarioStore } from "./store.mjs";
 const sample = { result: { host: "SYNTHETIC-01" } };
+test("AI settings override environment defaults without returning or inheriting keys", async () => {
+  const server = createSandbox("https://tierx.example", fetch, undefined, {
+    ai: {
+      provider: "ollama",
+      url: "http://127.0.0.1:11434",
+      model: "env-model",
+      apiKey: "environment-secret",
+    },
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const update = (body) =>
+    fetch(origin + "/ai/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  try {
+    const initial = await (await fetch(origin + "/ai/settings")).json();
+    assert.equal(initial.source, "environment");
+    assert.equal(initial.has_key, true);
+    assert(!JSON.stringify(initial).includes("environment-secret"));
+    const changed = await (
+      await update({
+        provider: "openai-compatible",
+        url: "https://ai.example/v1",
+        model: "override-model",
+        api_key: "override-secret",
+      })
+    ).json();
+    assert.equal(changed.source, "override");
+    assert.equal(changed.has_key, true);
+    assert(!JSON.stringify(changed).includes("override-secret"));
+    const noKey = await (
+      await update({
+        provider: "ollama",
+        url: "http://localhost:11434",
+        model: "local",
+      })
+    ).json();
+    assert.equal(noKey.has_key, false);
+    assert.equal(
+      (
+        await update({
+          provider: "ollama",
+          url: "http://remote.example",
+          model: "m",
+        })
+      ).status,
+      400,
+    );
+    const reset = await (await update({ use_environment: true })).json();
+    assert.equal(reset.model, "env-model");
+    assert.equal(reset.source, "environment");
+    assert.equal(
+      (
+        await fetch(origin + "/ai/settings", {
+          method: "POST",
+          headers: { Origin: "https://foreign.example" },
+          body: "{}",
+        })
+      ).status,
+      403,
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 test("UI target selection only routes to configured origins", async () => {
   const calls = [];
   const server = createSandbox(

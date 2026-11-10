@@ -34,6 +34,15 @@
       <nav class="tabs" role="tablist" aria-label="Simulator tools">
         <button
           role="tab"
+          id="tab-ai-settings"
+          aria-controls="panel-ai-settings"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          AI settings
+        </button>
+        <button
+          role="tab"
           id="tab-connection"
           aria-controls="panel-connection"
           aria-selected="true"
@@ -68,6 +77,62 @@
           Live results
         </button>
       </nav>
+      <section
+        id="panel-ai-settings"
+        role="tabpanel"
+        aria-labelledby="tab-ai-settings"
+        hidden
+      >
+        <h2>AI provider settings</h2>
+        <p>
+          Use optional server environment variables as defaults, or override
+          them here without restarting. Overrides apply to this local simulator
+          server until it restarts. They are not saved to disk or exported with
+          scenarios.
+        </p>
+        <p class="muted">
+          Environment defaults: SANDBOX_AI_PROVIDER, SANDBOX_AI_URL,
+          SANDBOX_AI_MODEL and optional SANDBOX_AI_API_KEY. Choose “Use
+          environment defaults” to remove the override. A new override never
+          inherits the previous provider’s API key.
+        </p>
+        <form id="ai-settings-form">
+          <label
+            >Provider<select id="settings-provider">
+              <option value="disabled">Disabled</option>
+              <option value="ollama">Ollama</option>
+              <option value="openai-compatible">OpenAI-compatible</option>
+            </select></label
+          >
+          <label
+            >Endpoint URL<input
+              id="settings-url"
+              type="url"
+              placeholder="http://127.0.0.1:11434"
+          /></label>
+          <p class="muted">
+            Ollama: base URL, e.g. http://127.0.0.1:11434. OpenAI-compatible:
+            API base including /v1, e.g. https://api.openai.com/v1. Only
+            synthetic sample content is sent to this provider.
+          </p>
+          <label
+            >Model<input
+              id="settings-model"
+              placeholder="Enter the exact model name"
+          /></label>
+          <label
+            >API key (optional; re-enter when applying an override)<input
+              id="settings-key"
+              type="password"
+              autocomplete="off"
+          /></label>
+          <button>Apply override</button
+          ><button type="button" id="settings-reset">
+            Use environment defaults
+          </button>
+        </form>
+        <p id="settings-status" role="status"></p>
+      </section>
       <section
         id="panel-connection"
         role="tabpanel"

@@ -1,5 +1,17 @@
 # TierX Alert Simulator
 
+## AI settings: environment defaults or UI override
+
+AI environment variables are optional. In **AI settings**, choose Ollama or an
+OpenAI-compatible provider and enter its endpoint URL, exact model name and
+optional API key. **Apply override** takes effect without restarting. Overrides
+are held only in server memory until restart and are never saved with scenarios.
+The key is cleared from the form after submission and is never returned by the
+server. Every override requires its own key; a previous provider's key is never
+silently reused. **Use environment defaults** removes the override and restores
+`SANDBOX_AI_PROVIDER`, `SANDBOX_AI_URL`, `SANDBOX_AI_MODEL` and optional
+`SANDBOX_AI_API_KEY`. With neither configured, AI stays disabled.
+
 The UI is organized into Connection, Send alerts, AI scenarios & replay, and Live
 results tabs. Switching tabs preserves inputs and does not stop an active run.
 The package directory and `SANDBOX_*` configuration names remain compatible.

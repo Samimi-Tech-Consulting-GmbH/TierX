@@ -284,12 +284,62 @@ $("export-scenario").onclick = async () => {
 $("preset").onchange = () => {
   if ($("preset").value === "duplicates") $("refresh-fields").checked = false;
 };
+async function refreshAI() {
+  const value = await local("/config");
+  config = { ...value, target: globalThis.sandbox.target() || value.target };
+  $("ai-provider").textContent = value.ai.enabled
+    ? `AI: ${value.ai.provider} · ${value.ai.model}`
+    : "AI disabled. Choose an AI provider in AI settings; manual sending and replay remain available.";
+  busy(["RUNNING", "PAUSED"].includes(runner.state) || !!generating);
+  const settings = await local("/ai/settings");
+  $("settings-provider").value = settings.provider;
+  $("settings-url").value = settings.url;
+  $("settings-model").value = settings.model;
+  $("settings-key").value = "";
+  $("settings-status").textContent =
+    `Using ${settings.source} settings. API key ${settings.has_key ? "configured on server (never returned)" : "not configured"}.`;
+}
+async function changeAI(useEnvironment) {
+  try {
+    if (["RUNNING", "PAUSED"].includes(runner.state) || generating)
+      throw new Error(
+        "Stop the current run or generation before changing AI settings.",
+      );
+    if (
+      !confirm(
+        useEnvironment
+          ? "Remove the override and use server environment defaults?"
+          : `Use ${$("settings-provider").value} at ${$("settings-url").value || "(disabled)"}? Synthetic scenario content will be sent to this provider.`,
+      )
+    )
+      return;
+    await local(
+      "/ai/settings",
+      useEnvironment
+        ? { use_environment: true }
+        : {
+            provider: $("settings-provider").value,
+            url: $("settings-url").value.trim(),
+            model: $("settings-model").value.trim(),
+            api_key: $("settings-key").value,
+          },
+    );
+    await refreshAI();
+  } catch (error) {
+    $("settings-status").textContent = error.message;
+  } finally {
+    $("settings-key").value = "";
+  }
+}
+$("ai-settings-form").onsubmit = (event) => {
+  event.preventDefault();
+  changeAI(false);
+};
+$("settings-reset").onclick = () => changeAI(true);
 Promise.all([local("/config"), refreshSaved()])
   .then(([value]) => {
     config = value;
-    $("ai-provider").textContent = value.ai.enabled
-      ? `AI: ${value.ai.provider} · ${value.ai.model}`
-      : "AI disabled. Configure SANDBOX_AI_PROVIDER, SANDBOX_AI_URL and SANDBOX_AI_MODEL on the local server. Saved replay remains available.";
+    refreshAI().catch((error) => status(error.message));
     $("generate").disabled = !value.ai.enabled;
     $("batch").value = JSON.stringify(
       [JSON.parse($("payload").value)],

@@ -24,8 +24,11 @@ export function createAlertSimulator(
   uiValue = targetValue,
   options = {},
 ) {
-  const ai = options.ai || aiConfiguration();
-  const generate = createGenerator(ai, options.generationFetch || fetch);
+  const defaultAI = options.ai || aiConfiguration();
+  let ai = defaultAI,
+    overridden = false,
+    generating = false;
+  let generate = createGenerator(ai, options.generationFetch || fetch);
   const store = scenarioStore(
     options.dataDir ||
       process.env.SANDBOX_DATA_DIR ||
@@ -113,6 +116,51 @@ export function createAlertSimulator(
       )
         return send(403, '{"detail":"Local same-origin access required"}');
       const url = new URL(request.url, localOrigins[0]);
+      if (url.pathname === "/ai/settings" && !url.search) {
+        const publicSettings = () =>
+          JSON.stringify({
+            provider: ai.provider,
+            url: ai.url || "",
+            model: ai.model || "",
+            has_key: !!ai.apiKey,
+            source: overridden ? "override" : "environment",
+          });
+        if (request.method === "GET") return send(200, publicSettings());
+        if (request.method === "POST") {
+          if (generating)
+            return send(
+              409,
+              '{"detail":"Stop generation before changing AI settings"}',
+            );
+          try {
+            let raw = "";
+            for await (const chunk of request) {
+              raw += chunk.toString();
+              if (Buffer.byteLength(raw) > 16384)
+                return send(413, '{"detail":"Settings too large"}');
+            }
+            const body = JSON.parse(raw);
+            const next = body.use_environment
+              ? defaultAI
+              : aiConfiguration({
+                  SANDBOX_AI_PROVIDER: body.provider,
+                  SANDBOX_AI_URL: body.url,
+                  SANDBOX_AI_MODEL: body.model,
+                  SANDBOX_AI_API_KEY: body.api_key || "",
+                });
+            ai = next;
+            overridden = !body.use_environment;
+            generate = createGenerator(ai, options.generationFetch || fetch);
+            return send(200, publicSettings());
+          } catch {
+            return send(
+              400,
+              '{"detail":"Invalid settings. Choose a provider, model and HTTPS or localhost HTTP origin without embedded credentials, query or fragment."}',
+            );
+          }
+        }
+        return send(405, '{"detail":"Method not allowed"}');
+      }
       if (url.pathname === "/config" && request.method === "GET")
         return send(
           200,
@@ -150,7 +198,18 @@ export function createAlertSimulator(
             body = JSON.parse(Buffer.concat(chunks).toString());
           }
           if (url.pathname === "/ai/generate") {
-            const result = await generate(body, controller.signal);
+            if (generating)
+              return send(
+                409,
+                '{"detail":"Another generation request is in progress"}',
+              );
+            generating = true;
+            let result;
+            try {
+              result = await generate(body, controller.signal);
+            } finally {
+              generating = false;
+            }
             const saved = await store.save({
               name: "Generated synthetic batch",
               description: body.description,
