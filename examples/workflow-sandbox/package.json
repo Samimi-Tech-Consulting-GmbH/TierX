@@ -1,9 +1,14 @@
 {
-  "name": "tierx-workflow-sandbox",
+  "name": "tierx-alert-simulator",
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "scripts": {"dev": "node server.mjs", "test": "node --test test.mjs"},
-  "engines": {"node": ">=20"}
+  "scripts": {
+    "dev": "node server.mjs",
+    "test": "node --test test.mjs scenario.test.mjs generator.test.mjs runner.test.mjs store.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }

@@ -25,6 +25,7 @@ coverage/
 .next/
 node_modules/
 .forge/
+examples/workflow-sandbox/.sandbox-data/
 
 # Local-only minimal dev stack
 compose.dev-min.yaml
