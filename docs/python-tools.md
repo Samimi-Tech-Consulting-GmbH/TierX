@@ -81,6 +81,12 @@ All routes require platform-admin authentication under `/api/v2/admin/python-too
 
 Invocations persist call identity, input/code hashes, revision, runtime digest,
 queue/start/deadline/duration, bounded output and safe destination decisions.
+Execution inputs, outputs and metadata are audit history: there is no automatic
+expiry. Completed results remain available for replay for the lifetime of that
+history. Any future deletion must be an explicit audit-data management action,
+not a timer that silently removes evidence or causes code to run again. Broker
+transport copies are distinct from the authoritative tenant audit record;
+discarding such a copy must never discard the retained evidence.
 Completed calls replay without execution. Uncertain requests are not retried:
 approved HTTP requests can have side effects. Cancellation kills containers;
 broker restart marks unfinished calls uncertain and removes orphan resources.
