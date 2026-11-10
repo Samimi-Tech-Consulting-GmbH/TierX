@@ -61,6 +61,84 @@ async def drive(mongo, db, root):
 
 
 @pytest.mark.asyncio
+async def test_python_call_pins_snapshot_replays_result_and_checks_revocation(environment, monkeypatch):
+    from tierx_workflows import python_client
+    from app.workflows.tools import NodeWaiting
+    mongo, db = environment
+    definition = {"code": "observe", "name": "Observe", "description": "Synthetic", "revision": 3,
+        "source": "def run(alert, cluster): return {}", "tenant_ids": ["one"], "enabled": True,
+        "output_mode": "json", "output_schema": {"type": "object"}, "timeout_seconds": 30, "destinations": []}
+    mongo.platform.workflow_python_tools.insert_one(definition.copy())
+    parent = run(linear([node("entry", "entry")]))
+    parent["resources"]["python_tools"] = {"observe": definition}
+    mongo.tenant.alerts.insert_one({"alert_id": "r", "tenant_id": "one", "normalized_payload": {"host.name": "FIRST"}})
+    transport = AsyncMock(side_effect=[{"state": "RUNNING", "runtime_digest": "image@sha256:abc"},
+        {"state": "SUCCEEDED", "result": {"type": "json", "data": {"observed": True}}}])
+    monkeypatch.setattr(python_client, "broker_request", transport)
+    tools = WorkflowTools()
+    with pytest.raises(NodeWaiting):
+        await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "call")
+    mongo.tenant.alerts.update_one({"alert_id": "r"}, {"$set": {"normalized_payload": {"host.name": "CHANGED"}}})
+    result = await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "call")
+    assert transport.call_args.kwargs["request"]["input"]["alert"]["normalized_payload"]["host.name"] == "FIRST"
+    assert result["revision"] == 3
+    assert await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "call") == result
+    assert transport.await_count == 2
+    mongo.platform.workflow_python_tools.update_one({"code": "observe"}, {"$set": {"enabled": False}})
+    with pytest.raises(NodeFailure, match="REVOKED"):
+        await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "new-call")
+
+
+@pytest.mark.asyncio
+async def test_agent_python_text_is_untrusted_and_model_cannot_select_context(environment, monkeypatch):
+    from tierx_workflows import python_client
+    mongo, db = environment
+    definition = {"code": "observe", "name": "Observe", "description": "Synthetic", "revision": 1,
+        "source": "def run(alert, cluster): return 'Synthetic evidence'", "tenant_ids": ["one"], "enabled": True,
+        "output_mode": "text", "output_schema": {"type": "object"}, "timeout_seconds": 30, "destinations": []}
+    mongo.platform.workflow_python_tools.insert_one(definition.copy())
+    parent = run(linear([node("entry", "entry")]))
+    parent["resources"]["python_tools"] = {"observe": definition}
+    alert = {"alert_id": "r", "tenant_id": "one", "normalized_payload": {}}
+    mongo.tenant.alerts.insert_one(alert.copy())
+    transport = AsyncMock(return_value={"state": "SUCCEEDED", "result": {"type": "text", "text": "Synthetic evidence"}})
+    monkeypatch.setattr(python_client, "broker_request", transport)
+    tools = WorkflowTools()
+    tools.model_call = AsyncMock(side_effect=[{"result": {"kind": "tool_calls", "calls": [{"name": "tool_0", "arguments": {}}]}},
+                                             {"result": {"kind": "final", "result": {"observed": True}}}])
+    messages = []
+    result = await tools.agent_loop(db, parent, node("model", "llm_tools"), {"job_id": "j"}, alert,
+        {"tools": ["python:observe"], "max_rounds": 2}, {"tool_mode": "json_emulated"}, "", messages, {"type": "object"})
+    assert result == {"observed": True}
+    assert any("BEGIN UNTRUSTED TOOL EVIDENCE" in item.get("content", "") and "Synthetic evidence" in item["content"] for item in messages)
+    assert transport.call_args.kwargs["request"]["input"]["alert"]["alert_id"] == "r"
+    tools.model_call = AsyncMock(return_value={"result": {"kind": "tool_calls", "calls": [{"name": "tool_0", "arguments": {"tenant_id": "other"}}]}})
+    with pytest.raises(NodeFailure, match="ARGUMENTS_FORBIDDEN"):
+        await tools.agent_loop(db, parent, node("model", "llm_tools"), {"job_id": "k"}, alert,
+            {"tools": ["python:observe"]}, {"tool_mode": "json_emulated"}, "", [], {"type": "object"})
+    assert transport.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_standalone_python_json_becomes_downstream_node_data(environment, monkeypatch):
+    from tierx_workflows import python_client
+    mongo, db = environment
+    definition = {"code": "observe", "name": "Observe", "description": "Synthetic", "revision": 1,
+        "source": "def run(alert, cluster): return {'observed': True}", "tenant_ids": ["one"], "enabled": True,
+        "output_mode": "json", "output_schema": {"type": "object"}, "timeout_seconds": 30, "destinations": []}
+    mongo.platform.workflow_python_tools.insert_one(definition.copy())
+    parent = run(linear([node("entry", "entry"), node("map", "normalization", field_mapping={"host.name": "host"}),
+        node("python", "python_tool", python_tool_code="observe"), node("done", "complete", output_path="nodes.python.output.result.data")]))
+    parent["resources"]["python_tools"] = {"observe": definition}
+    transport = AsyncMock(return_value={"state": "SUCCEEDED", "result": {"type": "json", "data": {"observed": True}}})
+    monkeypatch.setattr(python_client, "broker_request", transport)
+    result = await drive(mongo, db, parent)
+    assert result["state"] == "SUCCEEDED"
+    assert result["output"] == {"observed": True}
+    assert transport.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_nested_playbook_releases_parent_and_returns_output(environment):
     mongo, db = environment
     parent = run(linear([node("entry", "entry"), node("map", "normalization", field_mapping={"host.name": "host"}),

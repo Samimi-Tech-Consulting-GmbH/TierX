@@ -100,7 +100,7 @@ function Tile({ data, selected }: NodeProps<StudioNode>) {
   const definition = data.definition;
   const ports = [
     ...outputPorts(definition),
-    ...(definition.type === "tool_call" ? ["tool"] : []),
+    ...(["tool_call", "python_tool"].includes(definition.type) ? ["tool"] : []),
   ];
   const subflow = ["agent", "playbook_call", "playbook_selector"].includes(
     definition.type,
@@ -568,6 +568,9 @@ export function WorkflowStudio({
       { profile_code: string; model: string }[]
     >([]),
     [connectors, setConnectors] = useState<AvailableConnector[]>([]);
+  const [pythonTools, setPythonTools] = useState<
+    { code: string; name: string }[]
+  >([]);
   const [versions, setVersions] = useState<Definition[]>([]),
     [readOnly, setReadOnly] = useState(false),
     [breadcrumbs, setBreadcrumbs] = useState<Definition[]>([]);
@@ -621,11 +624,22 @@ export function WorkflowStudio({
     Promise.all([
       workflowRequest<{ items: typeof profiles }>("/admin/llm-profiles"),
       workflowRequest<{ items: AvailableConnector[] }>("/admin/connectors"),
+      workflowRequest<{
+        items: {
+          code: string;
+          name: string;
+          enabled: boolean;
+          active_revision?: number;
+        }[];
+      }>("/admin/python-tools"),
     ])
-      .then(([p, c]) => {
+      .then(([p, c, python]) => {
         if (active) {
           setProfiles(p.items);
           setConnectors(c.items);
+          setPythonTools(
+            python.items.filter((tool) => tool.enabled && tool.active_revision),
+          );
         }
       })
       .catch(() => {
@@ -671,10 +685,10 @@ export function WorkflowStudio({
   }
   const unsaved = Boolean(
     draft &&
-      !readOnly &&
-      (!saved ||
-        invalidAgent ||
-        comparable(draft, configuration) !== comparable(saved)),
+    !readOnly &&
+    (!saved ||
+      invalidAgent ||
+      comparable(draft, configuration) !== comparable(saved)),
   );
   useEffect(() => {
     if (!unsaved) return;
@@ -1288,6 +1302,7 @@ export function WorkflowStudio({
                     value={node.config}
                     profiles={profiles}
                     connectors={connectors}
+                    pythonTools={pythonTools}
                     definitions={items}
                     onChange={(config) => {
                       setGraph({
@@ -1403,6 +1418,7 @@ export function WorkflowStudio({
                   value={configuration!}
                   profiles={profiles}
                   connectors={connectors}
+                  pythonTools={pythonTools}
                   definitions={items}
                   onChange={(cfg) => setAgentJson(pretty(cfg))}
                 />

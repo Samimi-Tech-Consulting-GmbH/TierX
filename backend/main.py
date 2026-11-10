@@ -245,6 +245,8 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 
 app.include_router(auth_router, prefix="/api/v1")
+from app.api.v2.python_tools import router as python_tools_router
+app.include_router(python_tools_router, prefix="/api/v2")
 app.include_router(releases_router, prefix="/api/v1")
 app.include_router(playbooks_router, prefix="/api/v1")
 app.include_router(schema_registry_router, prefix="/api/v1")

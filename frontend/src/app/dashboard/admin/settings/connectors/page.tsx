@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { ToolNavigation } from "@/components/tool-navigation";
 import { UserRole } from "@/lib/types";
 import { workflowRequest } from "@/lib/workflows";
 import {
@@ -87,6 +88,7 @@ export default function Page() {
     return (
       <ResourceLibrary
         title="Tools & integrations"
+        navigation={<ToolNavigation active="connectors" />}
         description="Connect approved REST and MCP providers. Agents and workflows can use only the tools you authorize."
         createLabel="Add integration"
         loading={loading}

@@ -24,6 +24,7 @@ type Run = WorkflowRun & {
   children?: { run_id: string; definition_ref: string; state: string }[];
   tool_calls?: unknown[];
   model_calls?: unknown[];
+  python_calls?: unknown[];
 };
 export function WorkflowRunView({
   tenantId,
@@ -320,7 +321,11 @@ export function WorkflowRunView({
         <summary>Model calls and tool delivery metadata</summary>
         <pre className="overflow-auto whitespace-pre-wrap text-xs">
           {JSON.stringify(
-            { models: run.model_calls, tools: run.tool_calls },
+            {
+              models: run.model_calls,
+              tools: run.tool_calls,
+              python: run.python_calls,
+            },
             null,
             2,
           )}

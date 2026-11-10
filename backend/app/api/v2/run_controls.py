@@ -1,4 +1,5 @@
 """Tenant-isolated execution inspection and explicit analyst feedback."""
+import asyncio
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
@@ -42,7 +43,7 @@ def set_alert_decision(alert_id: str, body: AnalystDecision, tenant_id=Depends(v
 
 
 @router.post("/runs/{run_id}/cancel")
-def cancel(run_id: str, tenant_id=Depends(verify_tenant_access), user=Depends(require_platform_admin)):
+async def cancel(run_id: str, tenant_id=Depends(verify_tenant_access), user=Depends(require_platform_admin)):
     db = db_for(tenant_id)
     run = found(db.v2_runs, {"run_id": run_id})
     root = run.get("root_run_id", run_id)
@@ -62,6 +63,16 @@ def cancel(run_id: str, tenant_id=Depends(verify_tenant_access), user=Depends(re
     db.alerts.update_one({"alert_id": run["alert_id"], "run_id": root}, {"$set": {"workflow_state": "CANCELLED"}})
     db.alerts.update_one({"alert_id": run["alert_id"], "run_id": root, "analysis_status": {"$ne": "SUCCEEDED"}},
         {"$set": {"analysis_status": "FAILED", "status": "ERROR", "analysis_error": {"type": "CANCELLED"}, "updated_at": now}})
+    # Best-effort immediate kill; broker deadlines still bound execution if transport fails.
+    from tierx_workflows.python_client import broker_request
+    calls = list(db.v2_python_calls.find({"root_run_id": root, "state": {"$in": ["PENDING", "RUNNING"]}}, {"call_id": 1}).limit(100))
+    db.v2_python_calls.update_many({"root_run_id": root, "state": {"$in": ["PENDING", "RUNNING"]}},
+        {"$set": {"state": "CANCELLED", "error_type": "PYTHON_CANCELLED", "completed_at": now}})
+    if calls:
+        try:
+            await asyncio.wait_for(asyncio.gather(*(broker_request(call["call_id"], cancel=True) for call in calls), return_exceptions=True), timeout=3)
+        except TimeoutError:
+            pass
     return {"root_run_id": root, "state": "CANCELLED", "warning": "Already dispatched external requests cannot be recalled."}
 
 

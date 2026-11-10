@@ -1,0 +1,32 @@
+# Optional runner infrastructure, never an alternative workflow engine.
+# The socket MUST belong to a dedicated rootless daemon, not the application daemon.
+services:
+  python-broker:
+    image: ${TIERX_PYTHON_BROKER_IMAGE:?Set an immutable broker image digest}
+    restart: unless-stopped
+    user: "2101:2101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:rw,noexec,nosuid,size=16m]
+    environment:
+      DOCKER_HOST: unix:///run/python-docker.sock
+      TIERX_PYTHON_IMAGE: ${TIERX_PYTHON_IMAGE:?Set an immutable Python job image digest}
+      TIERX_PYTHON_BROKER_TOKEN: ${TIERX_PYTHON_BROKER_TOKEN:?Set a private broker token}
+      TIERX_PYTHON_DENIED_NETWORKS: ${TIERX_PYTHON_DENIED_NETWORKS:?Set infrastructure CIDRs as JSON}
+    volumes:
+      - ${TIERX_PYTHON_ROOTLESS_SOCKET:?Set the dedicated rootless socket}:/run/python-docker.sock
+      - ${TIERX_PYTHON_CGROUP_PATH:?Set the delegated user cgroup path}:/runner-cgroup:ro
+      - ${TIERX_PYTHON_STATE_DIR:?Set a private directory owned by UID 2101}:/data
+    # No published ports; only backend and pipeline use the private broker API.
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 128
+  backend:
+    environment:
+      - TIERX_PYTHON_BROKER_URL=http://python-broker:8095
+      - TIERX_PYTHON_BROKER_TOKEN=${TIERX_PYTHON_BROKER_TOKEN:?Set a private broker token}
+  pipeline:
+    environment:
+      - TIERX_PYTHON_BROKER_URL=http://python-broker:8095
+      - TIERX_PYTHON_BROKER_TOKEN=${TIERX_PYTHON_BROKER_TOKEN:?Set a private broker token}

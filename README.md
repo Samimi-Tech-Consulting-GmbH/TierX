@@ -14,6 +14,8 @@ routes one raw alert from a Jira project into a configured tenant, source
 system, and alert type while keeping the ingestion proxy private.
 The new platform-managed graph runtime, fixed workflow URLs, nested playbooks,
 agents, and REST/MCP tools are documented in [Workflow Studio](docs/workflows.md).
+Platform-admin-authored [Python tools](docs/python-tools.md) run in disposable
+containers through a separately provisioned rootless execution broker.
 It is disabled by default pending an explicit installation cutover.
 
 The Docker Compose stack includes:

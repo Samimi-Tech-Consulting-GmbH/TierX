@@ -18,7 +18,10 @@ export function WorkflowConnections({
   const from = graph.nodes.find((n) => n.id === source),
     to = graph.nodes.find((n) => n.id === target);
   const ports = from
-    ? [...outputPorts(from), ...(from.type === "tool_call" ? ["tool"] : [])]
+    ? [
+        ...outputPorts(from),
+        ...(["tool_call", "python_tool"].includes(from.type) ? ["tool"] : []),
+      ]
     : [];
   const duplicate = graph.edges.some(
     (e) =>

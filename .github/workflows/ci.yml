@@ -21,6 +21,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  python-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install ./kb_shared pytest
+      - run: pytest python_runner/ -q
+      - run: docker build -f python_runner/Dockerfile.job -t tierx-python-job:test .
+      - run: TIERX_TEST_PYTHON_IMAGE=tierx-python-job:test pytest python_runner/test_container_acceptance.py -q
+      - run: docker build -f python_runner/Dockerfile.broker -t tierx-python-broker:test .
   kb-semantic:
     runs-on: ubuntu-latest
     defaults:
@@ -217,7 +229,7 @@ jobs:
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
       )
-    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, workflow-provider, workflow-sandbox, configuration, kb-semantic]
+    needs: [backend, ingestion, pipeline, frontend, jira-forge, enrichment-action-example, workflow-provider, workflow-sandbox, configuration, kb-semantic, python-runner]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.next.outputs.version }}
@@ -254,6 +266,12 @@ jobs:
           - service: backend
             context: .
             dockerfile: backend/Dockerfile
+          - service: python-job
+            context: .
+            dockerfile: python_runner/Dockerfile.job
+          - service: python-broker
+            context: .
+            dockerfile: python_runner/Dockerfile.broker
           - service: frontend
             context: frontend
             dockerfile: frontend/Dockerfile
@@ -337,7 +355,7 @@ jobs:
           REGISTRY_NAMESPACE: samimi-tech-consulting-gmbh
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         run: |
-          for service in backend frontend ingestion-proxy pipeline init enrichment-action-example kb-semantic; do
+          for service in backend frontend ingestion-proxy pipeline init enrichment-action-example kb-semantic python-job python-broker; do
             docker buildx imagetools create \
               --tag "ghcr.io/${REGISTRY_NAMESPACE}/tierx-${service}:${RELEASE_VERSION}" \
               "ghcr.io/${REGISTRY_NAMESPACE}/tierx-${service}:${GITHUB_SHA}"
