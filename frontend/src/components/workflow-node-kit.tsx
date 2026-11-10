@@ -9,6 +9,7 @@ import {
   BookOpen,
   Database,
   Plug,
+  Code2,
   Network,
   BrainCircuit,
   Bot,
@@ -32,6 +33,13 @@ type Definition = {
   color: string;
 };
 export const NODE_DESIGN: Record<string, Definition> = {
+  python_tool: {
+    title: "Python tool",
+    description: "Run a published Python function in an isolated container",
+    group: "Gather context",
+    icon: Code2,
+    color: "#a78bfa",
+  },
   playbook_call: {
     title: "Playbook subflow",
     description: "Run a reusable investigation flow",
@@ -333,6 +341,7 @@ export function NodeFields({
   onChange,
   profiles,
   connectors = [],
+  pythonTools = [],
   definitions = [],
 }: {
   node: FlowNode;
@@ -340,6 +349,7 @@ export function NodeFields({
   onChange: (value: Record<string, unknown>) => void;
   profiles: { profile_code: string; model: string }[];
   connectors?: AvailableConnector[];
+  pythonTools?: { code: string; name: string }[];
   definitions?: { kind: string; code: string; name: string }[];
 }) {
   const set = (key: string, item: unknown) =>
@@ -596,6 +606,27 @@ export function NodeFields({
       )}
       {node.type === "enrichment_action" &&
         text("action_code", "Registered action code")}
+      {node.type === "python_tool" && (
+        <label className="block space-y-2 text-xs">
+          Published Python tool
+          <select
+            className={inputClass}
+            value={String(value.python_tool_code || "")}
+            onChange={(e) => set("python_tool_code", e.target.value)}
+          >
+            <option value="">Select a published tool</option>
+            {pythonTools.map((tool) => (
+              <option key={tool.code} value={tool.code}>
+                {tool.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-muted-foreground">
+            The alert and optional cluster snapshot are supplied automatically.
+            Tenant grants are checked at execution.
+          </p>
+        </label>
+      )}
       {node.type === "tool_call" && (
         <>
           <label className="block space-y-1.5 text-xs text-muted-foreground">
@@ -695,6 +726,10 @@ export function NodeFields({
                     name: "Related cluster evidence",
                   },
                   { code: "knowledge_base", name: "Search tenant knowledge" },
+                  ...pythonTools.map((tool) => ({
+                    code: `python:${tool.code}`,
+                    name: `Python · ${tool.name}`,
+                  })),
                   ...connectors.flatMap((c) =>
                     c.tools.map((t) => ({
                       code: `connector:${c.connector_code}:${t.name}`,
@@ -715,6 +750,9 @@ export function NodeFields({
                           "cluster_evidence",
                           "knowledge_base",
                         ].includes(code) &&
+                        !pythonTools.some(
+                          (tool) => code === `python:${tool.code}`,
+                        ) &&
                         !connectors.some((c) =>
                           c.tools.some(
                             (t) =>

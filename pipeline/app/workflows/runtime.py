@@ -75,10 +75,68 @@ async def invoke(db, run, job, reference, slot):
 
 
 class WorkflowTools(Tools):
+    async def python_tool(self, db, run, job, code, identity):
+        from tierx_workflows.python_tools import input_snapshot, PythonToolError
+        from tierx_workflows.python_client import broker_request, execution_definition
+        pinned = run["resources"].get("python_tools", {}).get(code)
+        current = await get_database().workflow_python_tools.find_one({"code": code, "enabled": True, "tenant_ids": run["tenant_id"]})
+        if not pinned or not current:
+            raise NodeFailure("PYTHON_TOOL_REVOKED")
+        await reserve(db, run, identity)
+        previous = await db.v2_python_calls.find_one({"call_id": identity})
+        if previous and previous["state"] == "SUCCEEDED":
+            return {"python_call_id": identity, "tool_code": code, "revision": pinned["revision"]}
+        if previous and previous["state"] in {"FAILED", "UNCERTAIN", "CANCELLED"}:
+            raise NodeFailure(previous.get("error_type", "PYTHON_EXECUTION_UNCERTAIN"))
+        try:
+            if not previous:
+                alert = await db.v2_alerts.find_one({"alert_id": run["alert_id"], "tenant_id": run["tenant_id"]})
+                if not alert:
+                    raise NodeFailure("PYTHON_ALERT_UNAVAILABLE")
+                cluster, members = None, []
+                if alert.get("cluster_id"):
+                    cluster = await db.v2_clusters.find_one({"cluster_id": alert["cluster_id"], "tenant_id": run["tenant_id"]})
+                    if cluster:
+                        members = await db.v2_alerts.find({"cluster_id": cluster["cluster_id"], "tenant_id": run["tenant_id"]}).sort("alert_id", 1).limit(101).to_list(None)
+                snapshot = input_snapshot(alert, cluster, members)
+                await db.v2_python_calls.update_one({"call_id": identity}, {"$setOnInsert": {
+                    "call_id": identity, "run_id": run["run_id"], "root_run_id": run.get("root_run_id", run["run_id"]),
+                    "tenant_id": run["tenant_id"], "job_id": job["job_id"], "tool_code": code,
+                    "revision": pinned["revision"], "code_sha256": checksum(pinned["source"]),
+                    "safe_input_snapshot": {"contract_version": snapshot["contract_version"], "alert_id": snapshot["alert"]["alert_id"],
+                        "cluster_id": snapshot["cluster"]["cluster_id"] if snapshot["cluster"] else None,
+                        "member_count": len(snapshot["cluster"]["members"]) if snapshot["cluster"] else 0},
+                    "input_sha256": checksum(snapshot), "input": snapshot, "definition": execution_definition(pinned),
+                    "state": "PENDING", "created_at": now(), "timeout_seconds": pinned["timeout_seconds"]}}, upsert=True)
+                previous = await db.v2_python_calls.find_one({"call_id": identity})
+            response = await broker_request(identity, request={"definition": previous["definition"], "input": previous["input"]})
+            fields = {"state": response["state"], "last_checked_at": now()}
+            fields.update({key: response[key] for key in ("runtime_digest", "queued_at", "started_at", "deadline", "duration_seconds", "destination_decisions") if key in response})
+            if response["state"] == "SUCCEEDED":
+                fields.update(result=response["result"], completed_at=now(), output_sha256=checksum(response["result"]))
+            elif response["state"] in {"FAILED", "UNCERTAIN", "CANCELLED"}:
+                fields.update(error_type=response.get("error", "PYTHON_EXECUTION_FAILED"), completed_at=now())
+            await db.v2_python_calls.update_one({"call_id": identity, "state": {"$nin": ["SUCCEEDED", "FAILED", "UNCERTAIN", "CANCELLED"]}}, {"$set": fields})
+            if response["state"] in {"PENDING", "RUNNING"}:
+                raise NodeWaiting("PYTHON_" + response["state"])
+            if response["state"] != "SUCCEEDED":
+                raise NodeFailure(fields["error_type"])
+            return {"python_call_id": identity, "tool_code": code, "revision": pinned["revision"]}
+        except PythonToolError as exc:
+            # A timed-out HTTP submission may already have started a side effect.
+            # Record uncertainty rather than dispatching this identity afresh.
+            await db.v2_python_calls.update_one({"call_id": identity, "state": {"$in": ["PENDING", "RUNNING"]}},
+                {"$set": {"state": "UNCERTAIN", "error_type": str(exc), "completed_at": now()}})
+            raise NodeFailure(str(exc)) from exc
+
     async def materialize(self, db, value, cache=None):
         result = await super().materialize(db, value, cache)
         if isinstance(result, dict):
             output = result.get("output")
+            if isinstance(output, dict) and output.get("python_call_id"):
+                call = await db.v2_python_calls.find_one({"call_id": output["python_call_id"], "state": "SUCCEEDED"})
+                if call:
+                    result = {**result, "output": {**output, "result": call["result"]}}
             if isinstance(output, dict) and output.get("call_id"):
                 call = await db.v2_tool_calls.find_one({"_id": output["call_id"], "state": "SUCCEEDED"})
                 if call:
@@ -151,6 +209,8 @@ class WorkflowTools(Tools):
             raise NodeFailure("DEFINITION_REVOKED")
         if kind in {"agent", "playbook_call"}:
             return await invoke(db, run, job, definition["references"][node["id"]], node["id"]), "success"
+        if kind == "python_tool":
+            return await self.python_tool(db, run, job, cfg["python_tool_code"], checksum([job["job_id"], "python", cfg["python_tool_code"]])), "success"
         if kind == "playbook_selector":
             return await self.select(db, run, node, job, alert, definition), "success"
         if kind in {"tool_call", "webhook"}:
@@ -373,6 +433,8 @@ class WorkflowTools(Tools):
                 _, code, tool_name = name.split(":")
                 registered = next(item for item in run["resources"]["connectors"][code]["tools"] if item["name"] == tool_name)
                 parameters, description = registered["input_schema"], registered["description"]
+            elif name.startswith("python:"):
+                description = run["resources"]["python_tools"][name[7:]]["description"]
             tools.append({"type": "function", "function": {"name": f"tool_{index}", "description": description, "parameters": parameters}})
         messages.append({"role": "system", "content": "Final result must match JSON schema: " + canonical(schema).decode()})
         calls = 0
@@ -406,6 +468,12 @@ class WorkflowTools(Tools):
                 if name.startswith("connector:"):
                     _, code, tool_name = name.split(":")
                     output = await self.connector(db, run, job, code, tool_name, arguments, identity)
+                elif name.startswith("python:"):
+                    if arguments:
+                        raise NodeFailure("PYTHON_TOOL_ARGUMENTS_FORBIDDEN")
+                    reference = await self.python_tool(db, run, job, name[7:], identity)
+                    saved = await db.v2_python_calls.find_one({"call_id": reference["python_call_id"], "state": "SUCCEEDED"})
+                    output = saved["result"]
                 elif arguments:
                     raise NodeFailure("BUILTIN_TOOL_ARGUMENTS_FORBIDDEN")
                 elif name.startswith(("agent:", "playbook:")):

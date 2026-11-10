@@ -24,9 +24,9 @@ NODE_TYPES = {
     "complete",
     "dead_letter",
     "playbook_call", "playbook_selector", "agent", "tool_call",
-    "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook",
+    "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook", "python_tool",
 }
-MODERN_NODE_TYPES = {"playbook_call", "playbook_selector", "agent", "tool_call", "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook"}
+MODERN_NODE_TYPES = {"playbook_call", "playbook_selector", "agent", "tool_call", "kb_deterministic", "kb_semantic", "persist_analysis", "notify_jira", "webhook", "python_tool"}
 MUTATIONS = {
     "kb_deterministic", "kb_semantic", "persist_analysis",
     "normalization",
@@ -83,6 +83,7 @@ CONFIG = {
     "agent": {"definition_code", "revision"},
     "playbook_selector": {"mode", "mappings", "candidates", "fallback", "profile_code", "threshold"},
     "tool_call": {"connector_code", "tool_name", "arguments", "argument_paths"},
+    "python_tool": {"python_tool_code"},
     "kb_deterministic": {"top_k"},
     "kb_semantic": {"top_k"},
     "persist_analysis": {"input_path"},
@@ -241,8 +242,10 @@ def validate_graph(graph):
         cfg = node.get("config", {})
         if not isinstance(cfg, dict) or set(cfg) - CONFIG[kind]:
             raise GraphError(f"Invalid configuration for {nid}")
+        if kind == "python_tool" and not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", str(cfg.get("python_tool_code", ""))):
+            raise GraphError("Published Python tool required")
         if graph.get("format_version") != "2.0" and (kind in MODERN_NODE_TYPES or any(
-            str(tool).startswith(("connector:", "agent:", "playbook:")) for tool in cfg.get("tools", []) or []
+            str(tool).startswith(("connector:", "agent:", "playbook:", "python:")) for tool in cfg.get("tools", []) or []
         )):
             raise GraphError("Modern nodes and tools require workflow format 2.0")
         if graph.get("format_version") == "2.0" and "debounce_ms" in cfg:
@@ -313,7 +316,7 @@ def validate_graph(graph):
             for tool in cfg.get("tools", []):
                 if not isinstance(tool, str) or (
                     tool not in {"knowledge_base", "alert_evidence", "cluster_evidence"}
-                    and not re.fullmatch(r"(?:action|agent|playbook):[a-z0-9][a-z0-9_-]{0,63}", tool)
+                    and not re.fullmatch(r"(?:action|agent|playbook|python):[a-z0-9][a-z0-9_-]{0,63}", tool)
                     and not re.fullmatch(r"connector:[a-z0-9][a-z0-9_-]{0,63}:[a-zA-Z0-9_-]{1,64}", tool)
                 ):
                     raise GraphError("Unknown tool reference")
@@ -442,9 +445,10 @@ def validate_graph(graph):
         if src not in by_id or dst not in by_id or dst == entries[0]:
             raise GraphError("Invalid edge endpoint")
         if port == "tool":
-            if by_id[src]["type"] != "tool_call" or by_id[dst]["type"] != "llm_tools":
+            if by_id[src]["type"] not in {"tool_call", "python_tool"} or by_id[dst]["type"] != "llm_tools":
                 raise GraphError("Capability edges connect tools to a tool-calling agent")
-            reference = f"connector:{by_id[src]['config']['connector_code']}:{by_id[src]['config']['tool_name']}"
+            reference = (f"python:{by_id[src]['config']['python_tool_code']}" if by_id[src]["type"] == "python_tool"
+                else f"connector:{by_id[src]['config']['connector_code']}:{by_id[src]['config']['tool_name']}")
             if reference not in by_id[dst].get("config", {}).get("tools", []):
                 raise GraphError("Capability edge must match the explicit agent allowlist")
             if src not in execution_targets:
@@ -510,7 +514,7 @@ def validate_graph(graph):
                 "playbook_selector": {"normalization"}, "agent": {"normalization"},
                 "knowledge_base": {"normalization"}, "kb_deterministic": {"normalization"},
                 "kb_semantic": {"normalization"}, "enrichment_action": {"normalization"},
-                "tool_call": {"normalization"}, "correlation": {"normalization"},
+                "tool_call": {"normalization"}, "python_tool": {"normalization"}, "correlation": {"normalization"},
                 "llm_analysis": {"normalization"}, "llm_tools": {"normalization"},
             }
         if not requirements.get(kind, set()) <= before:
