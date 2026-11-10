@@ -18,7 +18,7 @@ export function allowed(method, path) {
         path === "/api/v1/auth/me"))
   );
 }
-export function createSandbox(
+export function createAlertSimulator(
   targetValue,
   upstreamFetch = fetch,
   uiValue = targetValue,
@@ -276,6 +276,7 @@ export function createSandbox(
           "scenario.mjs",
           "runner.mjs",
           "scenario-ui.js",
+          "tabs.js",
         ].includes(file)
       )
         return send(404, "Not found", "text/plain");
@@ -299,12 +300,16 @@ export function createSandbox(
     }
   });
 }
+// Compatibility for existing integrations; the product is now Alert Simulator.
+export const createSandbox = createAlertSimulator;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.SANDBOX_PORT || 4174);
   const target = process.env.TIERX_TARGET || "http://127.0.0.1:8080";
-  createSandbox(target, fetch, process.env.TIERX_UI_ORIGIN || target).listen(
-    port,
-    "127.0.0.1",
-    () => console.log(`TierX Workflow Sandbox: http://127.0.0.1:${port}`),
+  createAlertSimulator(
+    target,
+    fetch,
+    process.env.TIERX_UI_ORIGIN || target,
+  ).listen(port, "127.0.0.1", () =>
+    console.log(`TierX Alert Simulator: http://127.0.0.1:${port}`),
   );
 }

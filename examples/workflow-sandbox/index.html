@@ -3,24 +3,76 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>TierX Workflow Sandbox</title>
+    <title>TierX Alert Simulator</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main>
-      <h1>TierX Workflow Sandbox</h1>
-      <p id="target"></p>
-      <label
-        >Environment<select
-          id="target-select"
-          aria-label="Target environment"
-        ></select
-      ></label>
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">TierX · Developer tools</p>
+          <h1>TierX Alert Simulator</h1>
+          <p class="muted">
+            Create synthetic alerts, replay scenarios, and inspect workflow
+            results.
+          </p>
+        </div>
+        <div class="environment">
+          <p id="target"></p>
+          <label
+            >Environment<select
+              id="target-select"
+              aria-label="Target environment"
+            ></select
+          ></label>
+        </div>
+      </header>
       <p>
         Only send synthetic alerts to a disposable tenant. Tokens stay in page
         memory and disappear on reload.
       </p>
-      <section>
+      <nav class="tabs" role="tablist" aria-label="Simulator tools">
+        <button
+          role="tab"
+          id="tab-connection"
+          aria-controls="panel-connection"
+          aria-selected="true"
+        >
+          Connection
+        </button>
+        <button
+          role="tab"
+          id="tab-manual"
+          aria-controls="panel-manual"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          Send alerts
+        </button>
+        <button
+          role="tab"
+          id="tab-scenarios"
+          aria-controls="panel-scenarios"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          AI scenarios &amp; replay
+        </button>
+        <button
+          role="tab"
+          id="tab-results"
+          aria-controls="panel-results"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          Live results
+        </button>
+      </nav>
+      <section
+        id="panel-connection"
+        role="tabpanel"
+        aria-labelledby="tab-connection"
+      >
         <h2>Observe executions</h2>
         <form id="login">
           <label
@@ -41,9 +93,11 @@
         <p id="session">
           Not signed in. An observer login is required to read traces.
         </p>
-      </section>
-      <section>
-        <h2>Send to a fixed workflow</h2>
+        <h2>Workflow destination</h2>
+        <p class="muted">
+          Set the ingestion path and entry token for the selected environment.
+          Observer login is only needed for live results.
+        </p>
         <label
           >Ingestion path<input
             id="path"
@@ -53,8 +107,21 @@
           >Workflow entry token<input
             id="entry-token"
             type="password"
-            autocomplete="off" /></label
-        ><label
+            autocomplete="off"
+        /></label>
+      </section>
+      <section
+        id="panel-manual"
+        role="tabpanel"
+        aria-labelledby="tab-manual"
+        hidden
+      >
+        <h2>Send alerts</h2>
+        <p class="muted">
+          Edit a synthetic sample and send it once, or send an identical pair to
+          test deduplication. Configure the destination in Connection.
+        </p>
+        <label
           >Alert JSON<textarea
             id="payload"
             rows="18"
@@ -69,7 +136,12 @@
         </div>
         <p id="message" role="status"></p>
       </section>
-      <section>
+      <section
+        id="panel-scenarios"
+        role="tabpanel"
+        aria-labelledby="tab-scenarios"
+        hidden
+      >
         <h2>AI scenarios &amp; replay</h2>
         <p id="ai-provider"></p>
         <p class="muted">
@@ -237,7 +309,12 @@ Generate synthetic endpoint alerts in the sample's format. Use realistic but inv
           /></label>
         </details>
       </section>
-      <section>
+      <section
+        id="panel-results"
+        role="tabpanel"
+        aria-labelledby="tab-results"
+        hidden
+      >
         <div class="buttons">
           <h2>Last five submitted alerts</h2>
           <button id="clear">Clear all</button>
@@ -251,5 +328,6 @@ Generate synthetic endpoint alerts in the sample's format. Use realistic but inv
     </main>
     <script type="module" src="app.js"></script>
     <script type="module" src="scenario-ui.js"></script>
+    <script type="module" src="tabs.js"></script>
   </body>
 </html>

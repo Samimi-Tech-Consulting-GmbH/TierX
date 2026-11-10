@@ -1,4 +1,8 @@
-# TierX Workflow Sandbox
+# TierX Alert Simulator
+
+The UI is organized into Connection, Send alerts, AI scenarios & replay, and Live
+results tabs. Switching tabs preserves inputs and does not stop an active run.
+The package directory and `SANDBOX_*` configuration names remain compatible.
 
 Dependency-free local alert sender and node-debug watcher. Requires Node.js 20+.
 
