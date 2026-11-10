@@ -2,6 +2,24 @@
 
 Dependency-free local alert sender and node-debug watcher. Requires Node.js 20+.
 
+## Switch environments without restarting
+
+The Environment selector switches between server-approved targets. Configure
+additional targets once using `SANDBOX_TARGETS` (a JSON array), for example:
+
+```sh
+TIERX_TARGET=http://127.0.0.1:18084 \
+SANDBOX_TARGETS='[{"label":"Testing","target":"https://testing-api.example.com","ui_origin":"https://testing.example.com"}]' \
+npm run dev
+```
+
+Switching stops local requests/watchers and clears login, entry token and workflow
+path. Re-enter the destination environment's credentials and workflow path.
+Payloads remain available for reuse. Targets cannot be supplied by AI or imported
+scenarios; arbitrary browser-supplied proxy destinations are rejected. Target
+configuration changes require one server restart, but switching configured targets
+does not. Only HTTPS and localhost HTTP origins are accepted.
+
 ```sh
 npm install
 TIERX_TARGET=https://your-instance.example npm run dev

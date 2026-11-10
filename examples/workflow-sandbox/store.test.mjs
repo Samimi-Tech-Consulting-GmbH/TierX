@@ -7,6 +7,54 @@ import { once } from "node:events";
 import { createSandbox } from "./server.mjs";
 import { scenarioStore } from "./store.mjs";
 const sample = { result: { host: "SYNTHETIC-01" } };
+test("UI target selection only routes to configured origins", async () => {
+  const calls = [];
+  const server = createSandbox(
+    "http://127.0.0.1:18084",
+    async (url, options) => {
+      calls.push({ url: String(url), headers: options.headers });
+      return new Response("{}", { status: 200 });
+    },
+    undefined,
+    {
+      ai: { provider: "disabled" },
+      targets: [{ label: "Testing", target: "https://testing.example.com" }],
+    },
+  );
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const config = await (await fetch(origin + "/config")).json();
+    assert.equal(config.targets.length, 2);
+    const selected = await fetch(origin + "/proxy/api/v1/auth/me", {
+      headers: {
+        "X-Sandbox-Target": "https://testing.example.com",
+        Authorization: "Bearer observer",
+      },
+    });
+    assert.equal(selected.status, 200);
+    assert.equal(calls[0].url, "https://testing.example.com/api/v1/auth/me");
+    assert.equal(calls[0].headers["X-Sandbox-Target"], undefined);
+    assert.equal(
+      (
+        await fetch(origin + "/proxy/api/v1/auth/me", {
+          headers: { "X-Sandbox-Target": "https://unapproved.example.com" },
+        })
+      ).status,
+      400,
+    );
+    assert.equal(calls.length, 1);
+    assert.throws(() =>
+      createSandbox("https://example.com", fetch, undefined, {
+        targets: [{ target: "https://user:secret@testing.example.com" }],
+      }),
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 test("local scenarios/outcomes survive reload, export without credentials and restrict permissions", async () => {
   const directory = await mkdtemp(join(tmpdir(), "tierx-scenarios-"));
   try {

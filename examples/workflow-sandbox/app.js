@@ -3,6 +3,7 @@ let observerToken = "",
   target = "",
   uiOrigin = "",
   cards = [];
+let environmentController = new AbortController();
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -32,39 +33,81 @@ fetch("/config")
     target = config.target;
     uiOrigin = config.ui_origin || target;
     $("target").textContent = "Target: " + target;
+    const environments = config.targets || [
+      { label: "Default", target, ui_origin: uiOrigin },
+    ];
+    $("target-select").replaceChildren(
+      ...environments.map(
+        (item) => new Option(item.label + " — " + item.target, item.target),
+      ),
+    );
+    $("target-select").onchange = () => {
+      const selected = environments.find(
+        (item) => item.target === $("target-select").value,
+      );
+      if (
+        !confirm(
+          `Switch sandbox to ${selected.target}? Current requests/watchers will stop, and login, workflow path and tokens will be cleared.`,
+        )
+      ) {
+        $("target-select").value = target;
+        return;
+      }
+      $("disconnect").onclick();
+      cards = [];
+      render();
+      $("path").value = "";
+      $("password").value = "";
+      target = selected.target;
+      uiOrigin = selected.ui_origin;
+      $("target").textContent = "Target: " + target;
+      document.dispatchEvent?.(new Event("sandbox-target-change"));
+    };
   });
 async function request(
   path,
   { method = "GET", body, token = observerToken, signal, identity } = {},
 ) {
-  const response = await fetch("/proxy" + path, {
-    method,
-    signal,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: "Bearer " + token } : {}),
-      ...(identity ? { "Idempotency-Key": identity } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  let result;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const environmentSignal = environmentController.signal;
+  environmentSignal.addEventListener("abort", abort, { once: true });
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted || environmentSignal.aborted) controller.abort();
   try {
-    result = await response.json();
-  } catch {
-    throw Object.assign(new Error("TierX returned an unreadable response."), {
-      status: response.status,
+    const response = await fetch("/proxy" + path, {
+      method,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Sandbox-Target": target,
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+        ...(identity ? { "Idempotency-Key": identity } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw Object.assign(new Error("TierX returned an unreadable response."), {
+        status: response.status,
+      });
+    }
+    if (!response.ok)
+      throw Object.assign(
+        new Error(
+          typeof result.detail === "string"
+            ? result.detail
+            : JSON.stringify(result.detail),
+        ),
+        { status: response.status, body: result },
+      );
+    return result;
+  } finally {
+    environmentSignal.removeEventListener("abort", abort);
+    signal?.removeEventListener("abort", abort);
   }
-  if (!response.ok)
-    throw Object.assign(
-      new Error(
-        typeof result.detail === "string"
-          ? result.detail
-          : JSON.stringify(result.detail),
-      ),
-      { status: response.status, body: result },
-    );
-  return result;
 }
 $("login").onsubmit = async (event) => {
   event.preventDefault();
@@ -87,6 +130,8 @@ $("login").onsubmit = async (event) => {
   }
 };
 $("disconnect").onclick = () => {
+  environmentController.abort();
+  environmentController = new AbortController();
   observerToken = "";
   $("entry-token").value = "";
   document.dispatchEvent?.(new Event("sandbox-disconnect"));

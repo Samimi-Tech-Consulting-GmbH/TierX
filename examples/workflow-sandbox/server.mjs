@@ -33,6 +33,38 @@ export function createSandbox(
   );
   const target = new URL(targetValue);
   const ui = new URL(uiValue);
+  const extraTargets =
+    options.targets || JSON.parse(process.env.SANDBOX_TARGETS || "[]");
+  if (!Array.isArray(extraTargets) || extraTargets.length > 20)
+    throw new Error("SANDBOX_TARGETS must be an array of at most 20 targets.");
+  const targets = [
+    { label: "Default", target: target.origin, ui_origin: ui.origin },
+    ...extraTargets,
+  ].map((item) => {
+    const origin = new URL(item.target),
+      dashboard = new URL(item.ui_origin || item.target);
+    for (const value of [origin, dashboard])
+      if (
+        value.username ||
+        value.password ||
+        value.search ||
+        value.hash ||
+        value.pathname !== "/" ||
+        !(
+          value.protocol === "https:" ||
+          (value.protocol === "http:" &&
+            ["localhost", "127.0.0.1", "[::1]"].includes(value.hostname))
+        )
+      )
+        throw new Error(
+          "Targets must be HTTPS or localhost HTTP origins without credentials or paths.",
+        );
+    return {
+      label: String(item.label || origin.origin).slice(0, 100),
+      target: origin.origin,
+      ui_origin: dashboard.origin,
+    };
+  });
   if (
     ui.username ||
     ui.password ||
@@ -87,6 +119,7 @@ export function createSandbox(
           JSON.stringify({
             target: target.origin,
             ui_origin: ui.origin,
+            targets,
             ai: {
               enabled: ai.provider !== "disabled",
               provider: ai.provider,
@@ -198,7 +231,13 @@ export function createSandbox(
         response.on("close", disconnected);
         try {
           // Request input can change only the pathname, never the upstream authority.
-          const destination = new URL(target.href);
+          const selected = request.headers["x-sandbox-target"] || target.origin;
+          if (!targets.some((item) => item.target === selected))
+            return send(
+              400,
+              '{"detail":"Target is not configured on this sandbox"}',
+            );
+          const destination = new URL(selected);
           destination.pathname = path;
           destination.search = "";
           destination.hash = "";

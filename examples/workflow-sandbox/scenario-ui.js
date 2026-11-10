@@ -9,6 +9,9 @@ let metadata = null,
 const status = (message) => {
   $("scenario-message").textContent = message;
 };
+document.addEventListener("sandbox-target-change", () => {
+  if (config) config.target = globalThis.sandbox.target();
+});
 async function local(path, body, signal) {
   const response = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
