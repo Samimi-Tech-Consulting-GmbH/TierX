@@ -4,7 +4,7 @@ import signal
 
 from app.core.config import settings
 from app.db.mongodb import close_client, get_database
-from tierx_runtime import COLLECTION, IDENTITY, effective, installed, heartbeat
+from tierx_runtime import COLLECTION, IDENTITY, effective, installed, heartbeat, boolean, env_value
 from app.workers.dead_letter_worker import DeadLetterWorker
 from app.workers.enrichment_worker import EnrichmentWorker
 from app.workers.fingerprint_worker import FingerprintWorker
@@ -63,6 +63,19 @@ async def main():
             db = get_database()
             document = await db[COLLECTION].find_one({"_id": IDENTITY})
             if installed(document):
+                if boolean(env_value("workflow_engine_enabled") or False):
+                    # The operator drains the legacy queues before enabling this
+                    # process-level cutover. Never start legacy analysis beside
+                    # alert-owned workflow analysis on the same collections.
+                    for name in list(optional):
+                        await stop_optional(optional, name)
+                    for worker in workers:
+                        await worker.stop()
+                    workers = []
+                    await db.service_heartbeats.update_one({"service": "pipeline"}, {
+                        "$set": heartbeat("pipeline", settings.revision)}, upsert=True)
+                    await asyncio.sleep(5)
+                    continue
                 await cleanup_workers(pending_core)
                 for name in list(pending_optional):
                     await stop_optional(pending_optional, name)

@@ -30,6 +30,32 @@ def minimal():
     }
 
 
+@pytest.mark.parametrize("bad", [None, [], "invalid"])
+def test_malformed_graph_shapes_raise_validation_errors(bad):
+    graph = minimal()
+    graph["nodes"][0]["config"] = bad
+    with pytest.raises(GraphError):
+        validate_graph(graph)
+    graph = minimal()
+    graph["edges"] = [bad]
+    with pytest.raises(GraphError):
+        validate_graph(graph)
+
+
+def test_legacy_endpoints_reject_modern_graphs_and_catalog_excludes_modern_nodes(setup):
+    client, _, _ = setup
+    modern = minimal()
+    modern["format_version"] = "2.0"
+    response = client.post("/api/v2/tenants/one/flows", json={"name": "Modern", "graph": modern})
+    assert response.status_code == 422
+    catalog = client.get("/api/v2/tenants/one/workflow-catalog").json()
+    assert not set(catalog["node_types"]) & {"agent", "tool_call", "playbook_call", "persist_analysis"}
+    legacy = minimal()
+    legacy["nodes"][1] = {"id": "done", "type": "persist_analysis", "config": {"input_path": "alert"}}
+    with pytest.raises(GraphError):
+        validate_graph(legacy)
+
+
 def test_examples_and_canvas_validation():
     from tierx_workflows.examples import examples
 

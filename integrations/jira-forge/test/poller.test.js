@@ -101,23 +101,18 @@ test("a stale cursor restarts at the first page", async () => {
   );
 });
 
-test("an ambiguous finalizing delivery is retried by the poller", async () => {
+test("workflow polling only observes and never implicitly finalizes or notifies", async () => {
   const calls = [];
   const request = async (path, options) => {
     calls.push([path, options]);
-    if (!options) return { state: "FINALIZING" };
-    return { state: "PROCESSING", alert_id: "alert-1" };
+    return { state: "COMPLETED", alert_id: "alert-1" };
   };
   const result = await refreshPendingSubmission(
     { submissionId: "submission-1" },
     request,
   );
-  assert.equal(result.state, "PROCESSING");
+  assert.equal(result.state, "COMPLETED");
   assert.deepEqual(calls, [
-    ["/api/v1/integrations/jira/submissions/submission-1", undefined],
-    [
-      "/api/v1/integrations/jira/submissions/submission-1/finalize",
-      { method: "POST", body: {} },
-    ],
+    ["/submission-1", undefined],
   ]);
 });

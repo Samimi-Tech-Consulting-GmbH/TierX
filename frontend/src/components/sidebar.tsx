@@ -85,6 +85,10 @@ function navItemActive(pathname: string, item: NavItem): boolean {
 }
 
 const navItems: NavItem[] = [
+  { href: "/dashboard/admin/workflows", label: "Workflows", icon: SlidersHorizontal,
+    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
+  { href: "/dashboard/admin/agents", label: "Agents", icon: SlidersHorizontal,
+    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
   {
     href: "/dashboard/admin",
     label: "Dashboard",
@@ -120,6 +124,8 @@ function settingsMenuItems(
           },
       { href: "/users", label: "Users", icon: Users },
       { href: "/dashboard/admin/settings/platform", label: "Platform settings", icon: SlidersHorizontal },
+      { href: "/dashboard/admin/settings/connectors", label: "Tools & integrations", icon: Plug },
+      { href: "/dashboard/admin/settings/llm-profiles", label: "Model profiles", icon: SlidersHorizontal },
       {
         href: "/dashboard/admin/integrations/jira",
         label: "Jira integration",
@@ -179,7 +185,7 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
       group: "Configuration",
     },
     {
-      href: sectionHref("playbooks", tenantId, isPlatformAdmin),
+      href: isPlatformAdmin ? "/dashboard/admin/playbooks" : sectionHref("playbooks", tenantId, false),
       label: "Playbooks",
       icon: Book,
       group: "Configuration",
@@ -188,12 +194,6 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
       href: sectionHref("knowledge-base", tenantId, isPlatformAdmin),
       label: "Knowledge Base",
       icon: LibraryBig,
-      group: "Configuration",
-    },
-    {
-      href: sectionHref("ingestion-v2", tenantId, isPlatformAdmin),
-      label: "Ingestion V2",
-      icon: ScanSearch,
       group: "Configuration",
     },
   ];

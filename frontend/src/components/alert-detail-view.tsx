@@ -21,6 +21,7 @@ import { PANEL, PANEL_NOTE, PANEL_TITLE, PILL } from "@/lib/cluster-display";
 import { scopedApi, scopedRoutes, type TenantScope } from "@/lib/tenant-scope";
 import { Button } from "@/components/ui/button";
 import { AlertAnalysisPanel } from "@/components/alert-analysis-panel";
+import { WorkflowAlertAnalysis } from "@/components/workflow-alert-analysis";
 import { cn } from "@/lib/utils";
 
 function Field({
@@ -183,9 +184,9 @@ export function AlertDetailView({
           </p>
         </div>
         {/* Processing traces live under the platform-admin debug tree. */}
-        {isAdmin ? (
+        {isAdmin || alert.workflow_format === "2.0" ? (
           <Link
-            href={`/dashboard/admin/debug/alerts/${encodeURIComponent(alert.alert_id)}`}
+            href={alert.workflow_format === "2.0" && alert.run_id ? `/dashboard/${tenantId}/workflows/runs/${alert.run_id}` : `/dashboard/admin/debug/alerts/${encodeURIComponent(alert.alert_id)}`}
             className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-[#404040] px-5 text-sm font-bold text-foreground transition-colors hover:bg-[#4a4a4a]"
           >
             <ScanSearch className="size-4" />
@@ -476,11 +477,11 @@ export function AlertDetailView({
         </div>
       ) : null}
 
-      <AlertAnalysisPanel
+      {alert.workflow_format === "2.0" ? <WorkflowAlertAnalysis tenantId={tenantId} alert={alert} /> : <AlertAnalysisPanel
         tenantId={tenantId}
         alert={alert}
         adminView={isAdmin}
-      />
+      />}
 
       <PayloadPanel
         title="Normalized payload"

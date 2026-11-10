@@ -22,6 +22,8 @@ async def infer(profile, messages, *, api_key=None, schema=None, tools=None):
         payload["options"] = {
             "temperature": profile.get("temperature", 0),
             "num_predict": profile.get("max_tokens", 2048),
+            "num_ctx": profile.get("context_tokens", 2048),
+            "num_batch": 32,
         }
         if schema:
             payload["format"] = schema

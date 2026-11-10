@@ -13,13 +13,13 @@ export class TierXRequestError extends Error {
   get retryable() { return this.status === 408 || this.status === 429 || this.status >= 500; }
 }
 const store = createConnectionStore(kvs, candidate =>
-  tierxRequest("/api/v1/integrations/jira/connection", { candidate }));
+  tierxRequest(candidate.workflowPath + "/connection", { candidate }));
 export async function getConfig({ includeSecret = false } = {}) {
   const config = await store.read(binding.getStore());
   return includeSecret ? config : publicConnection(config);
 }
-export async function saveConfig({ baseUrl, integrationId, secret }, cloudId) {
-  const destination = await prepareConnection(baseUrl);
+export async function saveConfig({ workflowUrl, integrationId, secret }, cloudId) {
+  const destination = await prepareConnection(workflowUrl);
   const candidate = {
     ...destination,
     integrationId: String(integrationId || "").trim(),
@@ -28,26 +28,36 @@ export async function saveConfig({ baseUrl, integrationId, secret }, cloudId) {
   if (!candidate.integrationId || !candidate.secret) throw new Error("Connection ID and secret are required.");
   return store.save(candidate, cloudId);
 }
-export async function prepareConnection(baseUrl) {
-  const origin = await validateDestination(baseUrl);
-  return { baseUrl: origin, egressKey: "tierx-" + createHash("sha256").update(origin).digest("hex").slice(0, 32) };
+export async function prepareConnection(workflowUrl) {
+  const url = new URL(String(workflowUrl || "").trim());
+  if (url.search || url.hash || url.username || url.password || !/^\/api\/v2\/workflows\/[a-z0-9][a-z0-9_-]{0,63}\/tenants\/[a-zA-Z0-9_-]+\/jira(?:\/submissions)?\/?$/.test(url.pathname)) {
+    throw new Error("Enter the fixed Jira workflow URL supplied by your TierX administrator.");
+  }
+  const origin = await validateDestination(url.origin);
+  const workflowPath = url.pathname.replace(/\/submissions\/?$/, "").replace(/\/$/, "");
+  return { baseUrl: origin, workflowPath, workflowUrl: origin + workflowPath,
+    egressKey: "tierx-" + createHash("sha256").update(origin).digest("hex").slice(0, 32) };
 }
 export const publicConfig = () => store.public();
 export const disconnect = () => store.disconnect();
 export async function testConnection(cloudId) {
   const config = await getConfig();
   return withConnection(config.identity, async () => {
-    const info = await tierxRequest("/api/v1/integrations/jira/connection");
+    const info = await tierxRequest(config.workflowPath + "/connection");
     if (info.jira_cloud_id !== cloudId) throw new Error("Connection belongs to a different Jira site.");
     return { ...config, connectionName: info.name, routeCount: info.route_count };
   });
 }
 export async function tierxRequest(path, options = {}) {
-  if (!/^\/api\/v1\/integrations\/jira\/[a-zA-Z0-9/_-]+$/.test(path)) throw new Error("Invalid TierX API path.");
   const config = options.candidate || await store.read(binding.getStore());
+  if (!config.workflowPath || !path.startsWith(config.workflowPath + "/") || !/^[a-zA-Z0-9/_-]+$/.test(path)) throw new Error("Invalid TierX workflow API path.");
   const origin = await validateDestination(config.baseUrl);
   if (!options.candidate) await store.read(config.identity);
   return sendRequest(origin, path, config, options);
+}
+export async function submissionRequest(suffix = "", options = {}) {
+  const config = await getConfig();
+  return tierxRequest(config.workflowPath + "/submissions" + suffix, options);
 }
 export async function sendRequest(origin, path, config, options = {}, fetch = api.fetch, timeoutMs = 20000) {
   const controller = new AbortController();

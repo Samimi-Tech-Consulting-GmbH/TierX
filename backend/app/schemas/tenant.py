@@ -169,6 +169,13 @@ class AlertDocument(BaseModel):
     last_analysis_requested_at: Optional[datetime] = None
     last_analyzed_at: Optional[datetime] = None
     alert_analysis: Optional[Dict[str, Any]] = None
+    workflow_format: Optional[str] = None
+    workflow_state: Optional[str] = None
+    workflow_error: Optional[Dict[str, Any]] = None
+    run_id: Optional[str] = None
+    correlation_group: Optional[str] = None
+    verdict: Optional[str] = None
+    analyst_decision: Optional[Dict[str, Any]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

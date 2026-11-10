@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo import ReturnDocument
 from bson.codec_options import CodecOptions
@@ -17,10 +17,14 @@ from tierx_workflows import (
     validate_graph,
 )
 from tierx_workflows.examples import examples
+from tierx_workflows.graph import MODERN_NODE_TYPES
+from tierx_workflows.tracing import debug_snapshot
+from tierx_workflows.safety import sanitize
 
 from app.api.dependencies.auth import (
     get_current_user,
     require_tenant_admin,
+    require_platform_admin,
     verify_tenant_access,
 )
 from app.db.mongodb import DatabaseManager
@@ -28,14 +32,24 @@ from app.models.tenant import Tenant
 
 
 def enabled():
-    if not boolean(env_value("ingestion_v2_enabled") or False):
+    if not (boolean(env_value("ingestion_v2_enabled") or False) or boolean(env_value("workflow_engine_enabled") or False)):
         raise HTTPException(404, "Ingestion V2 is disabled")
+
+
+def engine_enabled():
+    if not boolean(env_value("workflow_engine_enabled") or False):
+        raise HTTPException(404, "Workflow engine is disabled")
+
+
+def legacy_mutation(request: Request):
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and boolean(env_value("workflow_engine_enabled") or False):
+        raise HTTPException(410, "Use platform Workflow Studio and a fixed workflow ingestion URL")
 
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}",
     tags=["Ingestion V2"],
-    dependencies=[Depends(enabled)],
+    dependencies=[Depends(enabled), Depends(legacy_mutation)],
 )
 
 
@@ -61,6 +75,7 @@ def db_for(tenant_id):
     db.v2_revisions.create_index([("flow_id", 1), ("revision", 1)], unique=True)
     db.v2_bindings.create_index("binding_key", unique=True)
     db.v2_jobs.create_index([("state", 1), ("lease_expires_at", 1)])
+    db.v2_runs.create_index([("alert_id", 1), ("parent_run_id", 1)])
     return db
 
 
@@ -71,7 +86,19 @@ def found(collection, query):
     return row
 
 
+def trace_view(value):
+    """Debug metadata is not a second raw-document or full-prompt endpoint."""
+    if isinstance(value, list):
+        return [trace_view(item) for item in value]
+    if isinstance(value, dict):
+        return {key: trace_view(item) for key, item in sanitize(value).items() if not (key == "context" and isinstance(item, str)) and key not in {
+            "raw_payload", "prompt", "prompt_footer", "context_text", "text", "playbook_snapshot", "bundle", "resources"}}
+    return value
+
+
 def check(graph):
+    if graph.get("format_version") != "1.0":
+        raise HTTPException(422, "Legacy flow endpoints require format 1.0; use workflow definitions for format 2.0")
     try:
         return validate_graph(graph)
     except (GraphError, TypeError, ValueError) as exc:
@@ -110,7 +137,7 @@ class AlertInput(BaseModel):
 
 def resources(db, graph, tenant_id):
     """Resolve and pin resources; cross-tenant IDs cannot resolve."""
-    result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}}
+    result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}, "connectors": {}}
     platform = DatabaseManager.get_tenant_database("soc_mind_platform")
     for node in graph["nodes"]:
         cfg, kind = node.get("config", {}), node["type"]
@@ -128,7 +155,10 @@ def resources(db, graph, tenant_id):
             query = {"playbook_id": cfg["playbook_id"], "deleted_at": None}
             if cfg.get("version"):
                 query["version"] = cfg["version"]
-            result["playbooks"][node["id"]] = found(db.playbooks, query)
+            row = db.playbooks.find_one(query, {"_id": 0}, sort=[("version", -1)])
+            if not row:
+                raise HTTPException(422, "Referenced playbook unavailable")
+            result["playbooks"][node["id"]] = row
         codes = (
             [cfg["action_code"]]
             if kind == "enrichment_action" and cfg.get("action_code")
@@ -153,7 +183,21 @@ def resources(db, graph, tenant_id):
                 for k, v in action.items()
                 if k not in {"ciphertext", "nonce", "secret"}
             }
-        if kind in {"llm_analysis", "llm_tools"}:
+        connector_refs = []
+        if kind in {"tool_call", "webhook"}:
+            connector_refs.append((cfg["connector_code"], cfg["tool_name"]))
+        for tool in cfg.get("tools", []):
+            if tool.startswith("connector:"):
+                _, code, tool_name = tool.split(":")
+                connector_refs.append((code, tool_name))
+        for code, tool_name in connector_refs:
+            connector = found(platform.v2_connectors, {"connector_code": code, "enabled": True})
+            if tenant_id not in connector["tenant_ids"]:
+                raise HTTPException(403, "Connector not authorized for tenant")
+            if not any(tool["name"] == tool_name for tool in connector["tools"]):
+                raise HTTPException(422, "Tool schema is not explicitly approved")
+            result["connectors"][code] = {k: v for k, v in connector.items() if k not in {"credentials", "_id"}}
+        if kind in {"llm_analysis", "llm_tools", "playbook_selector"} and cfg.get("profile_code"):
             profile = found(
                 platform.v2_llm_profiles,
                 {"profile_code": cfg["profile_code"], "enabled": True},
@@ -175,7 +219,7 @@ def catalog(tenant_id=Depends(verify_tenant_access), user=Depends(get_current_us
     db_for(tenant_id)
     return {
         "format_version": "1.0",
-        "node_types": sorted(NODE_TYPES),
+        "node_types": sorted(NODE_TYPES - MODERN_NODE_TYPES),
         "default_graph": default_graph(),
         "examples": examples(),
     }
@@ -474,7 +518,7 @@ def runs(
     user=Depends(get_current_user),
 ):
     db = db_for(tenant_id)
-    projection = {"_id": 0, "input": 0, "resources": 0, "graph": 0}
+    projection = {"_id": 0, "input": 0, "resources": 0, "graph": 0, "bundle": 0, "output": 0}
     return {
         "items": list(
             db.v2_runs.find({}, projection)
@@ -494,19 +538,51 @@ def run_detail(
 ):
     db = db_for(tenant_id)
     run = found(db.v2_runs, {"run_id": run_id})
+    root = db.v2_runs.find_one({"run_id": run.get("root_run_id", run_id)}) or run
+    root_definition = (root.get("bundle") or {}).get("definitions", {}).get(root.get("definition_ref"), {})
+    run["workflow_version"] = {"code": root.get("definition_code"), "revision": root.get("revision"),
+        "definition_ref": root.get("definition_ref"), "checksum": root_definition.get("checksum")}
     run.pop("resources", None)
     run.pop("input", None)
     run["nodes"] = list(
-        db.v2_jobs.find({"run_id": run_id}, {"_id": 0, "lease_owner": 0}).sort(
+        db.v2_jobs.find({"run_id": run_id}, {"_id": 0, "lease_owner": 0,
+            "ancestors": 0, "evidence_snapshot": 0}).sort(
             "created_at", 1
         )
     )
+    observed = {job["node_id"] for job in run["nodes"]}
+    for node in run["graph"]["nodes"]:
+        for job in run["nodes"]:
+            if job["node_id"] == node["id"]:
+                job["node_type"], job["label"] = node["type"], node.get("label", node["id"])
+        if node["id"] not in observed:
+            capability = any(edge["source"] == node["id"] and edge.get("sourceHandle") == "tool" for edge in run["graph"]["edges"])
+            run["nodes"].append({"job_id": "not-executed:" + node["id"], "node_id": node["id"], "node_type": node["type"],
+                "label": node.get("label", node["id"]), "state": "CAPABILITY_ONLY" if capability else "NOT_REACHED"})
     run["alert"] = db.v2_alerts.find_one(
         {"alert_id": run["alert_id"]},
         {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0},
     )
+    if run["graph"].get("format_version") == "2.0":
+        run["output_snapshot"] = debug_snapshot(run.pop("output", None))
+        for job in run["nodes"]:
+            if "error_input" in job:
+                job["error_input_snapshot"] = debug_snapshot(job.pop("error_input"))
+            output = job.pop("output", None)
+            job["output_snapshot"] = job.get("output_snapshot") or debug_snapshot(output)
+        run["alert"] = db.alerts.find_one({"alert_id": run["alert_id"]}, {"_id": 0, "raw_payload": 0, "playbook_snapshot": 0})
+        run["children"] = list(db.v2_runs.find({"parent_run_id": run_id},
+            {"_id": 0, "input": 0, "resources": 0, "bundle": 0, "graph": 0, "output": 0}).sort("created_at", 1))
+        run["graph"] = __import__("copy").deepcopy(run["graph"])
+        for node in run["graph"]["nodes"]:
+            node.get("config", {}).pop("prompt", None)
+    run.pop("bundle", None)
+    run["tool_calls"] = list(db.v2_tool_calls.find({"run_id": run_id}, {"output": 0}).sort("started_at", 1))
+    for call in run["tool_calls"]:
+        call["call_id"] = str(call.pop("_id"))
+    run["model_calls"] = list(db.v2_model_calls.find({"run_id": run_id}, {"_id": 0, "response": 0}).sort("created_at", 1))
     if run["alert"] and run["alert"].get("cluster_id"):
-        run["cluster"] = db.v2_clusters.find_one(
+        run["cluster"] = db["clusters" if run["graph"].get("format_version") == "2.0" else "v2_clusters"].find_one(
             {"cluster_id": run["alert"]["cluster_id"]}, {"_id": 0}
         )
-    return run
+    return trace_view(run)

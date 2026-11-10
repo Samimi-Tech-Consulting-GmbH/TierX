@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { usePlatformHealth } from "@/lib/use-platform-health";
 import { cn } from "@/lib/utils";
 import { TierXLogo } from "@/components/tierx-logo";
+import { useEditorChromeContent } from "./editor-chrome";
 
 function HealthBadge() {
   const { health, loading, failed } = usePlatformHealth();
@@ -33,9 +34,12 @@ function HealthBadge() {
 
 export function DashboardHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useAuth();
+  const editor = useEditorChromeContent();
 
   return (
-    <header className="flex h-[76px] shrink-0 items-center gap-3 border-b border-[#404040] px-4 lg:px-6">
+    <header
+      className={`flex shrink-0 items-center gap-3 border-b border-[#404040] px-4 lg:px-6 ${editor ? "min-h-[64px] py-2" : "h-[76px]"}`}
+    >
       <button
         type="button"
         onClick={onMenuClick}
@@ -45,23 +49,29 @@ export function DashboardHeader({ onMenuClick }: { onMenuClick: () => void }) {
         <Menu className="size-5" />
       </button>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <TierXLogo className="size-6 text-primary" />
-        <span className="text-xl font-bold tracking-tight">TierX</span>
-      </div>
+      {editor ? (
+        <div className="min-w-0 flex-1">{editor}</div>
+      ) : (
+        <>
+          <div className="flex shrink-0 items-center gap-2">
+            <TierXLogo className="size-6 text-primary" />
+            <span className="text-xl font-bold tracking-tight">TierX</span>
+          </div>
 
-      <div className="ml-auto flex items-center gap-3 sm:gap-4">
-        <HealthBadge />
+          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            <HealthBadge />
 
-        <div className="hidden h-8 w-px bg-[#525252] sm:block" />
+            <div className="hidden h-8 w-px bg-[#525252] sm:block" />
 
-        <div className="hidden min-w-0 rounded-lg bg-card px-3 py-2 sm:block">
-          <p className="truncate text-sm text-foreground">{user?.email}</p>
-          <p className="text-xs text-muted-foreground">
-            {user?.role?.replace(/_/g, " ")}
-          </p>
-        </div>
-      </div>
+            <div className="hidden min-w-0 rounded-lg bg-card px-3 py-2 sm:block">
+              <p className="truncate text-sm text-foreground">{user?.email}</p>
+              <p className="text-xs text-muted-foreground">
+                {user?.role?.replace(/_/g, " ")}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 }

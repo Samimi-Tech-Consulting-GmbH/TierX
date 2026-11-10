@@ -224,6 +224,20 @@ export function ClusterDetailView({
   }
 
   const severity = severityFromValue(cluster.severity.max);
+  if (cluster.workflow_format === "2.0") return <section className="space-y-4 rounded-xl border p-6">
+    <h2 className="break-all font-mono text-xl">{cluster.cluster_id}</h2>
+    <p>{cluster.clustering_status} · {cluster.alert_count} member(s) · group: {cluster.correlation_group || "Tenant shared pool"}</p>
+    <p>Analysis and verdict belong to each alert. Membership changes do not trigger hidden re-analysis.</p>
+    {alertsLoading && <p>Loading members…</p>}{alertsError && <p role="alert">{alertsError}</p>}
+    <ul>{alerts.map(alert => <li key={alert.alert_id} className="my-3 rounded border p-3">
+      <Link className="underline" href={`${alertBase}/${alert.alert_id}`}>{alert.alert_id}</Link> · {alert.status}
+      {alert.alert_analysis && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(alert.alert_analysis, null, 2)}</pre>}
+    </li>)}</ul>
+    <p>Showing {alerts.length} of {alertTotal} alerts.</p>
+    <button disabled={alertPage === 0} onClick={() => setAlertPage(page => page - 1)}>Previous</button>{" "}
+    <button disabled={(alertPage + 1) * alertPageSize >= alertTotal} onClick={() => setAlertPage(page => page + 1)}>Next</button>
+    <details><summary>Correlation evidence</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(cluster.correlation_basis, null, 2)}</pre></details>
+  </section>;
   const summary = cluster.summary;
 
   const affectedHosts = cluster.affected_host_count ?? 0;
