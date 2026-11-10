@@ -70,7 +70,7 @@ def analyses(alert_id: str, skip: int = Query(0, ge=0), limit: int = Query(25, g
              tenant_id=Depends(verify_tenant_access), user=Depends(get_current_user)):
     db = db_for(tenant_id)
     found(db.alerts, {"alert_id": alert_id})
-    query = {"alert_id": alert_id}
+    query = {"alert_id": alert_id, "persistence_state": {"$ne": "DISCARDED"}}
     return {"items": list(db.v2_alert_analyses.find(query, {"_id": 0}).sort([("created_at", -1), ("analysis_id", 1)]).skip(skip).limit(limit)),
         "total": db.v2_alert_analyses.count_documents(query), "skip": skip, "limit": limit}
 
@@ -86,7 +86,8 @@ def feedback_list(alert_id: str, tenant_id=Depends(verify_tenant_access), user=D
 def feedback_save(alert_id: str, body: Feedback, tenant_id=Depends(verify_tenant_access), user=Depends(get_current_user)):
     db = db_for(tenant_id)
     found(db.alerts, {"alert_id": alert_id})
-    if body.analysis_id and not db.v2_alert_analyses.find_one({"alert_id": alert_id, "analysis_id": body.analysis_id}):
+    if body.analysis_id and not db.v2_alert_analyses.find_one({"alert_id": alert_id, "analysis_id": body.analysis_id,
+            "persistence_state": {"$ne": "DISCARDED"}}):
         raise HTTPException(422, "Analysis does not belong to this alert")
     row = {**body.model_dump(), "feedback_id": str(uuid4()), "tenant_id": tenant_id, "alert_id": alert_id,
            "created_by": user.user_id, "created_at": datetime.now(timezone.utc), "approval_state": "RECORDED"}

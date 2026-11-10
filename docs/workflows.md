@@ -121,7 +121,8 @@ Tenant-authorized users may inspect runs and analysis history. Only platform adm
 
 If cancellation races an analysis-history write, the uncommitted history item is
 retained for audit with `persistence_state=DISCARDED` and a `discard_reason`.
-It is not the alert's current analysis. Debug uses bounded, sanitized snapshots
+It is not the alert's current analysis, is excluded from normal analysis history,
+and cannot be selected as a feedback target. Debug uses bounded, sanitized snapshots
 for node inputs, outputs and propagated error input; internal ancestry and evidence
 reference fields are not returned.
 

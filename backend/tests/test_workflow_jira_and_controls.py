@@ -179,6 +179,23 @@ def test_cancel_preserves_previously_persisted_success(setup, monkeypatch):
     assert alert["alert_analysis"]["headline"] == "Saved"
 
 
+def test_discarded_history_is_not_listed_or_eligible_for_feedback(setup, monkeypatch):
+    client, mongo, _ = prepare(setup, monkeypatch)
+    db = mongo.tenant_one
+    db.alerts.insert_one({"alert_id": "a"})
+    db.v2_alert_analyses.insert_many([
+        {"alert_id": "a", "analysis_id": "kept", "headline": "Committed"},
+        {"alert_id": "a", "analysis_id": "discarded", "persistence_state": "DISCARDED"},
+    ])
+    base = "/api/v2/tenants/one/alerts/a"
+    response = client.get(base + "/workflow-analyses").json()
+    assert response["total"] == 1
+    assert [item["analysis_id"] for item in response["items"]] == ["kept"]
+    assert client.post(base + "/feedback", json={"decision": "APPROVE", "analysis_id": "discarded"}).status_code == 422
+    assert client.post(base + "/feedback", json={"decision": "APPROVE", "analysis_id": "kept"}).status_code == 201
+    assert db.v2_alert_analyses.count_documents({"persistence_state": "DISCARDED"}) == 1
+
+
 def test_debug_uses_bounded_snapshots_and_metadata_lists_exclude_outputs(setup, monkeypatch):
     client, mongo, _ = prepare(setup, monkeypatch)
     db = mongo.tenant_one
