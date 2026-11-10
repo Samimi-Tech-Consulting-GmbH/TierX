@@ -4,6 +4,7 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import selectors
 import sqlite3
 import subprocess
@@ -46,7 +47,7 @@ def preflight():
     if not any("seccomp" in item and "unconfined" not in item for item in info.get("SecurityOptions", [])):
         raise BrokerError("SECCOMP_PREFLIGHT_FAILED")
     image = os.environ["TIERX_PYTHON_IMAGE"]
-    if "@sha256:" not in image:
+    if not re.fullmatch(r"(?:[a-zA-Z0-9./:_-]+@)?sha256:[0-9a-f]{64}", image):
         raise BrokerError("PINNED_PYTHON_IMAGE_REQUIRED")
     docker("image", "inspect", image)
     denied = json.loads(os.environ["TIERX_PYTHON_DENIED_NETWORKS"])
@@ -182,6 +183,8 @@ class Broker:
                 "-e", "TIERX_JOB_DESTINATIONS=" + json.dumps(definition["destinations"]),
                 "-e", "TIERX_JOB_DENIED_NETWORKS=" + json.dumps(denied), self.image, "python", "-I", "/runner/proxy.py")
             docker("network", "connect", "bridge", proxy)
+            # Wait only for the local proxy listener; never retry a user's HTTP call.
+            docker("exec", proxy, "python", "-c", "import socket,time\nfor attempt in range(30):\n try:\n  socket.create_connection(('127.0.0.1',8080),timeout=0.1).close(); break\n except OSError:\n  time.sleep(0.1)\nelse: raise RuntimeError('proxy unavailable')", timeout=5)
             address = json.loads(docker("inspect", proxy))[0]["NetworkSettings"]["Networks"][network]["IPAddress"]
             response = bounded_run(["docker", "run", "--rm", "-i", "--name", name, "--network", network, *base,
                 "-e", f"TIERX_JOB_PROXY=http://{address}:8080", self.image, "python", "-I", "/runner/execute.py"],

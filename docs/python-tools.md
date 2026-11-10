@@ -57,7 +57,9 @@ payload forwarding is supported.
 
 The operator must include all TierX host, service, database, orchestration and
 application network addresses in `TIERX_PYTHON_DENIED_NETWORKS`. Missing denylist,
-unpinned image or ineffective isolation prevents broker startup. Use the optional
+unpinned image or ineffective isolation prevents broker startup. An OCI repository
+digest or full local image ID (`sha256:` plus 64 hexadecimal characters) is required;
+mutable tags are rejected. Use the optional
 `compose.python-runner.yaml` overlay only after dedicated runtime provisioning.
 The broker API has no published port; keep the bearer token private.
 
