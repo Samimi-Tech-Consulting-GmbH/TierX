@@ -40,3 +40,80 @@ interactive test; its reasoning is explicitly a protocol fixture. Use
 
 The Python harnesses require an application checkout and its Python dependencies;
 they are not part of the sender-only ZIP. Ordinary sender use needs only Node.js.
+
+## Optional AI scenarios
+
+Configure a separate local-server provider explicitly. AI is disabled by default;
+manual sending and saved replay work without it. No SDK or runtime dependencies
+are needed. Keep real customer data and credentials out of samples/descriptions.
+
+```sh
+# Ollama: set the exact installed model you choose; no model is downloaded.
+SANDBOX_AI_PROVIDER=ollama SANDBOX_AI_URL=http://127.0.0.1:11434 \
+  SANDBOX_AI_MODEL=your-installed-model TIERX_TARGET=https://your-test-instance.example npm run dev
+
+# OpenAI-compatible: use an API base supporting chat/completions + JSON Schema.
+SANDBOX_AI_PROVIDER=openai-compatible SANDBOX_AI_URL=https://ai.example/v1 \
+  SANDBOX_AI_MODEL=your-model npm run dev
+```
+
+Supply `SANDBOX_AI_API_KEY` through your shell/secret manager if required. It stays
+on the local server and is never returned to the browser or sent to TierX. Optional
+`.env.example` is a reference; `npm run dev` does not automatically load `.env`.
+With Node supporting it, `node --env-file=.env server.mjs` loads a local ignored file.
+Only HTTPS or localhost HTTP AI endpoints are accepted; redirects are rejected.
+Providers without the requested structured-output contract fail visibly; there is
+no silent provider/model substitution. Only sample JSON, scenario description,
+preset/count and optional schema are sent to the AI, never TierX routing/tokens.
+
+1. Keep the source sample in **Alert JSON**, describe a synthetic scenario, choose
+   a preset and generate 1–20 alerts. Review/edit the batch before sending.
+2. **Send batch once** sends each previewed alert once. **Start loop** either
+   replays the batch or generates fresh batches of up to five as needed.
+3. Defaults: ten submissions, five seconds apart, one request at a time. Limits:
+   1,000 submissions or 60 wall-clock minutes (including pauses), whichever first.
+   A confirmation lists the fixed target/path, mode, limits and negative-test state.
+4. Pause aborts local in-flight work and stops new sends. Resume retries an uncertain
+   pending submission with the same idempotency key. Stop never recalls accepted
+   alerts. Interrupted submissions are archived as `UNKNOWN`; inspect their delivery
+   IDs before replaying. Transient failures allow three retries using the same key;
+   authentication/routing failures stop the run, while 422 payload rejections count
+   separately and continue. Generation has one slot and a 120-second timeout.
+
+The supplied correlated preset preserves `result.host`, `result.src`, `result.user`
+from the sample; adjust the sample/preview to the actual workflow mapping. Correlation
+still depends on the deployed workflow. Duplicate mode disables field refresh and
+repeats an identical generated alert. Validation-failure mode requires explicit
+consent and removes the configured required field, including after replay refresh.
+It is labelled an intentional negative test, not schema-valid success.
+
+Replay can preserve bytes at the JSON-value level or refresh configured dotted
+timestamp/unique fields (defaults `result._time` and `result.rule_id`). The same
+delivery's retries keep its exact body. Different replay submissions use different
+delivery IDs, allowing the pipeline's fingerprint deduplication to be tested.
+
+### Validation and local archives
+
+Without a schema the badge reads `STRUCTURAL_ONLY`: valid JSON is not proof of a
+valid Splunk alert. The dependency-free JSON Schema subset supports `type`,
+`properties`, `required`, `additionalProperties`, `items`, item/string length and
+numeric bounds, `enum`, `const`, `allOf`, `anyOf`, `oneOf`, `title`, `description`
+and `$schema`. Unsupported keywords (including `$ref`, `pattern` and `format`)
+are rejected rather than ignored. Generation validates before applying explicitly
+selected negative-test mutations. No scanning, credential testing, tool execution
+or real security investigation is performed by generation.
+
+Generated/edited scenarios are saved automatically under `.sandbox-data/` (ignored
+by Git), or `SANDBOX_DATA_DIR`. Directories use 0700 and files 0600. Outcome JSONL
+records contain actual sent payloads, delivery IDs, status and accepted alert/run
+IDs—never request headers or credentials. The server rejects credential-bearing
+JSON properties/private keys and common token/credential URL forms; this is a
+safeguard, not a guarantee that arbitrary free text contains no sensitive data.
+Archives are limited to 10 MiB per scenario and scenario requests to 2 MiB; a full
+archive stops the run visibly. Export/archive these files privately as needed.
+
+Use the saved list or JSON import/export to replay without AI. Export includes the
+actual submission outcomes; importing a run selects the sent payloads for replay.
+Credentials must be entered again. Never include `.sandbox-data`, `.env`, logs or
+credentials in a client ZIP. Existing five-card watchers remain independent of
+loop counters; evicting a watcher does not cancel processing.
