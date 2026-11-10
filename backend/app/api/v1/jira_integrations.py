@@ -16,9 +16,6 @@ from app.schemas.jira_integration import (
 from app.services.jira_integration_service import JiraIntegrationService
 from app.core.brand_compat import compatible_header
 
-router = APIRouter(prefix="/integrations/jira", tags=["Jira Integration"])
-
-
 def require_jira_integration(request: Request) -> dict[str, Any]:
     integration_id = compatible_header(request, "integration-id") or ""
     authorization = request.headers.get("authorization", "")
@@ -32,19 +29,20 @@ def require_jira_integration(request: Request) -> dict[str, Any]:
     return JiraIntegrationService.authenticate(integration_id, secret.strip())
 
 
-@router.get("/connection", response_model=JiraConnectionInfo)
-def test_jira_connection(
-    integration: dict[str, Any] = Depends(require_jira_integration),
-):
-    return JiraIntegrationService.connection_info(integration)
-
-
 def retired_submission(request: Request, integration=Depends(require_jira_integration)):
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         raise HTTPException(410, "Configure Forge with a fixed workflow ingestion URL")
 
 
-router.dependencies.append(Depends(retired_submission))
+router = APIRouter(prefix="/integrations/jira", tags=["Jira Integration"],
+                   dependencies=[Depends(retired_submission)])
+
+
+@router.get("/connection", response_model=JiraConnectionInfo)
+def test_jira_connection(
+    integration: dict[str, Any] = Depends(require_jira_integration),
+):
+    return JiraIntegrationService.connection_info(integration)
 
 
 @router.post(

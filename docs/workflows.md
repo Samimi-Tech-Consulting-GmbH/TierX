@@ -132,6 +132,10 @@ Workflows are the only execution system. The standard pipeline service runs the
 workflow scheduler through `python main.py` and exposes no public port. No mode
 flag or optional worker profile is required. Backend readiness requires a fresh
 workflow-worker heartbeat, even before any definitions have been imported.
+Tenant reconciliation is bounded to ten seconds per tenant and isolated from
+other tenants. A live worker with tenant errors reports an amber degraded state;
+a missing or stale worker fails readiness. Frontend startup depends on backend
+readiness, so a stopped pipeline prevents a healthy installation startup.
 
 Publish explicitly configured subflows and workflows, grant tenants, and generate
 fixed entry credentials before submitting alerts. There is no built-in default
@@ -140,6 +144,10 @@ historical read interfaces remain available. Existing experimental graph-format
 1 runs are not scheduled by the current worker. Upgrade operators must drain or
 archive old Kafka and durable queues before switching releases. No database wipe,
 implicit default-binding migration, or historical backfill occurs automatically.
+Old Kafka topics and experimental cluster continuation requests are not drained
+automatically. Modern graphs persist alert-owned analysis and do not use those
+continuations. Remove the obsolete optional worker profiles from launch commands;
+the standard pipeline service is the sole scheduler.
 
 Rollback requires deliberate draining/cancellation and deployment of a previous
 release, not changing an execution-mode flag. Preserve databases, volumes and

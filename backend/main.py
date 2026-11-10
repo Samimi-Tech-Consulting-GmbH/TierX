@@ -315,7 +315,8 @@ async def health_check():
         seen = (worker or {}).get("updated_at")
         if seen and seen.tzinfo is None:
             seen = seen.replace(tzinfo=timezone.utc)
-        components["workflow_engine"] = "green" if seen and seen >= datetime.now(timezone.utc) - timedelta(seconds=30) and worker.get("state") == "READY" else "red"
+        fresh = bool(seen and seen >= datetime.now(timezone.utc) - timedelta(seconds=30))
+        components["workflow_engine"] = ("amber" if worker.get("state") == "DEGRADED" else "green") if fresh and worker.get("state") in {"READY", "DEGRADED"} else "red"
         if components["workflow_engine"] == "red":
             overall_status = "UNHEALTHY"
         if KNOWLEDGE_BASE_PROCESSING_ENABLED:

@@ -6,7 +6,7 @@ import pytest
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("age,state,expected", [(0, "READY", "green"), (60, "READY", "red"), (0, "FAILED", "red"), (None, None, "red")])
+@pytest.mark.parametrize("age,state,expected", [(0, "READY", "green"), (0, "DEGRADED", "amber"), (60, "READY", "red"), (0, "FAILED", "red"), (None, None, "red")])
 async def test_health_requires_workflow_heartbeat(monkeypatch, age, state, expected):
     import main
     record = None if age is None else {"updated_at": datetime.now(timezone.utc) - timedelta(seconds=age), "state": state}
@@ -23,4 +23,4 @@ async def test_health_requires_workflow_heartbeat(monkeypatch, age, state, expec
     monkeypatch.setattr(main.httpx, "AsyncClient", lambda **kwargs: Client())
     result = await main.health_check()
     assert result["components"]["workflow_engine"] == expected
-    assert result["status"] == ("HEALTHY" if expected == "green" else "UNHEALTHY")
+    assert result["status"] == ("UNHEALTHY" if expected == "red" else "HEALTHY")

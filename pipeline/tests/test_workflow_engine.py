@@ -109,6 +109,30 @@ async def test_scheduler_recovers_expired_leases_and_limits_parallel_nodes(monke
 
 
 @pytest.mark.asyncio
+async def test_tenant_failure_isolated_and_reported_in_fresh_heartbeat(monkeypatch):
+    from app.workflows import engine as module
+    mongo = mongomock.MongoClient(tz_aware=True)
+    raw = Client(mongo)
+    mongo.soc_mind_platform.tenants.insert_many([
+        {"tenant_id": "broken", "db_name": "broken", "status": "ACTIVE"},
+        {"tenant_id": "working", "db_name": "working", "status": "ACTIVE"},
+    ])
+    monkeypatch.setattr(module, "get_database", lambda: raw["soc_mind_platform"])
+    engine = Engine()
+    seen = []
+    async def tick_tenant(tenant):
+        seen.append(tenant["tenant_id"])
+        if tenant["tenant_id"] == "broken":
+            raise RuntimeError("synthetic tenant failure")
+    engine.tick_tenant = tick_tenant
+    assert await engine.tick() == 1
+    assert seen == ["broken", "working"]
+    heartbeat = mongo.soc_mind_platform.service_heartbeats.find_one({"service": "workflow-engine"})
+    assert heartbeat["state"] == "DEGRADED" and heartbeat["tenant_errors"] == 1
+    assert heartbeat["updated_at"] >= datetime.now(timezone.utc) - timedelta(seconds=5)
+
+
+@pytest.mark.asyncio
 async def test_invalid_fallback_is_not_marked_handled():
     from tierx_workflows.llm import ModelError
 
