@@ -175,7 +175,6 @@ class Broker:
     def submit(self, identity, request):
         from tierx_workflows.graph import checksum
         digest = checksum(request)
-        self.retry_cleanup()
         if self.unhealthy:
             raise BrokerError("RUNNER_ISOLATION_UNAVAILABLE")
         with self.lock, self.db() as db:

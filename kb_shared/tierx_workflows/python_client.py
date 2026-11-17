@@ -33,6 +33,8 @@ async def _request(path, *, request=None, cancel=False):
             if code in {"PYTHON_QUEUE_FULL", "PYTHON_REPLAY_CONFLICT", "RUNNER_ISOLATION_UNAVAILABLE",
                 "PYTHON_SYNTAX_ERROR", "SYNCHRONOUS_RUN_REQUIRED", "RUN_REQUIRES_ALERT_AND_CLUSTER"}:
                 raise PythonToolError(code)
+            if response.status_code >= 500:
+                raise PythonToolError("PYTHON_RUNNER_UNAVAILABLE")
             raise PythonToolError("PYTHON_RUNNER_REJECTED")
         result = response.json()
         if path != "/validate" and result.get("state") not in {"PENDING", "RUNNING", "SUCCEEDED", "FAILED", "UNCERTAIN", "CANCELLED"}:
