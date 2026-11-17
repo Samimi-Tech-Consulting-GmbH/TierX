@@ -64,8 +64,6 @@ export function createConnectionStore(storage, verify) {
       const current = await storage.getSecret(CONNECTION_KEY);
       // A non-secret tombstone invalidates in-progress first-time pairing too.
       await storage.setSecret(CONNECTION_KEY, { revision: randomUUID(), baseUrl: "" });
-      await storage.deleteSecret("soc-mind:integration-secret");
-      await storage.delete("soc-mind:config");
       return { configured: false, baseUrl: "", egressKey: current?.egressKey };
       });
     },

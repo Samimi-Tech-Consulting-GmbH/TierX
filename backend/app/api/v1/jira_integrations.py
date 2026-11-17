@@ -14,10 +14,10 @@ from app.schemas.jira_integration import (
     JiraSubmissionFailure,
 )
 from app.services.jira_integration_service import JiraIntegrationService
-from app.core.brand_compat import compatible_header
+from app.core.brand_compat import tierx_header
 
 def require_jira_integration(request: Request) -> dict[str, Any]:
-    integration_id = compatible_header(request, "integration-id") or ""
+    integration_id = tierx_header(request, "integration-id") or ""
     authorization = request.headers.get("authorization", "")
     scheme, _, secret = authorization.partition(" ")
     if not integration_id or scheme.lower() != "bearer" or not secret.strip():

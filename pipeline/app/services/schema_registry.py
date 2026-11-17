@@ -1,7 +1,7 @@
 """
 Async service for looking up alert-type schemas from tenant databases.
 
-Tenants are stored in ``soc_mind_platform.tenants``.  Each tenant's alert-type
+Tenants are stored in ``tierx_platform.tenants``.  Each tenant's alert-type
 schemas live in their own database (``db_name``) in the ``alert_type_schemas``
 collection.
 """

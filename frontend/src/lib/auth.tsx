@@ -8,14 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import {
-  STORAGE_KEYS,
-  LEGACY_STORAGE_KEYS,
-  clearCompatibleStorage,
-  hasSeenOnboarding,
-  readCompatibleStorage,
-  writeCompatibleStorage,
-} from "./storage";
+import { STORAGE_KEYS, hasSeenOnboarding } from "./storage";
 
 export interface AuthUser {
   user_id: string;
@@ -40,7 +33,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 /** Default landing route after login / auth redirects. */
-export function getHomeRoute(user: Pick<AuthUser, "role" | "tenant_id">): string {
+export function getHomeRoute(
+  user: Pick<AuthUser, "role" | "tenant_id">,
+): string {
   if (user.role === "PLATFORM_ADMIN") return "/dashboard/admin";
   if (user.tenant_id) return `/dashboard/${user.tenant_id}`;
   return "/login";
@@ -53,9 +48,10 @@ export function getPostLoginRoute(
 }
 
 const TOKEN_KEY = STORAGE_KEYS.TOKEN;
-const LEGACY_TOKEN_KEY = LEGACY_STORAGE_KEYS.TOKEN;
 const API_BASE =
-  process.env.NEXT_PUBLIC_TIERX_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "";
+  process.env.NEXT_PUBLIC_TIERX_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "";
 
 /**
  * "Remember me" picks the storage: localStorage survives a browser restart,
@@ -63,26 +59,18 @@ const API_BASE =
  */
 export function readToken(): string | null {
   if (typeof window === "undefined") return null;
-  return (
-    readCompatibleStorage(localStorage, TOKEN_KEY, LEGACY_TOKEN_KEY) ??
-    readCompatibleStorage(sessionStorage, TOKEN_KEY, LEGACY_TOKEN_KEY)
-  );
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function clearToken(): void {
   if (typeof window === "undefined") return;
-  clearCompatibleStorage(localStorage, TOKEN_KEY, LEGACY_TOKEN_KEY);
-  clearCompatibleStorage(sessionStorage, TOKEN_KEY, LEGACY_TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 function writeToken(accessToken: string, remember: boolean): void {
   clearToken();
-  writeCompatibleStorage(
-    remember ? localStorage : sessionStorage,
-    TOKEN_KEY,
-    LEGACY_TOKEN_KEY,
-    accessToken,
-  );
+  (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, accessToken);
 }
 
 export function useAuth(): AuthContextType {

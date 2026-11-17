@@ -19,7 +19,7 @@ from app.services.enrichment_action import (
 def test_canonical_json_and_delivery_ids_are_stable_per_action():
     assert canonical_json({"b": 2, "a": 1}) == b'{"a":1,"b":2}'
     first = deterministic_id("delivery", "tenant", "alert", "pb", 2, "first")
-    assert first == "ebca34d6-ac0a-5e6a-8a70-0130700c1d08"
+    assert first == "8003eb1c-99cb-5c5f-84d0-6c4fe88ec86d"
     assert first == deterministic_id("delivery", "tenant", "alert", "pb", 2, "first")
     assert first != deterministic_id("delivery", "tenant", "alert", "pb", 2, "second")
 
@@ -29,7 +29,7 @@ def test_action_secret_uses_action_specific_aad(monkeypatch):
     nonce = b"n" * 12
     key_id = "eak_test"
     action_code = "observe"
-    aad = f"soc-mind:enrichment-action:v1:{action_code}:{key_id}".encode()
+    aad = f"tierx:enrichment-action:v1:{action_code}:{key_id}".encode()
     ciphertext = AESGCM(master).encrypt(nonce, b"easec_test", aad)
     encode = lambda value: base64.urlsafe_b64encode(value).decode().rstrip("=")
     monkeypatch.setattr(settings, "webhook_secret_encryption_key", encode(master))

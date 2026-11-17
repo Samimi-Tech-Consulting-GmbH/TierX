@@ -329,7 +329,7 @@ async def test_enrichment_persists_optional_knowledge_base_results(monkeypatch):
 @pytest.mark.asyncio
 async def test_dead_letter_persists_extended_debug_fields(monkeypatch):
     dead_letters = FakeCollection()
-    database = FakeDatabase("soc_mind_platform", {"dead_letters": dead_letters})
+    database = FakeDatabase("tierx_platform", {"dead_letters": dead_letters})
     worker = DeadLetterWorker()
 
     async def fake_resolve_db(tenant_id):

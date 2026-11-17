@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies.auth import require_platform_admin
-from app.core.brand_compat import dual_headers
+from app.core.brand_compat import tierx_headers
 from app.schemas.user import AuthenticatedUser
 from app.services.debug_trace_service import DebugTraceService
 
@@ -57,7 +57,7 @@ async def _historical_debug_ingest(request: Request, admin: AuthenticatedUser = 
             response = await client.post(
                 f"{INGESTION_PROXY_URL}/api/v1/alerts/ingest",
                 json=body,
-                headers=dual_headers(debug_actor=admin.email),
+                headers=tierx_headers(debug_actor=admin.email),
             )
     except httpx.HTTPError:
         return JSONResponse(

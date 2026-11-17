@@ -19,7 +19,7 @@ logger = logging.getLogger("tierx-kb-semantic")
 
 
 def index_tenants(client, engine):
-    for tenant in client.soc_mind_platform.tenants.find({}):
+    for tenant in client.tierx_platform.tenants.find({}):
         db = client[tenant["db_name"]]
         if tenant.get("status") == "DELETED":
             cleanup(db, tenant["tenant_id"], engine, tenant_deleted=True)
@@ -48,7 +48,7 @@ async def lifespan(app):
                 if indexing or retrieval:
                     if app.state.engine is None:
                         app.state.engine = Engine()
-                    platform = app.state.client["soc_mind_platform"]
+                    platform = app.state.client["tierx_platform"]
                     platform.service_heartbeats.update_one(
                         {"service": "kb-semantic"},
                         {"$set": {"seen_at": now()}},
@@ -106,7 +106,7 @@ async def search(payload: Search):
             return {**result, "semantic_status": "BUSY"}
         try:
             tenant_id = str(payload.tenant_id)
-            tenant = app.state.client.soc_mind_platform.tenants.find_one(
+            tenant = app.state.client.tierx_platform.tenants.find_one(
                 {"tenant_id": tenant_id, "status": {"$ne": "DELETED"}}
             )
             if not tenant:

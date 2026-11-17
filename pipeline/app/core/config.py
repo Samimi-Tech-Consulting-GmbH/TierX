@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # MongoDB
     mongo_url: str
-    mongo_db: str = "soc_mind_platform"
+    mongo_db: str = "tierx_platform"
 
     # Deduplication
     deduplication_window_minutes: int = 60

@@ -307,7 +307,7 @@ def test_profile_credentials_encrypted_and_capability_test(setup, monkeypatch):
     created = client.put("/api/v2/admin/llm-profiles/test-profile", json=body)
     assert created.status_code == 200
     assert "credentials" not in created.json() and "api_key" not in created.json()
-    stored = mongo.soc_mind_platform.v2_llm_profiles.find_one({})
+    stored = mongo.tierx_platform.v2_llm_profiles.find_one({})
     assert "synthetic-provider-key" not in str(stored)
     assert llm_profiles.decrypt(stored) == body["api_key"]
     monkeypatch.setattr(
@@ -329,7 +329,7 @@ def test_profile_credentials_encrypted_and_capability_test(setup, monkeypatch):
     assert (
         client.post("/api/v2/admin/llm-profiles/test-profile/test").status_code == 200
     )
-    assert mongo.soc_mind_platform.v2_llm_profile_revisions.count_documents({}) == 1
+    assert mongo.tierx_platform.v2_llm_profile_revisions.count_documents({}) == 1
     assert "credentials" not in client.get("/api/v2/admin/llm-profiles").text
     assert (
         client.put("/api/v2/admin/llm-profiles/test-profile", json=body).status_code

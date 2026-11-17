@@ -17,7 +17,7 @@ from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from app.core.errors import ResourceNotFoundError
-from app.core.brand_compat import dual_headers
+from app.core.brand_compat import tierx_headers
 from app.db.mongodb import DatabaseManager
 from app.models.tenant import Tenant
 from app.services.alert_type_schema_service import AlertTypeSchemaService
@@ -1053,7 +1053,7 @@ class JiraIntegrationService:
                 response = await client.post(
                     f"{INGESTION_PROXY_URL}/api/v1/alerts/ingest",
                     json=cls._ingestion_payload(claimed),
-                    headers=dual_headers(
+                    headers=tierx_headers(
                         requested_alert_id=claimed["alert_id"],
                         integration=claimed["integration_id"],
                     ),

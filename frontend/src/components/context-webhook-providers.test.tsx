@@ -78,7 +78,7 @@ describe("multiple playbook context providers", () => {
     expect(screen.getByText("WEBHOOK_TIMEOUT")).toBeVisible();
     expect(screen.getByText("750 ms (0.8 s)")).toBeVisible();
     expect(screen.queryByText(/X-TierX-Signature/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/X-SOC-Mind-Signature/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/X-TierX-Signature/)).not.toBeInTheDocument();
   });
 
   it("shows the ordered provider configuration with one shared credential model", async () => {

@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { scopedApi } from "@/lib/tenant-scope";
@@ -37,15 +37,14 @@ describe("AlertsDashboardView", () => {
     );
     vi.mocked(scopedApi).mockReturnValue({ alertStats } as never);
 
-    render(
-      <AlertsDashboardView tenantId="tenant-1" scope="tenant" />,
-    );
+    // Settle the metrics request and its finally() state update before teardown.
+    await act(async () => {
+      render(<AlertsDashboardView tenantId="tenant-1" scope="tenant" />);
+    });
 
-    await waitFor(() =>
-      expect(alertStats).toHaveBeenCalledWith("tenant-1", {
-        q: "needle",
-        since_hours: 24,
-      }),
-    );
+    expect(alertStats).toHaveBeenCalledWith("tenant-1", {
+      q: "needle",
+      since_hours: 24,
+    });
   });
 });

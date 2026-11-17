@@ -18,7 +18,6 @@ def environment(name: str, default: str) -> str:
     return (
         os.environ.get(f"TIERX_{name}")
         or os.environ.get(name)
-        or os.environ.get(f"SOC_MIND_{name}")
         or default
     )
 
@@ -122,11 +121,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         def compatible(suffix: str) -> str | None:
             canonical = self.headers.get(f"X-TierX-{suffix}", "").strip()
-            legacy = self.headers.get(f"X-SOC-Mind-{suffix}", "").strip()
-            if canonical and legacy and canonical != legacy:
-                self._json(400, {"error": "conflicting_compatibility_headers"})
-                return None
-            return canonical or legacy
+            return canonical
 
         delivery_id = compatible("Delivery-ID")
         timestamp = compatible("Timestamp")

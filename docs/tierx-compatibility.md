@@ -1,26 +1,33 @@
-# TierX compatibility contracts
+# TierX clean-start identifier contract
 
-TierX uses `TIERX_*` environment variables, `X-TierX-*` HTTP headers,
-`tierx_*` browser keys, `tierx_kb`, and `TIERX_ANALYSIS_DEFAULT`.
+This release is a **breaking, clean-start release**. It does not read, migrate or
+mirror predecessor identifiers. Do not deploy it over an existing installation
+expecting its databases, credentials, browser sessions or Forge queues to work.
 
-Compatibility is permanent for existing installations:
+## Canonical identifiers
 
-- Environment resolution is canonical `TIERX_*`, then the existing unprefixed
-  name, then `SOC_MIND_*`.
-  Compose resolves these names before startup, including required credentials.
-  Empty Compose values fall through to the next name or default. Frontend API
-  URLs additionally support an explicitly empty value for same-origin requests.
-- Inbound signed/private endpoints accept `X-TierX-*` or `X-SOC-Mind-*` and
-  reject a request if both carry different values.
-- Outbound signed calls emit both header families with identical values.
-- Browser state is read and mirrored between canonical and legacy keys.
-  If both differ, the legacy value wins so changes made during rollback survive.
-- `soc_mind_kb` re-exports `tierx_kb`.
-- New encrypted credentials record AAD namespace `tierx`; records without this
-  metadata use the legacy AAD namespace.
-- The active legacy prompt is copied idempotently into
-  `TIERX_ANALYSIS_DEFAULT`; historical provenance is not rewritten.
+- Platform database: `tierx_platform`.
+- New tenant databases: `tierx_tenant_{slug}`.
+- Docker container names: `tierx_*`; use Compose service names in automation.
+- Environment resolution: `TIERX_*`, then the existing unprefixed setting.
+- Signed HTTP headers: `X-TierX-*` only.
+- Browser state: `tierx_token`, `tierx_selected_tenant`,
+  `tierx_onboarding_seen`; no mirroring or migration.
+- Python Knowledge Base package: `tierx_kb` only.
+- Default prompt identity: `TIERX_ANALYSIS_DEFAULT`, bootstrapped independently.
+- Encryption AAD and deterministic delivery namespaces: `tierx`.
+- Jira module, queue and storage identifiers: `tierx-*` / `tierx:*`.
 
-Repository paths, GHCR image names, databases, Docker identities, the Jira
-Forge app/module/queue/storage keys, and other physical deployment identifiers
-remain stable by design.
+## Operational boundary
+
+Use a new installation with TierX databases, fresh entry/signing credentials and
+fresh Jira configuration. Existing encrypted records and delivery identities are
+not converted, and browser users must sign in again. Existing Docker volumes are
+not deleted or renamed by this change. Changing container names does not make
+reusing an existing volume a clean installation: select a new Compose project and
+new persistent volumes explicitly.
+
+No database deletion, server reset, secret rotation, Forge reinstallation or data
+migration is automated by this source change. Those are separate operator actions.
+Rollback is to the previous release together with its original configuration and
+data; do not point the previous release at a new installation's state.

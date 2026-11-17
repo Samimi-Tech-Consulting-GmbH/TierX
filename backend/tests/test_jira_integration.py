@@ -32,7 +32,7 @@ def jira_db():
     mongoengine.disconnect_all()
     mongomock.gridfs.enable_gridfs_integration()
     mongoengine.connect(
-        "soc_mind_platform",
+        "tierx_platform",
         host="mongodb://unit-test.invalid/",
         mongo_client_class=mongomock.MongoClient,
         alias="default",
@@ -42,7 +42,7 @@ def jira_db():
         tenant_id="tenant-1",
         name="tenant-one",
         display_name="Tenant One",
-        db_name="soc_mind_tenant_one",
+        db_name="tierx_tenant_one",
         status="ACTIVE",
         allowed_source_systems=["SPLUNK"],
     ).save()
@@ -196,7 +196,7 @@ def test_project_routes_are_scoped_to_tenant(jira_db):
         tenant_id="tenant-2",
         name="tenant-two",
         display_name="Tenant Two",
-        db_name="soc_mind_tenant_two",
+        db_name="tierx_tenant_two",
         status="ACTIVE",
         allowed_source_systems=["SPLUNK"],
     ).save()

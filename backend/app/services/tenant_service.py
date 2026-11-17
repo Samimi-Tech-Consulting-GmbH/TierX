@@ -56,7 +56,7 @@ class TenantService:
     def _generate_db_name(slug: str) -> str:
         # replace any non-alphanumeric chars with underscores for safety
         safe_slug = re.sub(r"[^a-zA-Z0-9]", "_", slug).lower()
-        return f"soc_mind_tenant_{safe_slug}"
+        return f"tierx_tenant_{safe_slug}"
 
     @classmethod
     def provision_tenant_database(cls, db_name: str):

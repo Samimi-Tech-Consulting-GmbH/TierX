@@ -90,7 +90,7 @@ class WebhookSigningService:
                 record["scope_type"],
                 record["scope_id"],
                 record["key_id"],
-                record.get("aad_namespace") or "soc-mind",
+                record.get("aad_namespace") or "tierx",
             ),
         )
         return clear.decode()

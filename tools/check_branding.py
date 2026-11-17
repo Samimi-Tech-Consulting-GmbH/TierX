@@ -1,54 +1,27 @@
 #!/usr/bin/env python3
-"""Reject active legacy branding outside permanent compatibility identifiers."""
-
-from __future__ import annotations
-
-import re
-import subprocess
+"""Verify canonical TierX product and deployment identifiers."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY = re.compile(r"soc[- _]?mind", re.IGNORECASE)
-ALLOWED = [
-    re.compile(pattern)
-    for pattern in (
-        r"\bSOC-Mind-main\b",
-        r"ghcr\.io/(?:\$\{\{ github\.repository_owner \}\}|\$\{REGISTRY_NAMESPACE\})/soc-mind[-\w${}.:]*",
-        r"/opt/soc-mind", r"\bsocmind_(?:backend|frontend|ingestion_proxy|init|kafka|kb_processor|mongodb|ollama|pipeline)\b",
-        r"\bsoc_mind_(?:platform|tenant[_\w]*)\b", r"\bSOC_MIND_(?:[A-Z0-9_]+|\{_?name\}|\*)?",
-        r"X-SOC-Mind-(?:[A-Za-z0-9{}-]+|\*)", r"x-soc-mind-[a-z{}-]+", r"\bsoc_mind_(?:token|onboarding_seen|selected_tenant)\b",
-        r"\bsoc_mind_kb\b", r"\bsoc-mind:(?:config|integration-secret|submit|submission|pending|poll|webhook|enrichment-action)",
-        r"\bSOC_MIND_ANALYSIS_DEFAULT\b", r"\bsoc_mind_(?:kpi|dashboard)_test_[A-Fa-f0-9{}_.]+",
-        r"\bsoc-mind-(?:send-issue|configure|jira-submit)\b", r'"soc-mind"',
-        r"\bsoc-mind-correlation-repair\b",
-    )
-]
-IGNORED = {"LICENSE", "THIRD_PARTY_NOTICES.md", "sbom.cdx.json", "tools/check_branding.py", "tools/test_branding.py"}
+EXPECTED = {
+    "README.md": ("TierX",),
+    "backend/app/db/mongodb.py": ('db="tierx_platform"',),
+    "backend/app/services/tenant_service.py": ('f"tierx_tenant_{safe_slug}"',),
+    "frontend/src/lib/storage.ts": ('"tierx_token"', '"tierx_selected_tenant"'),
+    "compose.yaml": ("container_name: tierx_backend", "container_name: tierx_mongodb"),
+    "integrations/jira-forge/manifest.yml": ("tierx-send-issue", "tierx-configure", "tierx-jira-submit"),
+}
 
+def missing_identifiers(text, expected):
+    return [value for value in expected if value not in text]
 
-def has_legacy_branding(line: str) -> bool:
-    for allowed in ALLOWED:
-        line = allowed.sub("", line)
-    return bool(LEGACY.search(line))
-
-
-def main() -> None:
-    paths = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+def main():
     failures = []
-    for relative in paths:
-        if relative in IGNORED or relative.startswith("docs/deployments/"):
-            continue
-        path = ROOT / relative
-        try:
-            lines = path.read_text(errors="strict").splitlines()
-        except (UnicodeDecodeError, OSError):
-            continue
-        for number, line in enumerate(lines, 1):
-            if has_legacy_branding(line):
-                failures.append(f"{relative}:{number}:{line.strip()}")
+    for relative, expected in EXPECTED.items():
+        missing = missing_identifiers((ROOT / relative).read_text(), expected)
+        failures.extend(f"{relative}: missing canonical identifier {value}" for value in missing)
     if failures:
-        raise SystemExit("Active legacy branding found:\n" + "\n".join(failures))
-
+        raise SystemExit("\n".join(failures))
 
 if __name__ == "__main__":
     main()

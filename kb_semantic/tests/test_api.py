@@ -16,7 +16,7 @@ from test_semantic import FakeEngine
 def api(monkeypatch):
     monkeypatch.setenv("TIERX_KB_SEMANTIC_RETRIEVAL_ENABLED", "true")
     client = mongomock.MongoClient(tz_aware=True)
-    client.soc_mind_platform.tenants.insert_one(
+    client.tierx_platform.tenants.insert_one(
         {
             "tenant_id": "tenant-1",
             "status": "ACTIVE",
@@ -75,7 +75,7 @@ def test_deleted_unknown_and_other_tenant(api):
             .json()["semantic_status"]
             == "NOT_AVAILABLE"
         )
-    api[1].soc_mind_platform.tenants.update_one({}, {"$set": {"status": "DELETED"}})
+    api[1].tierx_platform.tenants.update_one({}, {"$set": {"status": "DELETED"}})
     assert search(api).json()["semantic_status"] == "NOT_AVAILABLE"
 
 
@@ -134,7 +134,7 @@ def test_deleted_tenant_is_purged_without_new_scheduling(api):
     db, engine = api[1].tenant_db, FakeEngine()
     discover(db, "tenant-1")
     process(db, claim(db), engine)
-    api[1].soc_mind_platform.tenants.update_one({}, {"$set": {"status": "DELETED"}})
+    api[1].tierx_platform.tenants.update_one({}, {"$set": {"status": "DELETED"}})
     main.index_tenants(api[1], engine)
     main.index_tenants(api[1], engine)
     assert len(engine.deleted) == 1

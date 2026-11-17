@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class PlatformConfigurationService:
     @staticmethod
     def db():
-        return DatabaseManager.get_tenant_database("soc_mind_platform")
+        return DatabaseManager.get_tenant_database("tierx_platform")
 
     @classmethod
     def document(cls):

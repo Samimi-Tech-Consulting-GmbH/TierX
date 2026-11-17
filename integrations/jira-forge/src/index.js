@@ -8,7 +8,7 @@ import { kvs } from "@forge/kvs";
 import { publicConfig, saveConfig, testConnection, disconnect, prepareConnection } from "./lib/tierx.js";
 import { requireIssueViewer } from "./lib/jira.js";
 
-const queue = new Queue({ key: "soc-mind-jira-submit" });
+const queue = new Queue({ key: "tierx-jira-submit" });
 
 export async function requireJiraAdministrator(accountId, client = api) {
   if (!accountId) throw new Error("Jira administrator context is unavailable.");
@@ -70,7 +70,7 @@ export const handler = makeResolver({
         cloudId: context.cloudId,
         connectionIdentity: config.identity,
       },
-      concurrency: { key: "soc-mind-jira-submit", limit: 2 },
+      concurrency: { key: "tierx-jira-submit", limit: 2 },
     });
     return { requestId, issueKey, state: "QUEUED" };
   },

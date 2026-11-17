@@ -39,7 +39,7 @@ class TestInput(BaseModel):
 
 
 def database():
-    db = DatabaseManager.get_tenant_database("soc_mind_platform")
+    db = DatabaseManager.get_tenant_database("tierx_platform")
     db.workflow_python_tools.create_index("code", unique=True)
     db.workflow_python_tool_revisions.create_index([("code", 1), ("revision", 1)], unique=True)
     db.workflow_python_test_calls.create_index("call_id", unique=True)

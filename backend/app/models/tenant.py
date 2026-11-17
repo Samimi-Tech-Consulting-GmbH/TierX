@@ -3,7 +3,7 @@ import mongoengine as me
 
 class Tenant(me.Document):
     """
-    MongoEngine Document for the Tenant schema in the soc_mind_platform database.
+    MongoEngine Document for the Tenant schema in the tierx_platform database.
     This acts as the single source of truth for the database schema.
     """
     tenant_id = me.StringField(required=True, unique=True)
@@ -22,7 +22,7 @@ class Tenant(me.Document):
 
     meta = {
         'collection': 'tenants',
-        'db_alias': 'default',   # Always stored in soc_mind_platform
+        'db_alias': 'default',   # Always stored in tierx_platform
         'indexes': [
             'name',
             'tenant_id',

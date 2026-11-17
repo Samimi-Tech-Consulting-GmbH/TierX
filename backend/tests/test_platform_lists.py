@@ -20,7 +20,7 @@ client = TestClient(app)
 
 mongoengine.disconnect_all()
 mongoengine.connect(
-    "soc_mind_platform",
+    "tierx_platform",
     host="mongodb://unit-test.invalid/",
     mongo_client_class=mongomock.MongoClient,
     alias="default",
@@ -67,7 +67,7 @@ def _tenant(name: str, status: str = "ACTIVE") -> Tenant:
         tenant_id=str(uuid4()),
         name=name,
         display_name=f"{name.title()} Tenant",
-        db_name=f"soc_mind_tenant_{name}",
+        db_name=f"tierx_tenant_{name}",
         status=status,
         created_by="test@example.com",
     ).save()

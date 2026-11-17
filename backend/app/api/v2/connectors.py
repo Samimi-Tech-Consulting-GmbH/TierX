@@ -50,7 +50,7 @@ class Connector(BaseModel):
 
 
 def database():
-    db = DatabaseManager.get_tenant_database("soc_mind_platform")
+    db = DatabaseManager.get_tenant_database("tierx_platform")
     db.v2_connectors.create_index("connector_code", unique=True)
     db.v2_connector_revisions.create_index(
         [("connector_code", 1), ("revision", 1)], unique=True

@@ -91,7 +91,7 @@ class Client:
         db_name, tenant_id, cohort = self.selected
         if name == db_name:
             return Database(self.raw[name], cohort)
-        if name == "soc_mind_platform":
+        if name == "tierx_platform":
             return Platform(self.raw[name], tenant_id)
         raise ValueError("V2 cross-tenant database access rejected")
 
