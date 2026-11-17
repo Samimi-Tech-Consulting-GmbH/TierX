@@ -14,7 +14,7 @@ client = TestClient(app)
 
 mongoengine.disconnect_all()
 mongoengine.connect(
-    "soc_mind_platform",
+    "tierx_platform",
     host="mongodb://root:example@mongodb:27017/",
     mongo_client_class=mongomock.MongoClient,
     alias="default",
@@ -112,7 +112,7 @@ def test_tenant_creation():
     data = response.json()
     assert "tenant_id" in data
     assert data["name"] == "test-org-1"
-    assert data["db_name"] == "soc_mind_tenant_test_org_1"
+    assert data["db_name"] == "tierx_tenant_test_org_1"
     assert data["status"] == "ONBOARDING"
 
     db_name = data["db_name"]

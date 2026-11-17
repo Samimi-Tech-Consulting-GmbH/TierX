@@ -44,7 +44,7 @@ class Profile(BaseModel):
 
 
 def collection():
-    db = DatabaseManager.get_tenant_database("soc_mind_platform")
+    db = DatabaseManager.get_tenant_database("tierx_platform")
     db.v2_llm_profiles.create_index("profile_code", unique=True)
     db.v2_llm_profile_revisions.create_index(
         [("profile_code", 1), ("revision", 1)], unique=True
@@ -274,7 +274,7 @@ async def test(profile_code: str):
         row["tested"] = True
         row.pop("_id", None)
         DatabaseManager.get_tenant_database(
-            "soc_mind_platform"
+            "tierx_platform"
         ).v2_llm_profile_revisions.update_one(
             {"profile_code": profile_code, "revision": row["revision"]},
             {"$setOnInsert": row},

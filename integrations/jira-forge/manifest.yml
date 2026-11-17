@@ -6,7 +6,7 @@ app:
 
 modules:
   jira:issueAction:
-    - key: soc-mind-send-issue
+    - key: tierx-send-issue
       resource: issue-action
       resolver:
         function: ui-resolver
@@ -15,7 +15,7 @@ modules:
       viewportSize: medium
 
   jira:adminPage:
-    - key: soc-mind-configure
+    - key: tierx-configure
       resource: admin-page
       resolver:
         function: ui-resolver
@@ -25,7 +25,7 @@ modules:
 
   consumer:
     - key: jira-submit-consumer
-      queue: soc-mind-jira-submit
+      queue: tierx-jira-submit
       function: submit-consumer
 
   scheduledTrigger:

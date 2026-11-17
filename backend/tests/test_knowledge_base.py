@@ -22,7 +22,7 @@ KB_FIXTURES = Path(__file__).parent / "fixtures" / "knowledge_base"
 
 mongoengine.disconnect_all()
 mongoengine.connect(
-    "soc_mind_platform",
+    "tierx_platform",
     host="mongodb://unit-test.invalid/",
     mongo_client_class=mongomock.MongoClient,
     alias="default",
@@ -631,8 +631,7 @@ def test_empty_hybrid_search_reports_hybrid_version(tenants):
     assert response.json()["semantic_status"] == "NOT_INDEXED"
 
 
-def test_legacy_knowledge_base_import_reexports_tierx_package():
-    from soc_mind_kb import parse_document as legacy_parse
-    from tierx_kb import parse_document as canonical_parse
+def test_knowledge_base_package_exports_parser():
+    from tierx_kb import parse_document
 
-    assert legacy_parse is canonical_parse
+    assert callable(parse_document)

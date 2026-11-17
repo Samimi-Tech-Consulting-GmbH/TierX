@@ -64,9 +64,9 @@ async def test_terminal_persistence_failures_propagate_for_replay(monkeypatch, w
 
 def test_empty_environment_aliases_use_shared_precedence():
     from tierx_runtime import normalize_environment
-    env = {"TIERX_MONGO_URL": "", "MONGO_URL": "", "SOC_MIND_MONGO_URL": "legacy"}
+    env = {"TIERX_MONGO_URL": "", "MONGO_URL": "current"}
     normalize_environment(env)
-    assert env["MONGO_URL"] == "legacy"
+    assert env["MONGO_URL"] == "current"
     env["TIERX_MONGO_URL"] = "canonical"
     normalize_environment(env)
     assert env["MONGO_URL"] == "canonical"

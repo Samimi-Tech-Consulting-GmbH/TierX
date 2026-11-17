@@ -30,7 +30,7 @@ def environment(monkeypatch):
     )
     monkeypatch.setattr("app.services.tenant_service.DatabaseManager", MockDatabaseManager)
     monkeypatch.setattr("app.services.playbook_service.DatabaseManager", MockDatabaseManager)
-    MockDatabaseManager.get_tenant_database("soc_mind_platform")[
+    MockDatabaseManager.get_tenant_database("tierx_platform")[
         "enrichment_actions"
     ].delete_many({})
 
@@ -80,7 +80,7 @@ def test_platform_admin_lifecycle_copy_once_and_redaction():
     body = created.json()
     assert body["secret"].startswith("easec_")
     assert body["timeout_seconds"] == 300
-    stored = MockDatabaseManager.get_tenant_database("soc_mind_platform")[
+    stored = MockDatabaseManager.get_tenant_database("tierx_platform")[
         "enrichment_actions"
     ].find_one({"action_code": payload["action_code"]})
     assert stored["ciphertext"]

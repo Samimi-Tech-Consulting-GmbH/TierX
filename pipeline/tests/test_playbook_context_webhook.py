@@ -14,9 +14,9 @@ from app.services.playbook_context_webhook import (
 )
 
 
-def test_delivery_ids_preserve_persisted_namespace():
-    assert PlaybookContextWebhookClient.delivery_id("tenant", "alert", "pb", 2) == "255761a1-f9db-53ab-9d18-56175f0b028c"
-    assert PlaybookContextWebhookClient.delivery_id("tenant", "alert", "pb", 2, "first") == "55ccd627-45b8-5fc9-8cd5-08dcd472b9d5"
+def test_delivery_ids_use_tierx_namespace():
+    assert PlaybookContextWebhookClient.delivery_id("tenant", "alert", "pb", 2) == "737c9339-1c72-5d07-a4f9-abac71077ea2"
+    assert PlaybookContextWebhookClient.delivery_id("tenant", "alert", "pb", 2, "first") == "32bd9107-294a-5d76-bbdb-5457ca9eb14f"
 
 
 class Collection:
@@ -37,7 +37,7 @@ class Collection:
 def encrypted_record(master_key, secret, scope="TENANT", scope_id="tenant-1"):
     key_id = "whk_test"
     nonce = b"n" * 12
-    aad = f"soc-mind:webhook:v1:tenant-1:{scope}:{scope_id}:{key_id}".encode()
+    aad = f"tierx:webhook:v1:tenant-1:{scope}:{scope_id}:{key_id}".encode()
     ciphertext = AESGCM(master_key).encrypt(nonce, secret.encode(), aad)
     return {
         "scope_type": scope,
@@ -180,7 +180,7 @@ async def test_success_signs_normalized_only_and_persists_safe_metadata(
     assert b"raw_payload" not in captured["content"]
     assert b"authorization" not in captured["content"]
     assert captured["headers"]["X-TierX-Signature"].startswith("v1=")
-    assert captured["headers"]["X-SOC-Mind-Signature"] == captured["headers"]["X-TierX-Signature"]
+    assert captured["headers"]["X-TierX-Signature"] == captured["headers"]["X-TierX-Signature"]
     assert "secret" not in str(result)
 
 

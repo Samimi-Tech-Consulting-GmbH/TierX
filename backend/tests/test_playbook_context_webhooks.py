@@ -282,7 +282,7 @@ def test_copy_once_encryption_precedence_rotation_and_permissions(tenant_and_pla
         legacy_nonce,
         legacy_secret.encode(),
         WebhookSigningService._aad(
-            tenant_id, "TENANT", tenant_id, legacy_key_id, "soc-mind"
+            tenant_id, "TENANT", tenant_id, legacy_key_id, "tierx"
         ),
     )
     legacy_record = {

@@ -15,7 +15,7 @@ from app.schemas.alert import (
 )
 from app.services.kafka_publisher import kafka_publisher
 from app.services.tenant_cache import tenant_cache
-from app.core.brand_compat import compatible_header
+from app.core.brand_compat import tierx_header
 from tierx_runtime import boolean, env_value
 
 router = APIRouter()
@@ -69,12 +69,12 @@ async def ingest_alert(request: Request):
 async def _historical_ingest_alert(request: Request):
     parsed = await request.json()
     raw: dict = parsed if isinstance(parsed, dict) else {"payload": parsed}
-    requested_alert_id = compatible_header(request, "requested-alert-id")
+    requested_alert_id = tierx_header(request, "requested-alert-id")
     try:
         alert_id = str(UUID(requested_alert_id)) if requested_alert_id else str(uuid4())
     except (ValueError, TypeError, AttributeError):
         alert_id = str(uuid4())
-    submitted_by = compatible_header(request, "debug-actor")
+    submitted_by = tierx_header(request, "debug-actor")
 
     from app.services.trace import TraceSpan
 

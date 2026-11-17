@@ -18,7 +18,7 @@ def test_alert_stats_execute_on_real_mongodb_44_without_get_field():
     client = MongoClient(MONGO44_URL, serverSelectionTimeoutMS=5000)
     version = client.server_info()["version"]
     assert version.startswith("4.4."), version
-    database = client[f"soc_mind_kpi_test_{uuid4().hex}"]
+    database = client[f"tierx_kpi_test_{uuid4().hex}"]
     try:
         database.alerts.insert_many(
             [
@@ -51,7 +51,7 @@ def test_alert_stats_execute_on_real_mongodb_44_without_get_field():
 @pytest.mark.skipif(not MONGO44_URL, reason="requires a real MongoDB 4.4 server")
 def test_dashboard_definitions_execute_on_mongodb_44(monkeypatch):
     client = MongoClient(MONGO44_URL, serverSelectionTimeoutMS=5000)
-    database = client[f"soc_mind_dashboard_test_{uuid4().hex}"]
+    database = client[f"tierx_dashboard_test_{uuid4().hex}"]
     now = datetime.now(timezone.utc)
     try:
         database.alerts.insert_many(

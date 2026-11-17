@@ -4,7 +4,7 @@ set -e
 
 echo "Starting Initialization Job for TierX..."
 
-MODEL=${TIERX_OLLAMA_MODEL:-${OLLAMA_MODEL:-${SOC_MIND_OLLAMA_MODEL:-phi3}}}
+MODEL=${TIERX_OLLAMA_MODEL:-${OLLAMA_MODEL:-phi3}}
 
 echo "Checking if model '$MODEL' is already present in Ollama..."
 if curl -s http://ollama:11434/api/tags | grep -q "\"name\":\"$MODEL"; then

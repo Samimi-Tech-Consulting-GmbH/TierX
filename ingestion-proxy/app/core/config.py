@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     kafka_trace_topic: str = "alert_processing_events"
 
     mongo_url: str
-    mongo_db: str = "soc_mind_platform"
+    mongo_db: str = "tierx_platform"
     tenant_cache_ttl_seconds: int = 3600
     debug_trace_enabled: bool = False
     debug_trace_max_snapshot_bytes: int = 262_144

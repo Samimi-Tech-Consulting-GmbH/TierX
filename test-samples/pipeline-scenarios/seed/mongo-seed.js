@@ -1,7 +1,7 @@
 // Seed data for the pipeline test scenarios.
-// Run: docker exec -i socmind_mongodb mongosh -u root -p example < seed/mongo-seed.js
-const platform = db.getSiblingDB("soc_mind_platform");
-const tenantDb = db.getSiblingDB("soc_mind_tenant_demo");
+// Run: docker compose exec -T mongodb mongosh -u root -p example < seed/mongo-seed.js
+const platform = db.getSiblingDB("tierx_platform");
+const tenantDb = db.getSiblingDB("tierx_tenant_demo");
 
 platform.tenants.updateOne(
   { tenant_id: "tenant-demo" },
@@ -9,7 +9,7 @@ platform.tenants.updateOne(
       tenant_id: "tenant-demo",
       name: "Demo Tenant",
       status: "ACTIVE",
-      db_name: "soc_mind_tenant_demo",
+      db_name: "tierx_tenant_demo",
       allowed_source_systems: ["SPLUNK", "CORTEX_XDR"],
   } },
   { upsert: true }

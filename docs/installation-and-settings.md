@@ -66,8 +66,9 @@ Platform administrators use `/dashboard/admin/settings/platform` and:
 
 Canonical `TIERX_*` overrides take precedence. Empty values mean no override.
 Override fields are read-only, and saved shadow values remain intact so removing
-an override restores the administrator's saved value. Legacy unprefixed and
-`SOC_MIND_*` values are still accepted for existing installations.
+an override restores the administrator's saved value. Unprefixed settings remain
+supported. This is a clean-start release; see the
+[identifier contract](tierx-compatibility.md) before deployment.
 
 Settings record revision, UTC update time, and administrator audit identity.
 Backend, pipeline, ingestion, and document processor check every five seconds.

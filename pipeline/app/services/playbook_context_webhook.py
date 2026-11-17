@@ -33,7 +33,7 @@ def _decode(value: str) -> bytes:
 
 
 def decrypt_secret(tenant_id: str, record: dict[str, Any]) -> str:
-    namespace = record.get("aad_namespace") or "soc-mind"
+    namespace = record.get("aad_namespace") or "tierx"
     aad = (
         f"{namespace}:webhook:v1:{tenant_id}:{record['scope_type']}:"
         f"{record['scope_id']}:{record['key_id']}"
@@ -97,8 +97,8 @@ class PlaybookContextWebhookClient:
         version: int,
         webhook_id: str | None = None,
     ) -> str:
-        # Keep persisted delivery IDs stable across product renames.
-        identity = f"soc-mind:webhook:v1:{tenant_id}:{alert_id}:{playbook_id}:{version}"
+        # Stable namespace for a clean TierX installation.
+        identity = f"tierx:webhook:v1:{tenant_id}:{alert_id}:{playbook_id}:{version}"
         if webhook_id is not None:
             identity += f":{webhook_id}"
         return str(
@@ -295,11 +295,6 @@ class PlaybookContextWebhookClient:
                 "X-TierX-Timestamp": timestamp,
                 "X-TierX-Key-ID": credential["key_id"],
                 "X-TierX-Signature": f"v1={signature}",
-                "X-SOC-Mind-Webhook-Version": "1",
-                "X-SOC-Mind-Delivery-ID": delivery_id,
-                "X-SOC-Mind-Timestamp": timestamp,
-                "X-SOC-Mind-Key-ID": credential["key_id"],
-                "X-SOC-Mind-Signature": f"v1={signature}",
             }
             timeout = min(10, max(1, int(config.get("timeout_seconds") or 5)))
             async with httpx.AsyncClient(

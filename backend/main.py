@@ -2,7 +2,7 @@ import asyncio
 import os
 
 # Canonical TierX environment variables override current unprefixed names;
-# legacy SOC_MIND_* aliases remain permanent for existing deployments.
+# TierX-prefixed configuration takes precedence over unprefixed settings.
 from tierx_runtime import normalize_environment
 normalize_environment()
 import httpx
@@ -313,7 +313,7 @@ async def health_check():
         client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=2000)
         client.admin.command("ping")
         components["mongodb"] = "green"
-        worker = client.soc_mind_platform.service_heartbeats.find_one({"service": "workflow-engine"})
+        worker = client.tierx_platform.service_heartbeats.find_one({"service": "workflow-engine"})
         seen = (worker or {}).get("updated_at")
         if seen and seen.tzinfo is None:
             seen = seen.replace(tzinfo=timezone.utc)
@@ -322,7 +322,7 @@ async def health_check():
         if components["workflow_engine"] == "red":
             overall_status = "UNHEALTHY"
         if KNOWLEDGE_BASE_PROCESSING_ENABLED:
-            heartbeat = client.soc_mind_platform.service_heartbeats.find_one(
+            heartbeat = client.tierx_platform.service_heartbeats.find_one(
                 {"service": "knowledge-base-processor"}
             )
             seen_at = heartbeat.get("seen_at") if heartbeat else None
