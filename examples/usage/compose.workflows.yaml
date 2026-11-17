@@ -1,10 +1,2 @@
-# Enable only after draining the old pipeline and preparing fixed workflows.
-services:
-  workflow-engine:
-    extends:
-      file: compose.common.yaml
-      service: pipeline
-    command: [python, workflow_main.py]
-    stop_grace_period: 32m
-    profiles: [workflow-engine]
-    mem_limit: 640m
+# Workflows are part of the standard pipeline service; no overlay is needed.
+services: {}

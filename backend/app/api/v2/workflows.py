@@ -32,17 +32,15 @@ from app.models.tenant import Tenant
 
 
 def enabled():
-    if not (boolean(env_value("ingestion_v2_enabled") or False) or boolean(env_value("workflow_engine_enabled") or False)):
-        raise HTTPException(404, "Ingestion V2 is disabled")
+    """Workflow execution is the standard runtime, not a feature flag."""
 
 
 def engine_enabled():
-    if not boolean(env_value("workflow_engine_enabled") or False):
-        raise HTTPException(404, "Workflow engine is disabled")
+    """Compatibility dependency for existing workflow management routes."""
 
 
 def legacy_mutation(request: Request):
-    if request.method not in {"GET", "HEAD", "OPTIONS"} and boolean(env_value("workflow_engine_enabled") or False):
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
         raise HTTPException(410, "Use platform Workflow Studio and a fixed workflow ingestion URL")
 
 

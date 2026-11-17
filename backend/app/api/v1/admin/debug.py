@@ -37,6 +37,10 @@ async def debug_ingest(
     request: Request,
     admin: AuthenticatedUser = Depends(require_platform_admin),
 ):
+    return JSONResponse(status_code=410, content={"detail": "Use a fixed authenticated workflow ingestion URL."})
+
+
+async def _historical_debug_ingest(request: Request, admin: AuthenticatedUser = Depends(require_platform_admin)):
     if not DEBUG_TRACE_ENABLED:
         return _disabled()
 

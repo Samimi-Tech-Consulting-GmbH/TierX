@@ -52,6 +52,7 @@ def _api_client(monkeypatch):
     monkeypatch.setattr(debug_api, "DEBUG_TRACE_ENABLED", True)
     monkeypatch.setattr(debug_api.httpx, "AsyncClient", lambda **kwargs: FakeAsyncClient())
     app = FastAPI()
+    app.post("/api/v1/admin/debug/ingest")(debug_api._historical_debug_ingest)
     app.include_router(debug_api.router, prefix="/api/v1/admin")
     return TestClient(app)
 
@@ -98,6 +99,7 @@ def test_debug_ingest_returns_503_when_private_service_fails(monkeypatch):
     monkeypatch.setattr(debug_api, "DEBUG_TRACE_ENABLED", True)
     monkeypatch.setattr(debug_api.httpx, "AsyncClient", lambda **kwargs: FailingClient())
     app = FastAPI()
+    app.post("/api/v1/admin/debug/ingest")(debug_api._historical_debug_ingest)
     app.include_router(debug_api.router, prefix="/api/v1/admin")
     response = TestClient(app).post(
         "/api/v1/admin/debug/ingest",

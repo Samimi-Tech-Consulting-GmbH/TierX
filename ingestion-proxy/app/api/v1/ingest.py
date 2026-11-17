@@ -63,8 +63,10 @@ async def _dead_letter(
     },
 )
 async def ingest_alert(request: Request):
-    if boolean(env_value("workflow_engine_enabled") or False):
-        return JSONResponse(status_code=410, content={"detail": "Legacy ingestion is retired; use your fixed authenticated workflow URL."})
+    return JSONResponse(status_code=410, content={"detail": "Legacy ingestion is retired; use your fixed authenticated workflow URL."})
+
+
+async def _historical_ingest_alert(request: Request):
     parsed = await request.json()
     raw: dict = parsed if isinstance(parsed, dict) else {"payload": parsed}
     requested_alert_id = compatible_header(request, "requested-alert-id")

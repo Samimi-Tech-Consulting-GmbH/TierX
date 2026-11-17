@@ -39,7 +39,7 @@ def test_installed_ingestion_reaches_normal_validation(monkeypatch):
     monkeypatch.setattr(main, "installation_complete", ready)
     monkeypatch.setattr(main.kafka_publisher, "publish_dead_letter", AsyncMock())
     response = TestClient(main.app).post("/api/v1/alerts/ingest", json={})
-    assert response.status_code == 422
+    assert response.status_code == 410
 
 
 def test_database_failure_fails_closed(monkeypatch):

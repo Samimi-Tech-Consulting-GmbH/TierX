@@ -44,7 +44,8 @@ def _client(monkeypatch):
     monkeypatch.setattr(ingest, "tenant_cache", FakeTenantCache())
     monkeypatch.setattr(settings, "debug_trace_enabled", True)
     app = FastAPI()
-    app.include_router(ingest.router, prefix="/api/v1/alerts")
+    # Historical trace serialization remains tested without exposing old ingress.
+    app.post("/api/v1/alerts/ingest")(ingest._historical_ingest_alert)
     return TestClient(app), publisher
 
 

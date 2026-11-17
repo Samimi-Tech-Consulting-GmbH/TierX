@@ -20,9 +20,7 @@ import {
   Bell,
   Book,
   Building2,
-  CircleArrowRight,
   Database,
-  FileCode2,
   LayoutDashboard,
   Network,
   LibraryBig,
@@ -85,10 +83,20 @@ function navItemActive(pathname: string, item: NavItem): boolean {
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard/admin/workflows", label: "Workflows", icon: SlidersHorizontal,
-    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
-  { href: "/dashboard/admin/agents", label: "Agents", icon: SlidersHorizontal,
-    group: "Operations", roles: [UserRole.PLATFORM_ADMIN] },
+  {
+    href: "/dashboard/admin/workflows",
+    label: "Workflows",
+    icon: SlidersHorizontal,
+    group: "Operations",
+    roles: [UserRole.PLATFORM_ADMIN],
+  },
+  {
+    href: "/dashboard/admin/agents",
+    label: "Agents",
+    icon: SlidersHorizontal,
+    group: "Operations",
+    roles: [UserRole.PLATFORM_ADMIN],
+  },
   {
     href: "/dashboard/admin",
     label: "Dashboard",
@@ -123,9 +131,21 @@ function settingsMenuItems(
             icon: Building2,
           },
       { href: "/users", label: "Users", icon: Users },
-      { href: "/dashboard/admin/settings/platform", label: "Platform settings", icon: SlidersHorizontal },
-      { href: "/dashboard/admin/settings/connectors", label: "Tools & integrations", icon: Plug },
-      { href: "/dashboard/admin/settings/llm-profiles", label: "Model profiles", icon: SlidersHorizontal },
+      {
+        href: "/dashboard/admin/settings/platform",
+        label: "Platform settings",
+        icon: SlidersHorizontal,
+      },
+      {
+        href: "/dashboard/admin/settings/connectors",
+        label: "Tools & integrations",
+        icon: Plug,
+      },
+      {
+        href: "/dashboard/admin/settings/llm-profiles",
+        label: "Model profiles",
+        icon: SlidersHorizontal,
+      },
       {
         href: "/dashboard/admin/integrations/jira",
         label: "Jira integration",
@@ -185,7 +205,9 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
       group: "Configuration",
     },
     {
-      href: isPlatformAdmin ? "/dashboard/admin/playbooks" : sectionHref("playbooks", tenantId, false),
+      href: isPlatformAdmin
+        ? "/dashboard/admin/playbooks"
+        : sectionHref("playbooks", tenantId, false),
       label: "Playbooks",
       icon: Book,
       group: "Configuration",
@@ -290,23 +312,15 @@ export function Sidebar({
       </nav>
 
       {/* Padding sits outside the rule so it stops short of the sidebar edges. */}
-      <div className="shrink-0 px-4 pb-6">
+      <div className="shrink-0 px-4 pb-3">
         <div className="border-t border-[#404040] pt-3">
           <SettingsMenu items={settingsItems} onNavigate={onNavigate} />
 
-          <ProductLinks version={releaseVersion} sha={releaseSha} />
-          <Link href="/legal/source" className={cn(ROW, "text-[#d4d4d4] hover:bg-white/5")}>
-            <FileCode2 className="size-4 shrink-0" />
-            <span>Source code (AGPL)</span>
-          </Link>
-          <button
-            type="button"
-            onClick={logout}
-            className={cn(ROW, "w-full text-[#f87171] hover:bg-white/5")}
-          >
-            <CircleArrowRight className="size-4 shrink-0" />
-            <span>Logout</span>
-          </button>
+          <ProductLinks
+            version={releaseVersion}
+            sha={releaseSha}
+            onLogout={logout}
+          />
         </div>
       </div>
     </aside>
