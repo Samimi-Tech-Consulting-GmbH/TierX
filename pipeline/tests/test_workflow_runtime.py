@@ -321,6 +321,7 @@ async def test_router_modes(environment, monkeypatch, mode, mapped, confidence, 
         schema = tools.model_call.call_args.kwargs["schema"]
         assert schema["properties"]["reason"]["maxLength"] == 256
         assert "one short sentence" in tools.model_call.call_args.args[5][0]["content"]
+        assert "from 0 to 1, never a percentage" in tools.model_call.call_args.args[5][0]["content"]
         validate_output({"code":"candidate", "confidence":confidence, "reason":"x" * 256}, schema)
         with pytest.raises(ModelError, match="MODEL_OUTPUT_INVALID"):
             validate_output({"code":"candidate", "confidence":confidence, "reason":"x" * 257}, schema)
