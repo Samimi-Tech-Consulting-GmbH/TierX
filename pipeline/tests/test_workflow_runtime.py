@@ -316,6 +316,17 @@ async def test_router_modes(environment, monkeypatch, mode, mapped, confidence, 
     assert tools.model_call.await_count == model_calls
     assert tools.profile.await_count == model_calls
     assert invoke.call_args.args[3] == f"playbook:{expected}@1"
+    if model_calls:
+        from tierx_workflows.llm import ModelError, validate_output
+        schema = tools.model_call.call_args.kwargs["schema"]
+        assert schema["properties"]["reason"]["maxLength"] == 256
+        assert "one short sentence" in tools.model_call.call_args.args[5][0]["content"]
+        assert "from 0 to 1, never a percentage" in tools.model_call.call_args.args[5][0]["content"]
+        validate_output({"code":"candidate", "confidence":confidence, "reason":"x" * 256}, schema)
+        with pytest.raises(ModelError, match="MODEL_OUTPUT_INVALID"):
+            validate_output({"code":"candidate", "confidence":confidence, "reason":"x" * 257}, schema)
+        with pytest.raises(ModelError, match="MODEL_OUTPUT_INVALID"):
+            validate_output({"code":"candidate", "confidence":87, "reason":"Synthetic match"}, schema)
 
 
 @pytest.mark.asyncio
