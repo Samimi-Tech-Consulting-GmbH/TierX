@@ -291,12 +291,13 @@ export function createAlertSimulator(
         try {
           // Request input can change only the pathname, never the upstream authority.
           const selected = request.headers["x-sandbox-target"] || target.origin;
-          if (!targets.some((item) => item.target === selected))
+          const configuredTarget = targets.find((item) => item.target === selected);
+          if (!configuredTarget)
             return send(
               400,
               '{"detail":"Target is not configured on this sandbox"}',
             );
-          const destination = new URL(selected);
+          const destination = new URL(configuredTarget.target);
           destination.pathname = path;
           destination.search = "";
           destination.hash = "";
