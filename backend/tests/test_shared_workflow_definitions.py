@@ -99,13 +99,17 @@ def test_modern_nodes_and_connector_tools_are_rejected_in_legacy_graphs():
 @pytest.mark.parametrize("mode,extra", [("static",{"candidates":[""]*30,"profile_code":"invalid profile","threshold":-1}), ("model_only",{"mappings":{"x":""}})])
 def test_router_ignores_invalid_hidden_settings(mode, extra):
     config={"mode":mode,"fallback":"generic","profile_code":"local",**extra}
-    result=validate_graph(graph({"id":"pick","type":"playbook_selector","config":config},capabilities=["normalization"]))
+    original=graph({"id":"pick","type":"playbook_selector","config":config},capabilities=["normalization"])
+    before=deepcopy(original)
+    result=validate_definition("playbook",original)
+    assert original==before
     cleaned=next(n["config"] for n in result["nodes"] if n["id"]=="pick")
     assert ("candidates" if mode=="static" else "mappings") not in cleaned
 
 
-def test_static_router_does_not_resolve_stale_profile(monkeypatch):
+@pytest.mark.parametrize("mode",["static","model","model_only"])
+def test_static_router_does_not_resolve_stale_profile(monkeypatch,mode):
     from app.api.v2 import workflows
     monkeypatch.setattr(workflows.DatabaseManager,"get_tenant_database",lambda _: object())
-    result=workflows.resources(None,{"nodes":[{"type":"playbook_selector","config":{"mode":"static","profile_code":"unauthorized"}}]},"one")
+    result=workflows.resources(None,{"nodes":[{"type":"playbook_selector","config":{"mode":mode,"candidates":[],"profile_code":"unauthorized"}}]},"one")
     assert result["profiles"]=={}

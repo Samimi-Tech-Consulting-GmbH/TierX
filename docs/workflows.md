@@ -91,6 +91,9 @@ the required fallback **playbook**, not the outer workflow. This is selection
 fallback, not recovery from errors inside a selected playbook. Inactive mappings,
 candidates and model profiles are not compiled as dependencies for modes that do
 not use them. Existing `static` and `model` configurations retain their behavior.
+Saving drops inactive settings; switching modes later requires configuring those
+settings again. An empty candidate list skips model/profile resolution and uses
+the static match when permitted, otherwise the fallback (`NO_MODEL_CANDIDATES`).
 Specialist templates do not pretend to install integrations.
 
 ## Fixed ingestion URL

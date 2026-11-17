@@ -202,7 +202,7 @@ def resources(db, graph, tenant_id):
             if not any(tool["name"] == tool_name for tool in connector["tools"]):
                 raise HTTPException(422, "Tool schema is not explicitly approved")
             result["connectors"][code] = {k: v for k, v in connector.items() if k not in {"credentials", "_id"}}
-        needs_profile = kind in {"llm_analysis", "llm_tools"} or (kind == "playbook_selector" and cfg.get("mode", "static") in {"model", "model_only"})
+        needs_profile = kind in {"llm_analysis", "llm_tools"} or (kind == "playbook_selector" and cfg.get("mode", "static") in {"model", "model_only"} and bool(cfg.get("candidates")))
         if needs_profile and cfg.get("profile_code"):
             profile = found(
                 platform.v2_llm_profiles,
