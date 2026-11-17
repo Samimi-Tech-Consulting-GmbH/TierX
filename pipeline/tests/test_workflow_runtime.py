@@ -293,6 +293,48 @@ async def test_waiting_selector_reuses_its_first_persisted_fallback(environment,
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode,mapped,confidence,expected,model_calls", [
+    ("static", True, .9, "mapped", 0), ("static", False, .9, "fallback", 0),
+    ("model", True, .9, "mapped", 0), ("model", False, .9, "candidate", 1),
+    ("model_only", True, .9, "candidate", 1), ("model_only", True, .2, "fallback", 1),
+])
+async def test_router_modes(environment, monkeypatch, mode, mapped, confidence, expected, model_calls):
+    from app.workflows import runtime
+    mongo,db=environment
+    mongo.tenant.v2_jobs.insert_one({"job_id":"router"})
+    tools=WorkflowTools()
+    tools.profile=AsyncMock(return_value=({},None))
+    tools.model_call=AsyncMock(return_value={"result":{"code":"candidate","confidence":confidence,"reason":"Synthetic match"}})
+    invoke=AsyncMock(return_value={"result":{}})
+    monkeypatch.setattr(runtime,"invoke",invoke)
+    parent=run(linear([node("entry","entry"),node("done","complete")]))
+    parent["bundle"]["definitions"]["playbook:candidate@1"]={"description":"Synthetic investigation"}
+    definition={"references":{f"select:playbook:{code}":f"playbook:{code}@1" for code in ("mapped","candidate","fallback")}}
+    selector=node("select","playbook_selector",mode=mode,profile_code="local",mappings={"synthetic":"mapped"} if mapped else {}, candidates=["candidate"],fallback="fallback")
+    result=await tools.select(db,parent,selector,{"job_id":"router"},{"alert_type":"synthetic","normalized_payload":{}},definition)
+    assert result["selected_playbook"] == expected
+    assert tools.model_call.await_count == model_calls
+    assert tools.profile.await_count == model_calls
+    assert invoke.call_args.args[3] == f"playbook:{expected}@1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode",["model","model_only"])
+async def test_empty_router_candidates_skip_model(environment,monkeypatch,mode):
+    from app.workflows import runtime
+    mongo,db=environment
+    mongo.tenant.v2_jobs.insert_one({"job_id":"empty"})
+    tools=WorkflowTools(); tools.profile=AsyncMock(); tools.model_call=AsyncMock()
+    call=AsyncMock(return_value={"result":{}})
+    monkeypatch.setattr(runtime,"invoke",call)
+    parent=run(linear([node("entry","entry"),node("done","complete")]))
+    result=await tools.select(db,parent,node("pick","playbook_selector",mode=mode,candidates=[],fallback="generic"),
+        {"job_id":"empty"},{"alert_type":"synthetic","normalized_payload":{}},{"references":{"pick:playbook:generic":"playbook:generic@1"}})
+    assert result["reason"]=="NO_MODEL_CANDIDATES" and result["fallback"]
+    tools.profile.assert_not_awaited(); tools.model_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_failed_reasoning_has_terminal_analysis_status_and_safe_snapshots(environment):
     mongo,db=environment
     parent=run(linear([node("entry","entry"),node("map","normalization",field_mapping={"host.name":"host"}),

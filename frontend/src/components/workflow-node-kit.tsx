@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { FlowNode } from "@/lib/workflows";
+import { PlaybookMultiSelect } from "./playbook-multi-select";
 
 type Definition = {
   title: string;
@@ -48,7 +49,7 @@ export const NODE_DESIGN: Record<string, Definition> = {
     color: "#a78bfa",
   },
   playbook_selector: {
-    title: "Select playbook",
+    title: "Playbook router",
     description: "Static or model selection with an explicit fallback",
     group: "Gather context",
     icon: GitBranch,
@@ -350,7 +351,13 @@ export function NodeFields({
   profiles: { profile_code: string; model: string }[];
   connectors?: AvailableConnector[];
   pythonTools?: { code: string; name: string }[];
-  definitions?: { kind: string; code: string; name: string }[];
+  definitions?: {
+    kind: string;
+    code: string;
+    name: string;
+    enabled?: boolean;
+    active_revision?: number;
+  }[];
 }) {
   const set = (key: string, item: unknown) =>
     onChange({ ...value, [key]: item });
@@ -453,17 +460,20 @@ export function NodeFields({
               value={String(value.mode || "static")}
               onChange={(e) => set("mode", e.target.value)}
             >
-              <option value="static">Static mapping</option>
-              <option value="model">Static first, then model</option>
+              <option value="static">Static only</option>
+              <option value="model">Static then LLM selector</option>
+              <option value="model_only">LLM selector only</option>
             </select>
           </label>
-          <MappingFields
-            legend="Static routing · alert type → playbook code"
-            targetLabel="Alert type"
-            sourceLabel="Playbook code"
-            value={(value.mappings || {}) as Record<string, string>}
-            onChange={(mapping) => set("mappings", mapping)}
-          />
+          {value.mode !== "model_only" && (
+            <MappingFields
+              legend="Static routing · alert type → playbook code"
+              targetLabel="Alert type"
+              sourceLabel="Playbook code"
+              value={(value.mappings || {}) as Record<string, string>}
+              onChange={(mapping) => set("mappings", mapping)}
+            />
+          )}
           <label className="block space-y-1.5 text-xs">
             Fallback playbook
             <select
@@ -472,8 +482,25 @@ export function NodeFields({
               onChange={(e) => set("fallback", e.target.value)}
             >
               <option value="">Select required fallback</option>
+              {!!value.fallback &&
+                !definitions.some(
+                  (item) =>
+                    item.kind === "playbook" &&
+                    item.code === value.fallback &&
+                    item.enabled !== false &&
+                    !!item.active_revision,
+                ) && (
+                  <option value={String(value.fallback)} disabled>
+                    Unavailable playbook · {String(value.fallback)}
+                  </option>
+                )}
               {definitions
-                .filter((item) => item.kind === "playbook")
+                .filter(
+                  (item) =>
+                    item.kind === "playbook" &&
+                    item.enabled !== false &&
+                    !!item.active_revision,
+                )
                 .map((item) => (
                   <option key={item.code} value={item.code}>
                     {item.name}
@@ -481,10 +508,36 @@ export function NodeFields({
                 ))}
             </select>
           </label>
-          {value.mode === "model" && (
+          {["model", "model_only"].includes(String(value.mode)) && (
             <>
-              {text("profile_code", "Routing model profile")}
-              {list("candidates", "Candidate playbook codes")}
+              <label className="block space-y-1.5 text-xs">
+                Routing model profile
+                <select
+                  className={inputClass}
+                  value={String(value.profile_code || "")}
+                  onChange={(event) => set("profile_code", event.target.value)}
+                >
+                  <option value="">Select a routing model</option>
+                  {profiles.map((profile) => (
+                    <option
+                      key={profile.profile_code}
+                      value={profile.profile_code}
+                    >
+                      {profile.profile_code} · {profile.model}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PlaybookMultiSelect
+                items={definitions.filter(
+                  (item) =>
+                    item.kind === "playbook" &&
+                    item.enabled !== false &&
+                    !!item.active_revision,
+                )}
+                value={(value.candidates || []) as string[]}
+                onChange={(codes) => set("candidates", codes)}
+              />
               {number("threshold", "Minimum selection confidence", 0.7, 0, 1)}
             </>
           )}

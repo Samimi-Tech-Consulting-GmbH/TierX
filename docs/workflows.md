@@ -73,7 +73,28 @@ Maximum nested call depth is three. Agent defaults: five rounds, ten tool calls.
 
 Tools have approved JSON schemas, explicit tenant grants and encrypted write-only credentials. No shell, inline script, subprocess, or model-generated database query is supported. See the [example provider and node definition](../examples/workflow-providers/README.md).
 
-Static mappings win. Otherwise the playbook selector can ask a model to choose from at most 20 configured candidates. Code validates code/confidence against the configured threshold (default 0.70). Failed/untrusted selection invokes a configured fallback **playbook**, not the outer workflow. Specialist templates do not pretend to install integrations.
+The **Playbook router** has three modes:
+
+- **Static only** (`static`): use the exact alert-type mapping, otherwise the fallback.
+- **Static then LLM selector** (`model`): a static match wins; otherwise ask the configured model.
+- **LLM selector only** (`model_only`): ignore static mappings and ask the model directly.
+
+Choose LLM candidates by name using the searchable multi-select in the router's
+settings. No individual playbook nodes or canvas connections are needed. The
+library can contain hundreds of playbooks; each routing model call is bounded to
+20 selected candidates. Only enabled, published playbooks are offered as new LLM
+candidates. Existing unavailable selections remain visible and removable.
+
+Code validates the model's candidate code and confidence against the configured
+threshold (default 0.70). Low-confidence, failed or invalid model selection invokes
+the required fallback **playbook**, not the outer workflow. This is selection
+fallback, not recovery from errors inside a selected playbook. Inactive mappings,
+candidates and model profiles are not compiled as dependencies for modes that do
+not use them. Existing `static` and `model` configurations retain their behavior.
+Saving drops inactive settings; switching modes later requires configuring those
+settings again. An empty candidate list skips model/profile resolution and uses
+the static match when permitted, otherwise the fallback (`NO_MODEL_CANDIDATES`).
+Specialist templates do not pretend to install integrations.
 
 ## Fixed ingestion URL
 

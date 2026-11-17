@@ -59,6 +59,19 @@ def test_agent_and_selector_budgets_and_fallback_are_validated():
         validate_graph(graph({"id": "select", "type": "playbook_selector", "config": {"candidates": ["network"]}}, capabilities=["normalization"]))
 
 
+@pytest.mark.parametrize("mode,expected", [("static",{"mapped","fallback"}), ("model",{"mapped","candidate","fallback"}), ("model_only",{"candidate","fallback"})])
+def test_router_compiles_only_dependencies_used_by_mode(mode, expected):
+    from tierx_workflows.definitions import references
+    config={"mode":mode,"mappings":{"synthetic":"mapped"},"candidates":["candidate"],"fallback":"fallback","profile_code":"local"}
+    value=graph({"id":"select","type":"playbook_selector","config":config},capabilities=["normalization"])
+    validate_graph(value)
+    assert {item[2] for item in references("playbook",value)} == expected
+    if mode == "model_only":
+        del config["profile_code"]
+        with pytest.raises(GraphError,match="profile"):
+            validate_graph(value)
+
+
 def test_editable_templates_validate_without_installing_resources():
     from tierx_workflows.templates import templates
     from tierx_workflows.definitions import validate_definition
@@ -81,3 +94,22 @@ def test_modern_nodes_and_connector_tools_are_rejected_in_legacy_graphs():
     value["format_version"]="1.0"
     with pytest.raises(GraphError,match="format 2.0"):
         validate_graph(value)
+
+
+@pytest.mark.parametrize("mode,extra", [("static",{"candidates":[""]*30,"profile_code":"invalid profile","threshold":-1}), ("model_only",{"mappings":{"x":""}})])
+def test_router_ignores_invalid_hidden_settings(mode, extra):
+    config={"mode":mode,"fallback":"generic","profile_code":"local",**extra}
+    original=graph({"id":"pick","type":"playbook_selector","config":config},capabilities=["normalization"])
+    before=deepcopy(original)
+    result=validate_definition("playbook",original)
+    assert original==before
+    cleaned=next(n["config"] for n in result["nodes"] if n["id"]=="pick")
+    assert ("candidates" if mode=="static" else "mappings") not in cleaned
+
+
+@pytest.mark.parametrize("mode",["static","model","model_only"])
+def test_static_router_does_not_resolve_stale_profile(monkeypatch,mode):
+    from app.api.v2 import workflows
+    monkeypatch.setattr(workflows.DatabaseManager,"get_tenant_database",lambda _: object())
+    result=workflows.resources(None,{"nodes":[{"type":"playbook_selector","config":{"mode":mode,"candidates":[],"profile_code":"unauthorized"}}]},"one")
+    assert result["profiles"]=={}
