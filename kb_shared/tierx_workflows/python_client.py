@@ -29,14 +29,25 @@ async def _request(path, *, request=None, cancel=False):
                 raise PythonToolError("PYTHON_RUNNER_AUTH_REJECTED")
             if response.status_code == 404:
                 raise PythonToolError("PYTHON_EXECUTION_UNCERTAIN")
-            code = response.json().get("error")
+            if response.status_code == 429:
+                raise PythonToolError("PYTHON_QUEUE_FULL")
+            try:
+                error = response.json()
+            except ValueError:
+                raise PythonToolError("PYTHON_RUNNER_UNAVAILABLE" if response.status_code >= 500 else "PYTHON_RUNNER_PROTOCOL_ERROR")
+            code = error.get("error") if isinstance(error, dict) else None
             if code in {"PYTHON_QUEUE_FULL", "PYTHON_REPLAY_CONFLICT", "RUNNER_ISOLATION_UNAVAILABLE",
                 "PYTHON_SYNTAX_ERROR", "SYNCHRONOUS_RUN_REQUIRED", "RUN_REQUIRES_ALERT_AND_CLUSTER"}:
                 raise PythonToolError(code)
             if response.status_code >= 500:
                 raise PythonToolError("PYTHON_RUNNER_UNAVAILABLE")
             raise PythonToolError("PYTHON_RUNNER_REJECTED")
-        result = response.json()
+        try:
+            result = response.json()
+        except ValueError:
+            raise PythonToolError("PYTHON_RUNNER_PROTOCOL_ERROR")
+        if not isinstance(result, dict):
+            raise PythonToolError("PYTHON_RUNNER_PROTOCOL_ERROR")
         if path != "/validate" and result.get("state") not in {"PENDING", "RUNNING", "SUCCEEDED", "FAILED", "UNCERTAIN", "CANCELLED"}:
             raise PythonToolError("PYTHON_RUNNER_PROTOCOL_ERROR")
         return result

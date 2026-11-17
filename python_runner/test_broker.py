@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 import pytest
 
@@ -88,4 +89,68 @@ def test_cancel_minimizes_transport_request_but_preserves_identity(tmp_path, mon
     instance.submit("a" * 64, request)
     assert instance.pool.submit.call_count == 1
     assert instance.get("a" * 64)["state"] == "CANCELLED"
+    instance.test_pool.shutdown()
+
+
+def test_health_is_cached_and_never_waits_for_cleanup(monkeypatch):
+    monkeypatch.setenv("TIERX_PYTHON_BROKER_TOKEN", "synthetic-health-token")
+    instance = SimpleNamespace(unhealthy=True, image="image", retry_cleanup=Mock(side_effect=AssertionError("blocking cleanup")))
+    handler = object.__new__(broker.Handler)
+    handler.headers = {"Authorization": "Bearer synthetic-health-token"}
+    handler.path, handler.command, handler.server = "/health", "GET", SimpleNamespace(broker=instance)
+    assert handler.handle_request() == (503, {"state": "ISOLATION_UNAVAILABLE"})
+    instance.unhealthy = False
+    assert handler.handle_request()[0] == 200
+    instance.retry_cleanup.assert_not_called()
+
+
+def test_background_recovery_retries_on_30_second_schedule(monkeypatch):
+    class StopLoop(BaseException): pass
+    sleeper = Mock(side_effect=[None, StopLoop()])
+    monkeypatch.setattr(broker.time, "sleep", sleeper)
+    instance = SimpleNamespace(retry_cleanup=Mock())
+    with pytest.raises(StopLoop): broker.Broker.recover_loop(instance)
+    instance.retry_cleanup.assert_called_once_with()
+    assert sleeper.call_args_list[0].args == (30,)
+
+
+def test_startup_cleanup_uses_retry_helpers(tmp_path, monkeypatch):
+    def docker(*args, **kwargs):
+        return "orphan-job" if args[0] == "ps" else "orphan-net"
+    monkeypatch.setattr(broker, "docker", docker)
+    container, network = Mock(), Mock()
+    monkeypatch.setattr(broker, "remove_container", container)
+    monkeypatch.setattr(broker, "remove_network", network)
+    instance = broker.Broker(str(tmp_path / "calls.sqlite"), "image", [])
+    container.assert_called_once_with("orphan-job")
+    network.assert_called_once_with("orphan-net")
+    instance.pool.shutdown()
+    instance.test_pool.shutdown()
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_queued_execution_waits_for_recovery_and_honors_cancel(tmp_path, monkeypatch, cancelled):
+    monkeypatch.setattr(broker, "docker", lambda *a, **kw: "")
+    instance = broker.Broker(str(tmp_path / "calls.sqlite"), "image", [])
+    instance.pool.shutdown()
+    instance.pool = Mock()
+    request = {"definition": {"source": "def run(alert,cluster): return {}", "timeout_seconds": 5,
+        "destinations": [], "output_mode": "json", "output_schema": {"type": "object"}}, "input": {}}
+    identity = "a" * 64
+    instance.submit(identity, request)
+    if cancelled: instance.cancel(identity)
+    instance.unhealthy = True
+    def recover():
+        assert instance.get(identity)["state"] == ("CANCELLED" if cancelled else "PENDING")
+        instance.unhealthy = False
+    monkeypatch.setattr(instance, "retry_cleanup", recover)
+    def docker(*args, **kwargs):
+        if args[0] == "inspect": return json.dumps([{"NetworkSettings": {"Networks": {"tierx-py-" + identity[:48] + "-net": {"IPAddress": "192.0.2.10"}}}}])
+        return "[]" if args[0] == "exec" else ""
+    monkeypatch.setattr(broker, "docker", docker)
+    execution = Mock(return_value={"result": {"observed": True}})
+    monkeypatch.setattr(broker, "bounded_run", execution)
+    instance.execute(identity, request)
+    assert instance.get(identity)["state"] == ("CANCELLED" if cancelled else "SUCCEEDED")
+    assert execution.call_count == (0 if cancelled else 1)
     instance.test_pool.shutdown()
