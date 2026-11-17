@@ -325,6 +325,8 @@ async def test_router_modes(environment, monkeypatch, mode, mapped, confidence, 
         validate_output({"code":"candidate", "confidence":confidence, "reason":"x" * 256}, schema)
         with pytest.raises(ModelError, match="MODEL_OUTPUT_INVALID"):
             validate_output({"code":"candidate", "confidence":confidence, "reason":"x" * 257}, schema)
+        with pytest.raises(ModelError, match="MODEL_OUTPUT_INVALID"):
+            validate_output({"code":"candidate", "confidence":87, "reason":"Synthetic match"}, schema)
 
 
 @pytest.mark.asyncio
