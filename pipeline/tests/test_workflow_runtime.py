@@ -134,6 +134,26 @@ async def test_python_transient_rejection_or_poll_outage_remains_retryable(envir
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("error", ["PYTHON_RUNNER_NOT_CONFIGURED", "PYTHON_RUNNER_AUTH_REJECTED", "PYTHON_RUNNER_PROTOCOL_ERROR"])
+@pytest.mark.parametrize("submitted", [False, True])
+async def test_definitive_python_configuration_failures_do_not_become_uncertain_or_wait_forever(environment, monkeypatch, error, submitted):
+    from tierx_workflows import python_client
+    from tierx_workflows.python_tools import PythonToolError
+    mongo, db = environment
+    definition = {"code": "observe", "revision": 1, "source": "def run(alert, cluster): return {}", "tenant_ids": ["one"], "enabled": True}
+    mongo.platform.workflow_python_tools.insert_one(definition.copy())
+    parent = run(linear([node("entry", "entry")]))
+    parent["resources"]["python_tools"] = {"observe": definition}
+    record = {"call_id": "configuration", "state": "PENDING", "definition": definition, "input": {}}
+    if submitted: record["submission_started_at"] = datetime.now(timezone.utc)
+    mongo.tenant.v2_python_calls.insert_one(record)
+    monkeypatch.setattr(python_client, "broker_request", AsyncMock(side_effect=PythonToolError(error)))
+    with pytest.raises(NodeFailure, match=error):
+        await WorkflowTools().python_tool(db, parent, {"job_id": "j"}, "observe", "configuration")
+    assert mongo.tenant.v2_python_calls.find_one({"call_id": "configuration"})["state"] == "FAILED"
+
+
+@pytest.mark.asyncio
 async def test_agent_python_text_is_untrusted_and_model_cannot_select_context(environment, monkeypatch):
     from tierx_workflows import python_client
     mongo, db = environment

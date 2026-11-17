@@ -130,6 +130,11 @@ class WorkflowTools(Tools):
             return {"python_call_id": identity, "tool_code": code, "revision": pinned["revision"]}
         except PythonToolError as exc:
             code = str(exc)
+            if code in {"PYTHON_RUNNER_NOT_CONFIGURED", "PYTHON_RUNNER_AUTH_REJECTED", "PYTHON_RUNNER_REJECTED",
+                "PYTHON_RUNNER_PROTOCOL_ERROR", "PYTHON_SYNTAX_ERROR", "SYNCHRONOUS_RUN_REQUIRED", "RUN_REQUIRES_ALERT_AND_CLUSTER"}:
+                await db.v2_python_calls.update_one({"call_id": identity, "state": {"$in": ["PENDING", "RUNNING"]}},
+                    {"$set": {"state": "FAILED", "error_type": code, "completed_at": now()}})
+                raise NodeFailure(code) from exc
             if attempted_post and code in {"PYTHON_QUEUE_FULL", "RUNNER_ISOLATION_UNAVAILABLE"}:
                 await db.v2_python_calls.update_one({"call_id": identity, "state": "PENDING"}, {"$unset": {"submission_started_at": ""}})
                 raise NodeWaiting(code) from exc

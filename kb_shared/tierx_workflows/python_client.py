@@ -19,12 +19,14 @@ async def _request(path, *, request=None, cancel=False):
     origin = os.getenv("TIERX_PYTHON_BROKER_URL", "").rstrip("/")
     token = os.getenv("TIERX_PYTHON_BROKER_TOKEN", "")
     if not origin or not token:
-        raise PythonToolError("PYTHON_RUNNER_UNAVAILABLE")
+        raise PythonToolError("PYTHON_RUNNER_NOT_CONFIGURED")
     try:
         async with httpx.AsyncClient(timeout=5, trust_env=False, follow_redirects=False) as client:
             response = await client.request("DELETE" if cancel else "POST" if request else "GET", origin + path,
                 headers={"Authorization": "Bearer " + token}, json=request)
         if response.status_code != 200:
+            if response.status_code in {401, 403}:
+                raise PythonToolError("PYTHON_RUNNER_AUTH_REJECTED")
             if response.status_code == 404:
                 raise PythonToolError("PYTHON_EXECUTION_UNCERTAIN")
             code = response.json().get("error")

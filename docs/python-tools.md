@@ -100,10 +100,13 @@ broker restart marks unfinished calls uncertain and removes orphan resources.
 A persisted submission marker makes later observation GET-only: missing broker
 state is uncertain and never permission to execute again. Terminal broker request
 copies are blanked, while tenant audit inputs and broker result/checksum remain.
-Failed resource cleanup is retried on health checks/new submissions; the broker
+Failed resource cleanup is retried by a 30-second background maintenance loop
+and on new submissions; the broker
 rejects new calls until that cleanup succeeds.
-No Docker restart is triggered by health status alone; the healthcheck retries
-cleanup. Operators should alert on sustained `/health` 503 responses.
+No Docker restart is triggered by health status alone; the healthcheck reads
+cached isolation health without waiting for Docker cleanup. Operators should
+alert on sustained `/health` 503 responses. Missing configuration, authentication
+rejection and invalid broker protocols fail explicitly rather than retry forever.
 Oversized stdout/stderr fails the invocation rather than preserving or exposing
 logs. Live queues are bounded
 at 100 calls, draft queues at 10; execution timeout starts when a queued call

@@ -209,6 +209,11 @@ class Broker:
         for resources in pending:
             self.cleanup(*resources)
 
+    def recover_loop(self):
+        while True:
+            time.sleep(30)
+            self.retry_cleanup()
+
     def get(self, identity):
         with self.db() as db:
             row = db.execute("SELECT state,result FROM calls WHERE id=?", (identity,)).fetchone()
@@ -297,7 +302,6 @@ class Handler(BaseHTTPRequestHandler):
         if not hmac.compare_digest(self.headers.get("Authorization", "").encode(), ("Bearer " + os.environ["TIERX_PYTHON_BROKER_TOKEN"]).encode()):
             return 401, {"error": "UNAUTHORIZED"}
         if self.path == "/health" and self.command == "GET":
-            self.server.broker.retry_cleanup()
             if self.server.broker.unhealthy:
                 return 503, {"state": "ISOLATION_UNAVAILABLE"}
             return 200, {"state": "READY", "runtime_digest": self.server.broker.image}
@@ -354,4 +358,5 @@ if __name__ == "__main__":
     image, denied = preflight()
     server = ThreadingHTTPServer(("0.0.0.0", 8095), Handler)
     server.broker = Broker(os.environ.get("TIERX_PYTHON_STATE", "/data/calls.sqlite"), image, denied)
+    threading.Thread(target=server.broker.recover_loop, daemon=True).start()
     server.serve_forever()
