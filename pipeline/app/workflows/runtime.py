@@ -357,10 +357,11 @@ class WorkflowTools(Tools):
             selected = selection["selected_playbook"]
             result = await invoke(db, run, job, definition["references"][f"{node['id']}:playbook:{selected}"], "selected")
             return {**selection, **result}
-        selected = cfg.get("mappings", {}).get(alert["alert_type"])
+        mode = cfg.get("mode", "static")
+        selected = cfg.get("mappings", {}).get(alert["alert_type"]) if mode != "model_only" else None
         reason, confidence = "STATIC_MAPPING" if selected else "NO_STATIC_MAPPING", None
         model_reason = None
-        if not selected and cfg.get("mode", "static") == "model":
+        if not selected and mode in {"model", "model_only"}:
             candidates = sorted(set(cfg.get("candidates", [])))[:20]
             catalogue = [{"code": code, "description": run["bundle"]["definitions"][
                 definition["references"][f"{node['id']}:playbook:{code}"]]["description"]} for code in candidates]

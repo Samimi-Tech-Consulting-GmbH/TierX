@@ -60,7 +60,10 @@ def references(kind, configuration):
         if node["type"] in {"playbook_call", "agent"}:
             result.append((nid, "agent" if node["type"] == "agent" else "playbook", cfg["definition_code"], cfg.get("revision")))
         if node["type"] == "playbook_selector":
-            for code in sorted({*cfg.get("candidates", []), *cfg.get("mappings", {}).values(), cfg["fallback"]}):
+            mode = cfg.get("mode", "static")
+            candidates = cfg.get("candidates", []) if mode in {"model", "model_only"} else []
+            mappings = cfg.get("mappings", {}).values() if mode != "model_only" else []
+            for code in sorted({*candidates, *mappings, cfg["fallback"]}):
                 result.append((f"{nid}:playbook:{code}", "playbook", code, None))
         for tool in cfg.get("tools", []):
             parts = tool.split(":")

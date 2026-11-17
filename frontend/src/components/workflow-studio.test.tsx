@@ -47,6 +47,7 @@ describe("Graph JSON import", () => {
         id: "pick",
         type: "playbook_selector",
         config: {
+          mode: "model",
           fallback: "generic",
           mappings: { malware: "endpoint" },
           candidates: ["network", "endpoint"],
@@ -111,7 +112,7 @@ describe("Graph JSON import", () => {
       target: { value: "playbook" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Add Select playbook" }),
+      screen.getByRole("button", { name: "Add Playbook router" }),
     );
     expect(add).toHaveBeenCalledWith("playbook_selector");
     expect(
@@ -138,6 +139,64 @@ describe("Graph JSON import", () => {
       mode: "static",
       fallback: "generic",
     });
+  });
+  it("offers all router modes and hides static mappings in LLM-only mode", () => {
+    const change = vi.fn();
+    render(
+      <NodeFields
+        node={{ id: "pick", type: "playbook_selector", config: {} }}
+        value={{ mode: "model_only", mappings: { malware: "static" } }}
+        profiles={[{ profile_code: "local", model: "example" }]}
+        definitions={[
+          {
+            kind: "playbook",
+            code: "generic",
+            name: "Generic investigation",
+            active_revision: 1,
+            enabled: true,
+          },
+          { kind: "playbook", code: "draft", name: "Unpublished draft" },
+          {
+            kind: "playbook",
+            code: "disabled",
+            name: "Disabled playbook",
+            active_revision: 1,
+            enabled: false,
+          },
+        ]}
+        onChange={change}
+      />,
+    );
+    expect(
+      screen.getByRole("option", { name: "Static only" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Static then LLM selector" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "LLM selector only" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Static routing/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /LLM candidate playbooks/ }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /LLM candidate playbooks/ }),
+    );
+    expect(
+      screen.getByRole("checkbox", { name: /Generic investigation/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /Unpublished draft|Disabled playbook/,
+      }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Routing model profile"), {
+      target: { value: "local" },
+    });
+    expect(change).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "model_only", profile_code: "local" }),
+    );
   });
   it("does not replace controlled nodes on measurement or selection events", () => {
     const change = vi.fn();

@@ -59,6 +59,19 @@ def test_agent_and_selector_budgets_and_fallback_are_validated():
         validate_graph(graph({"id": "select", "type": "playbook_selector", "config": {"candidates": ["network"]}}, capabilities=["normalization"]))
 
 
+@pytest.mark.parametrize("mode,expected", [("static",{"mapped","fallback"}), ("model",{"mapped","candidate","fallback"}), ("model_only",{"candidate","fallback"})])
+def test_router_compiles_only_dependencies_used_by_mode(mode, expected):
+    from tierx_workflows.definitions import references
+    config={"mode":mode,"mappings":{"synthetic":"mapped"},"candidates":["candidate"],"fallback":"fallback","profile_code":"local"}
+    value=graph({"id":"select","type":"playbook_selector","config":config},capabilities=["normalization"])
+    validate_graph(value)
+    assert {item[2] for item in references("playbook",value)} == expected
+    if mode == "model_only":
+        del config["profile_code"]
+        with pytest.raises(GraphError,match="profile"):
+            validate_graph(value)
+
+
 def test_editable_templates_validate_without_installing_resources():
     from tierx_workflows.templates import templates
     from tierx_workflows.definitions import validate_definition

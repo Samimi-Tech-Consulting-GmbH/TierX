@@ -278,13 +278,13 @@ def validate_graph(graph):
             if not isinstance(cfg.get("mappings", {}), dict) or not isinstance(cfg.get("candidates", []), list) or len(cfg.get("candidates", [])) > 20:
                 raise GraphError("Selector requires a mapping object and at most 20 candidates")
             codes = [*cfg.get("candidates", []), *cfg.get("mappings", {}).values(), cfg.get("fallback")]
-            if cfg.get("mode", "static") not in {"static", "model"} or not codes or any(
+            if cfg.get("mode", "static") not in {"static", "model", "model_only"} or not codes or any(
                 not isinstance(code, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", code) for code in codes
             ) or len(codes) > 101:
                 raise GraphError("Selector requires valid candidates and fallback")
             if not isinstance(cfg.get("threshold", 0.7), (float, int)) or isinstance(cfg.get("threshold"), bool) or not 0 <= cfg.get("threshold", 0.7) <= 1:
                 raise GraphError("Invalid selector threshold")
-            if cfg.get("mode") == "model" and not cfg.get("profile_code"):
+            if cfg.get("mode") in {"model", "model_only"} and not cfg.get("profile_code"):
                 raise GraphError("Model selector requires a profile")
         if kind == "persist_analysis" and not isinstance(cfg.get("input_path"), str):
             raise GraphError("Analysis persistence requires an input path")

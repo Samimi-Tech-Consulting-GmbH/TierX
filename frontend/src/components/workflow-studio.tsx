@@ -205,10 +205,14 @@ export function subflowReferences(
     if (typeof cfg.fallback === "string")
       result.push({ kind: "playbook", code: cfg.fallback, role: "Fallback" });
     for (const [type, code] of Object.entries(
-      (cfg.mappings || {}) as Record<string, string>,
+      cfg.mode === "model_only"
+        ? {}
+        : ((cfg.mappings || {}) as Record<string, string>),
     ))
       result.push({ kind: "playbook", code, role: `Static: ${type}` });
-    for (const code of (cfg.candidates || []) as string[])
+    for (const code of (["model", "model_only"].includes(String(cfg.mode))
+      ? cfg.candidates || []
+      : []) as string[])
       result.push({ kind: "playbook", code, role: "Model candidate" });
   }
   for (const tool of (cfg.tools || []) as string[]) {
