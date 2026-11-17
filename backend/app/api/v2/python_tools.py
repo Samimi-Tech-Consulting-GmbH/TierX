@@ -42,6 +42,7 @@ def database():
     db = DatabaseManager.get_tenant_database("soc_mind_platform")
     db.workflow_python_tools.create_index("code", unique=True)
     db.workflow_python_tool_revisions.create_index([("code", 1), ("revision", 1)], unique=True)
+    db.workflow_python_test_calls.create_index("call_id", unique=True)
     return db
 
 
@@ -110,11 +111,13 @@ async def test(code: str, body: TestInput):
         raise HTTPException(422, "Invalid Python input snapshot") from exc
     try:
         identity = checksum([body.tenant_id, code, str(uuid4())])
-        result = await broker_request(identity, request={"definition": execution_definition(row), "input": data})
-        database().workflow_python_test_calls.insert_one({"call_id": identity, "code": code, "tenant_id": body.tenant_id})
+        database().workflow_python_test_calls.insert_one({"call_id": identity, "code": code, "tenant_id": body.tenant_id,
+            "state": "SUBMITTING", "input": data, "definition": execution_definition(row), "created_at": datetime.now(timezone.utc)})
+        result = await broker_request(identity, request={"definition": execution_definition(row), "input": data, "execution_class": "TEST"})
+        database().workflow_python_test_calls.update_one({"call_id": identity}, {"$set": {"state": result["state"], "result": result}})
         return {"call_id": identity, **result}
     except ValueError as exc:
-        raise HTTPException(503, "Python runner unavailable") from exc
+        raise runner_error(exc) from exc
 
 
 @router.get("/{code}/tests/{call_id}")
@@ -122,9 +125,14 @@ async def test_result(code: str, call_id: str):
     if not database().workflow_python_test_calls.find_one({"call_id": call_id, "code": code}):
         raise HTTPException(404, "Test call not found")
     try:
-        return await broker_request(call_id)
+        result = await broker_request(call_id)
+        database().workflow_python_test_calls.update_one({"call_id": call_id}, {"$set": {"state": result["state"], "result": result}})
+        return result
     except ValueError as exc:
-        raise HTTPException(503, "Python runner unavailable") from exc
+        record = database().workflow_python_test_calls.find_one({"call_id": call_id, "code": code})
+        if record.get("state") in {"SUCCEEDED", "FAILED", "CANCELLED", "UNCERTAIN"}:
+            return record["result"]
+        raise runner_error(exc) from exc
 
 
 @router.delete("/{code}/tests/{call_id}")
@@ -134,4 +142,13 @@ async def cancel_test(code: str, call_id: str):
     try:
         return await broker_request(call_id, cancel=True)
     except ValueError as exc:
-        raise HTTPException(503, "Python runner unavailable; deadline still applies") from exc
+        raise runner_error(exc) from exc
+
+
+def runner_error(exc):
+    code = str(exc)
+    if code == "PYTHON_QUEUE_FULL":
+        return HTTPException(429, code)
+    if code in {"PYTHON_REPLAY_CONFLICT", "PYTHON_EXECUTION_UNCERTAIN"}:
+        return HTTPException(409, code)
+    return HTTPException(503, "Python runner unavailable")

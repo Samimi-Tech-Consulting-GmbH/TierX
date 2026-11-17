@@ -40,3 +40,52 @@ def test_durable_identity_conflicts_restart_and_cancel(tmp_path, monkeypatch):
     restarted = broker.Broker(instance.path, instance.image, instance.denied)
     assert restarted.get("b" * 64)["state"] == "UNCERTAIN"
     restarted.pool.shutdown()
+    instance.test_pool.shutdown()
+    restarted.test_pool.shutdown()
+
+
+def test_draft_calls_have_a_separate_bounded_pool(tmp_path, monkeypatch):
+    monkeypatch.setattr(broker, "docker", lambda *a, **kw: "")
+    instance = broker.Broker(str(tmp_path / "calls.sqlite"), "image", [])
+    instance.pool.shutdown()
+    instance.test_pool.shutdown()
+    instance.pool, instance.test_pool = Mock(), Mock()
+    request = {"execution_class": "TEST", "input": {}, "definition": {}}
+    for index in range(10):
+        instance.submit(str(index).zfill(64), request)
+    with pytest.raises(broker.BrokerError, match="QUEUE_FULL"):
+        instance.submit("a" * 64, request)
+    instance.submit("b" * 64, {"input": {}, "definition": {}})
+    assert instance.pool.submit.call_count == 1
+    assert instance.test_pool.submit.call_count == 10
+
+
+def test_cleanup_failure_is_retried_without_touching_other_jobs(tmp_path, monkeypatch):
+    monkeypatch.setattr(broker, "docker", lambda *a, **kw: "")
+    instance = broker.Broker(str(tmp_path / "calls.sqlite"), "image", [])
+    remove = Mock(side_effect=[broker.BrokerError("failed"), None])
+    monkeypatch.setattr(broker, "remove_network", remove)
+    monkeypatch.setattr(broker, "remove_container", Mock())
+    instance.cleanup("job", "proxy", "network")
+    assert instance.unhealthy
+    instance.retry_cleanup()
+    assert not instance.unhealthy
+    assert remove.call_args.args == ("network",)
+    instance.pool.shutdown()
+    instance.test_pool.shutdown()
+
+
+def test_cancel_minimizes_transport_request_but_preserves_identity(tmp_path, monkeypatch):
+    monkeypatch.setattr(broker, "docker", lambda *a, **kw: "")
+    instance = broker.Broker(str(tmp_path / "calls.sqlite"), "image", [])
+    instance.pool.shutdown()
+    instance.pool = Mock()
+    request = {"input": {"evidence": "retained in tenant Mongo"}, "definition": {}}
+    instance.submit("a" * 64, request)
+    instance.cancel("a" * 64)
+    with instance.db() as db:
+        assert db.execute("SELECT request FROM calls").fetchone()[0] == ""
+    instance.submit("a" * 64, request)
+    assert instance.pool.submit.call_count == 1
+    assert instance.get("a" * 64)["state"] == "CANCELLED"
+    instance.test_pool.shutdown()

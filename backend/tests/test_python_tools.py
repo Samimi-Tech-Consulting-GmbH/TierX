@@ -78,3 +78,36 @@ def test_publication_fails_closed_without_python312_validation(setup, monkeypatc
     monkeypatch.setattr(python_tools, "validate_with_broker", AsyncMock(side_effect=PythonToolError("PYTHON_RUNNER_UNAVAILABLE")))
     assert client.post(root + "/publish").status_code == 503
     assert client.get(root + "/versions").json()["items"] == []
+
+
+def test_draft_record_precedes_submission_and_terminal_result_is_retained(setup, monkeypatch):
+    from tierx_workflows.python_tools import PythonToolError
+    client, _, _ = prepare(setup)
+    root = "/api/v2/admin/python-tools/observe"
+    client.put(root, json=value())
+    async def submitted(identity, **kwargs):
+        row = python_tools.database().workflow_python_test_calls.find_one({"call_id": identity})
+        assert row["state"] == "SUBMITTING"
+        assert kwargs["request"]["execution_class"] == "TEST"
+        return {"state": "SUCCEEDED", "result": {"type": "json", "data": {"observed": True}}}
+    monkeypatch.setattr(python_tools, "broker_request", submitted)
+    response = client.post(root + "/test", json={"tenant_id": "one", "alert": {"tenant_id": "one", "alert_id": "a", "normalized_payload": {}}})
+    assert response.status_code == 202
+    monkeypatch.setattr(python_tools, "broker_request", AsyncMock(side_effect=PythonToolError("PYTHON_EXECUTION_UNCERTAIN")))
+    result = client.get(root + "/tests/" + response.json()["call_id"])
+    assert result.json()["state"] == "SUCCEEDED"
+
+
+def test_draft_storage_failure_cannot_start_external_execution(setup, monkeypatch):
+    client, _, _ = prepare(setup)
+    root = "/api/v2/admin/python-tools/observe"
+    client.put(root, json=value())
+    transport = AsyncMock()
+    monkeypatch.setattr(python_tools, "broker_request", transport)
+    collection = python_tools.database().workflow_python_test_calls
+    def fail(*args, **kwargs):
+        raise RuntimeError("storage unavailable")
+    monkeypatch.setattr(collection, "insert_one", fail)
+    with pytest.raises(RuntimeError, match="storage unavailable"):
+        client.post(root + "/test", json={"tenant_id": "one", "alert": {"tenant_id": "one", "alert_id": "a", "normalized_payload": {}}})
+    transport.assert_not_awaited()

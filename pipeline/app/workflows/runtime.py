@@ -109,7 +109,11 @@ class WorkflowTools(Tools):
                     "input_sha256": checksum(snapshot), "input": snapshot, "definition": execution_definition(pinned),
                     "state": "PENDING", "created_at": now(), "timeout_seconds": pinned["timeout_seconds"]}}, upsert=True)
                 previous = await db.v2_python_calls.find_one({"call_id": identity})
-            response = await broker_request(identity, request={"definition": previous["definition"], "input": previous["input"]})
+            # Persist the submission boundary BEFORE any external side effect.
+            # A crash in this window is uncertain, never permission to POST again.
+            claimed = await db.v2_python_calls.update_one({"call_id": identity, "submission_started_at": {"$exists": False}},
+                {"$set": {"submission_started_at": now()}})
+            response = await broker_request(identity, request={"definition": previous["definition"], "input": previous["input"]}) if claimed.modified_count else await broker_request(identity)
             fields = {"state": response["state"], "last_checked_at": now()}
             fields.update({key: response[key] for key in ("runtime_digest", "queued_at", "started_at", "deadline", "duration_seconds", "destination_decisions") if key in response})
             if response["state"] == "SUCCEEDED":

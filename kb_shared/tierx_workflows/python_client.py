@@ -25,6 +25,8 @@ async def _request(path, *, request=None, cancel=False):
             response = await client.request("DELETE" if cancel else "POST" if request else "GET", origin + path,
                 headers={"Authorization": "Bearer " + token}, json=request)
         if response.status_code != 200:
+            if response.status_code == 404:
+                raise PythonToolError("PYTHON_EXECUTION_UNCERTAIN")
             code = response.json().get("error")
             if code in {"PYTHON_QUEUE_FULL", "PYTHON_REPLAY_CONFLICT", "RUNNER_ISOLATION_UNAVAILABLE",
                 "PYTHON_SYNTAX_ERROR", "SYNCHRONOUS_RUN_REQUIRED", "RUN_REQUIRES_ALERT_AND_CLUSTER"}:

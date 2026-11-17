@@ -80,13 +80,34 @@ async def test_python_call_pins_snapshot_replays_result_and_checks_revocation(en
         await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "call")
     mongo.tenant.alerts.update_one({"alert_id": "r"}, {"$set": {"normalized_payload": {"host.name": "CHANGED"}}})
     result = await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "call")
-    assert transport.call_args.kwargs["request"]["input"]["alert"]["normalized_payload"]["host.name"] == "FIRST"
+    assert transport.call_args_list[0].kwargs["request"]["input"]["alert"]["normalized_payload"]["host.name"] == "FIRST"
+    assert transport.call_args_list[1].kwargs == {}
     assert result["revision"] == 3
     assert await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "call") == result
     assert transport.await_count == 2
     mongo.platform.workflow_python_tools.update_one({"code": "observe"}, {"$set": {"enabled": False}})
     with pytest.raises(NodeFailure, match="REVOKED"):
         await tools.python_tool(db, parent, {"job_id": "j"}, "observe", "new-call")
+
+
+@pytest.mark.asyncio
+async def test_submitted_python_call_missing_from_broker_never_posts_again(environment, monkeypatch):
+    from tierx_workflows import python_client
+    from tierx_workflows.python_tools import PythonToolError
+    mongo, db = environment
+    definition = {"code": "observe", "revision": 1, "source": "def run(alert, cluster): return {}",
+        "tenant_ids": ["one"], "enabled": True}
+    mongo.platform.workflow_python_tools.insert_one(definition.copy())
+    parent = run(linear([node("entry", "entry")]))
+    parent["resources"]["python_tools"] = {"observe": definition}
+    mongo.tenant.v2_python_calls.insert_one({"call_id": "lost", "state": "PENDING", "submission_started_at": datetime.now(timezone.utc),
+        "definition": definition, "input": {}})
+    transport = AsyncMock(side_effect=PythonToolError("PYTHON_EXECUTION_UNCERTAIN"))
+    monkeypatch.setattr(python_client, "broker_request", transport)
+    with pytest.raises(NodeFailure, match="UNCERTAIN"):
+        await WorkflowTools().python_tool(db, parent, {"job_id": "j"}, "observe", "lost")
+    assert transport.call_args.kwargs == {}
+    assert mongo.tenant.v2_python_calls.find_one({"call_id": "lost"})["state"] == "UNCERTAIN"
 
 
 @pytest.mark.asyncio

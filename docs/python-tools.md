@@ -39,7 +39,8 @@ evidence, not commands to alter alerts or clusters.
 custom images, target credentials, application mounts or Docker socket are supplied
 to scripts. A fresh read-only, non-root container uses 256 MiB RAM, one CPU,
 64 PIDs, 16 MiB temporary storage, dropped capabilities, Docker's default seccomp,
-and no-new-privileges. The private broker runs at most two invocations concurrently.
+and no-new-privileges. Live calls use a configurable worker pool (default two);
+draft tests use a separate single-worker pool and cannot occupy live slots.
 Timeouts are 1–1800 seconds (30 by default); container setup counts toward deadline.
 
 Only the broker receives a **dedicated rootless Docker socket**. Never mount the
@@ -55,6 +56,9 @@ chosen address is pinned. HTTP redirects are rejected. Loopback, link-local,
 metadata, reserved addresses, rootless network subnets and configured TierX
 infrastructure CIDRs are denied even when explicitly allowed. Each invocation has
 32 connection attempts. IPv6 transition/NAT64 ranges and CGNAT are also denied.
+Hostname approval alone permits only globally routable answers. Private addresses
+require an explicit IP/CIDR destination grant in addition to the hostname grant;
+infrastructure deny rules still take precedence.
 Each proxy requires a fresh random invocation capability, so other proxy containers
 cannot use its policy endpoint. TCP checks open then close a connection; no arbitrary TCP
 payload forwarding is supported.
@@ -65,7 +69,8 @@ unpinned image or ineffective isolation prevents broker startup. An OCI reposito
 digest or full local image ID (`sha256:` plus 64 hexadecimal characters) is required;
 mutable tags are rejected. Use the optional
 `compose.python-runner.yaml` overlay only after dedicated runtime provisioning.
-The broker API has no published port; keep the bearer token private.
+The broker API has no published port and joins a dedicated internal network
+shared only with backend and pipeline; keep the bearer token private.
 
 ## Management API
 
@@ -90,10 +95,14 @@ discarding such a copy must never discard the retained evidence.
 Completed calls replay without execution. Uncertain requests are not retried:
 approved HTTP requests can have side effects. Cancellation kills containers;
 broker restart marks unfinished calls uncertain and removes orphan resources.
-If container cleanup fails, the broker remains unhealthy and rejects new calls
-until an operator verifies cleanup and restarts it. Oversized stdout/stderr fails
-the invocation rather than preserving or exposing logs. The two-worker queue is
-bounded at 100 calls; execution timeout starts when a queued call becomes running.
+A persisted submission marker makes later observation GET-only: missing broker
+state is uncertain and never permission to execute again. Terminal broker request
+copies are blanked, while tenant audit inputs and broker result/checksum remain.
+Failed resource cleanup is retried on health checks/new submissions; the broker
+rejects new calls until that cleanup succeeds. Oversized stdout/stderr fails
+the invocation rather than preserving or exposing logs. Live queues are bounded
+at 100 calls, draft queues at 10; execution timeout starts when a queued call
+becomes running. Configure live capacity with `TIERX_PYTHON_WORKERS`.
 Runner errors follow explicit workflow error edges. Debug omits code, input
 documents, output evidence and stdout/stderr; it exposes metadata and checksums.
 

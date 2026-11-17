@@ -88,6 +88,17 @@ def test_proxy_pins_dns_rejects_mixed_answers_and_enforces_budget():
         policy.resolve("allowed.example", 443)
 
 
+@pytest.mark.parametrize("address", ["10.20.30.40", "172.20.0.4", "192.168.1.5", "fd00::5"])
+def test_private_dns_answers_require_an_explicit_network_grant(address):
+    policy = proxy.Policy([{"host": "allowed.example", "ports": [443]}], [])
+    rows = [(2, 1, 6, "", (address, 443))]
+    with patch.object(proxy.socket, "getaddrinfo", return_value=rows):
+        with pytest.raises(ValueError, match="NOT_APPROVED"):
+            policy.resolve("allowed.example", 443)
+        policy.targets.append({"host": address, "ports": [443]})
+        assert policy.resolve("allowed.example", 443) == address
+
+
 @pytest.mark.parametrize("address", ["127.0.0.1", "::1", "169.254.169.254", "::ffff:127.0.0.1", "10.10.1.2",
     "100.64.0.1", "64:ff9b::a00:1", "2002:a00:1::1", "2001::1"])
 def test_even_explicit_allow_cannot_override_protected_destinations(address):

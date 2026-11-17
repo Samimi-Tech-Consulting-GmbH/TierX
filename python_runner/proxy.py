@@ -69,7 +69,9 @@ class Policy:
                     network = ipaddress.ip_network(target["host"], strict=False)
                     allowed |= ip.version == network.version and ip in network
                 except ValueError:
-                    allowed |= host == target["host"]
+                    # Hostname approval alone must not authorize a DNS rebinding
+                    # into private networks. Those need a separate explicit CIDR.
+                    allowed |= host == target["host"] and ip.is_global
             if not allowed:
                 raise ValueError("DESTINATION_NOT_APPROVED")
         return addresses[0]

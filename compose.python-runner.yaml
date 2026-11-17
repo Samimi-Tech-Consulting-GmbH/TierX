@@ -22,11 +22,22 @@ services:
     mem_limit: 256m
     cpus: 1
     pids_limit: 128
+    networks: [python-runner]
+    healthcheck:
+      test: [CMD, python, -c, "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8095/health',headers={'Authorization':'Bearer '+os.environ['TIERX_PYTHON_BROKER_TOKEN']}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   backend:
+    networks: [default, python-runner]
     environment:
       - TIERX_PYTHON_BROKER_URL=http://python-broker:8095
       - TIERX_PYTHON_BROKER_TOKEN=${TIERX_PYTHON_BROKER_TOKEN:?Set a private broker token}
   pipeline:
+    networks: [default, python-runner]
     environment:
       - TIERX_PYTHON_BROKER_URL=http://python-broker:8095
       - TIERX_PYTHON_BROKER_TOKEN=${TIERX_PYTHON_BROKER_TOKEN:?Set a private broker token}
+networks:
+  python-runner:
+    internal: true

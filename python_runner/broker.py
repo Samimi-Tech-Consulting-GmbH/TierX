@@ -43,6 +43,19 @@ def remove_container(name):
         time.sleep(0.1)
 
 
+def remove_network(name):
+    for attempt in range(3):
+        try:
+            docker("network", "rm", name, timeout=5)
+        except (BrokerError, subprocess.TimeoutExpired):
+            if not docker("network", "ls", "-q", "--filter", "name=^" + name + "$", timeout=5).strip():
+                return
+        else:
+            return
+        time.sleep(0.1 * (attempt + 1))
+    raise BrokerError("PYTHON_CLEANUP_FAILED")
+
+
 def preflight():
     if len(os.environ.get("TIERX_PYTHON_BROKER_TOKEN", "")) < 32:
         raise BrokerError("STRONG_BROKER_TOKEN_REQUIRED")
@@ -131,11 +144,15 @@ class Broker:
     def __init__(self, path, image, denied):
         self.path, self.image, self.denied = path, image, denied
         self.unhealthy = False
-        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        self.pending_cleanup = set()
+        self.cleanup_lock = threading.Lock()
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=int(os.getenv("TIERX_PYTHON_WORKERS", "2")))
+        self.test_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         with self.db() as db:
             db.execute("CREATE TABLE IF NOT EXISTS calls (id TEXT PRIMARY KEY, checksum TEXT NOT NULL, request TEXT NOT NULL, state TEXT NOT NULL, result TEXT)")
             db.execute("UPDATE calls SET state='UNCERTAIN', result=? WHERE state IN ('PENDING','RUNNING')", (json.dumps({"error": "PYTHON_EXECUTION_UNCERTAIN"}),))
+            db.execute("UPDATE calls SET request='' WHERE state NOT IN ('PENDING','RUNNING')")
         # A broker restart never replays an uncertain side-effecting request.
         self.cleanup_orphans()
 
@@ -157,6 +174,7 @@ class Broker:
     def submit(self, identity, request):
         from tierx_workflows.graph import checksum
         digest = checksum(request)
+        self.retry_cleanup()
         if self.unhealthy:
             raise BrokerError("RUNNER_ISOLATION_UNAVAILABLE")
         with self.lock, self.db() as db:
@@ -165,10 +183,30 @@ class Broker:
                 if existing[0] != digest:
                     raise BrokerError("PYTHON_REPLAY_CONFLICT")
                 return
-            if db.execute("SELECT count(*) FROM calls WHERE state IN ('PENDING','RUNNING')").fetchone()[0] >= 100:
+            queued = db.execute("SELECT request FROM calls WHERE state IN ('PENDING','RUNNING')").fetchall()
+            is_test = request.get("execution_class") == "TEST"
+            if sum((json.loads(row[0]).get("execution_class") == "TEST") == is_test for row in queued) >= (10 if is_test else 100):
                 raise BrokerError("PYTHON_QUEUE_FULL")
             db.execute("INSERT INTO calls VALUES (?,?,?,'PENDING',?)", (identity, digest, json.dumps(request), json.dumps({"queued_at": time.time()})))
-        self.pool.submit(self.execute, identity, request)
+        (self.test_pool if is_test else self.pool).submit(self.execute, identity, request)
+
+    def cleanup(self, name, proxy, network):
+        with self.cleanup_lock:
+            try:
+                for container in (name, proxy):
+                    remove_container(container)
+                remove_network(network)
+            except Exception:
+                self.pending_cleanup.add((name, proxy, network))
+            else:
+                self.pending_cleanup.discard((name, proxy, network))
+            self.unhealthy = bool(self.pending_cleanup)
+
+    def retry_cleanup(self):
+        with self.cleanup_lock:
+            pending = tuple(self.pending_cleanup)
+        for resources in pending:
+            self.cleanup(*resources)
 
     def get(self, identity):
         with self.db() as db:
@@ -228,21 +266,13 @@ class Broker:
             except Exception:
                 decisions = []
             metadata.update(duration_seconds=round(time.time() - started, 3), destination_decisions=decisions)
-            for container in (name, proxy):
-                try:
-                    remove_container(container)
-                except Exception:
-                    self.unhealthy = True
-            try:
-                docker("network", "rm", network)
-            except Exception:
-                pass
+            self.cleanup(name, proxy, network)
         with self.db() as db:
-            db.execute("UPDATE calls SET state=?,result=? WHERE id=? AND state='RUNNING'", (state, json.dumps({**metadata, **result}), identity))
+            db.execute("UPDATE calls SET state=?,result=?,request='' WHERE id=? AND state='RUNNING'", (state, json.dumps({**metadata, **result}), identity))
 
     def cancel(self, identity):
         with self.db() as db:
-            db.execute("UPDATE calls SET state='CANCELLED',result=? WHERE id=? AND state IN ('PENDING','RUNNING')", (json.dumps({"error": "PYTHON_CANCELLED"}), identity))
+            db.execute("UPDATE calls SET state='CANCELLED',result=?,request='' WHERE id=? AND state IN ('PENDING','RUNNING')", (json.dumps({"error": "PYTHON_CANCELLED"}), identity))
         for suffix in ("-job", "-proxy"):
             try:
                 docker("rm", "-f", "tierx-py-" + identity[:48] + suffix)
@@ -261,6 +291,7 @@ class Handler(BaseHTTPRequestHandler):
         if not hmac.compare_digest(self.headers.get("Authorization", "").encode(), ("Bearer " + os.environ["TIERX_PYTHON_BROKER_TOKEN"]).encode()):
             return 401, {"error": "UNAUTHORIZED"}
         if self.path == "/health" and self.command == "GET":
+            self.server.broker.retry_cleanup()
             if self.server.broker.unhealthy:
                 return 503, {"state": "ISOLATION_UNAVAILABLE"}
             return 200, {"state": "READY", "runtime_digest": self.server.broker.image}
@@ -278,6 +309,8 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < size <= 1200000:
                 return 413, {"error": "REQUEST_LIMIT"}
             request = json.loads(self.rfile.read(size))
+            if request.get("execution_class", "LIVE") not in {"LIVE", "TEST"}:
+                return 422, {"error": "PYTHON_REQUEST_INVALID"}
             request["definition"] = validate_definition(request["definition"])
             Draft202012Validator(INPUT_SCHEMA).validate(request["input"])
             if len(canonical(request["input"])) > 1048576:
@@ -297,6 +330,8 @@ class Handler(BaseHTTPRequestHandler):
             value = {"error": code}
         except PythonToolError as exc:
             status, value = 422, {"error": str(exc)}
+        except sqlite3.Error:
+            status, value = 503, {"error": "PYTHON_STORAGE_UNAVAILABLE"}
         except Exception:
             status, value = 422, {"error": "PYTHON_REQUEST_INVALID"}
         encoded = json.dumps(value).encode()
