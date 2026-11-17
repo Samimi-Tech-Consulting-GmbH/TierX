@@ -482,8 +482,25 @@ export function NodeFields({
               onChange={(e) => set("fallback", e.target.value)}
             >
               <option value="">Select required fallback</option>
+              {!!value.fallback &&
+                !definitions.some(
+                  (item) =>
+                    item.kind === "playbook" &&
+                    item.code === value.fallback &&
+                    item.enabled !== false &&
+                    !!item.active_revision,
+                ) && (
+                  <option value={String(value.fallback)} disabled>
+                    Unavailable playbook · {String(value.fallback)}
+                  </option>
+                )}
               {definitions
-                .filter((item) => item.kind === "playbook")
+                .filter(
+                  (item) =>
+                    item.kind === "playbook" &&
+                    item.enabled !== false &&
+                    !!item.active_revision,
+                )
                 .map((item) => (
                   <option key={item.code} value={item.code}>
                     {item.name}

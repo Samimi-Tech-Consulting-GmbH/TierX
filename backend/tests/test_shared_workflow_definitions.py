@@ -94,3 +94,18 @@ def test_modern_nodes_and_connector_tools_are_rejected_in_legacy_graphs():
     value["format_version"]="1.0"
     with pytest.raises(GraphError,match="format 2.0"):
         validate_graph(value)
+
+
+@pytest.mark.parametrize("mode,extra", [("static",{"candidates":[""]*30,"profile_code":"invalid profile","threshold":-1}), ("model_only",{"mappings":{"x":""}})])
+def test_router_ignores_invalid_hidden_settings(mode, extra):
+    config={"mode":mode,"fallback":"generic","profile_code":"local",**extra}
+    result=validate_graph(graph({"id":"pick","type":"playbook_selector","config":config},capabilities=["normalization"]))
+    cleaned=next(n["config"] for n in result["nodes"] if n["id"]=="pick")
+    assert ("candidates" if mode=="static" else "mappings") not in cleaned
+
+
+def test_static_router_does_not_resolve_stale_profile(monkeypatch):
+    from app.api.v2 import workflows
+    monkeypatch.setattr(workflows.DatabaseManager,"get_tenant_database",lambda _: object())
+    result=workflows.resources(None,{"nodes":[{"type":"playbook_selector","config":{"mode":"static","profile_code":"unauthorized"}}]},"one")
+    assert result["profiles"]=={}

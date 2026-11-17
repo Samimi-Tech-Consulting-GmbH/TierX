@@ -173,6 +173,8 @@ def decide(context, config):
 
 
 def validate_graph(graph):
+    from copy import deepcopy
+    graph = deepcopy(graph)
     if not isinstance(graph, dict) or set(graph) - {
         "format_version",
         "nodes",
@@ -275,6 +277,14 @@ def validate_graph(graph):
             if not isinstance(cfg.get("arguments", {}), dict) or not isinstance(cfg.get("argument_paths", {}), dict):
                 raise GraphError("Invalid tool arguments")
         if kind == "playbook_selector":
+            mode = cfg.get("mode", "static")
+            # Hidden settings are inactive, not publication dependencies.
+            if mode == "static":
+                cfg.pop("candidates", None)
+                cfg.pop("profile_code", None)
+                cfg.pop("threshold", None)
+            elif mode == "model_only":
+                cfg.pop("mappings", None)
             if not isinstance(cfg.get("mappings", {}), dict) or not isinstance(cfg.get("candidates", []), list) or len(cfg.get("candidates", [])) > 20:
                 raise GraphError("Selector requires a mapping object and at most 20 candidates")
             codes = [*cfg.get("candidates", []), *cfg.get("mappings", {}).values(), cfg.get("fallback")]

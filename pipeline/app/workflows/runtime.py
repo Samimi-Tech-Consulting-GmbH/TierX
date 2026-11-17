@@ -361,7 +361,9 @@ class WorkflowTools(Tools):
         selected = cfg.get("mappings", {}).get(alert["alert_type"]) if mode != "model_only" else None
         reason, confidence = "STATIC_MAPPING" if selected else "NO_STATIC_MAPPING", None
         model_reason = None
-        if not selected and mode in {"model", "model_only"}:
+        if not selected and mode in {"model", "model_only"} and not cfg.get("candidates"):
+            reason = "NO_MODEL_CANDIDATES"
+        if not selected and mode in {"model", "model_only"} and cfg.get("candidates"):
             candidates = sorted(set(cfg.get("candidates", [])))[:20]
             catalogue = [{"code": code, "description": run["bundle"]["definitions"][
                 definition["references"][f"{node['id']}:playbook:{code}"]]["description"]} for code in candidates]

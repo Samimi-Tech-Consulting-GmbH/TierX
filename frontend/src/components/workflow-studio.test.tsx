@@ -127,7 +127,13 @@ describe("Graph JSON import", () => {
         value={{ mode: "static" }}
         profiles={[]}
         definitions={[
-          { kind: "playbook", code: "generic", name: "Generic investigation" },
+          {
+            kind: "playbook",
+            code: "generic",
+            name: "Generic investigation",
+            active_revision: 1,
+            enabled: true,
+          },
         ]}
         onChange={change}
       />,
@@ -197,6 +203,33 @@ describe("Graph JSON import", () => {
     expect(change).toHaveBeenCalledWith(
       expect.objectContaining({ mode: "model_only", profile_code: "local" }),
     );
+  });
+  it("shows an unavailable fallback and excludes drafts from new choices", () => {
+    render(
+      <NodeFields
+        node={{ id: "pick", type: "playbook_selector", config: {} }}
+        value={{ mode: "static", fallback: "old" }}
+        profiles={[]}
+        definitions={[
+          { kind: "playbook", code: "draft", name: "Draft" },
+          {
+            kind: "playbook",
+            code: "ready",
+            name: "Ready",
+            active_revision: 1,
+            enabled: true,
+          },
+        ]}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("option", { name: "Unavailable playbook · old" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("option", { name: "Draft" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Ready" })).toBeInTheDocument();
   });
   it("does not replace controlled nodes on measurement or selection events", () => {
     const change = vi.fn();

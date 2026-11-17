@@ -319,6 +319,22 @@ async def test_router_modes(environment, monkeypatch, mode, mapped, confidence, 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode",["model","model_only"])
+async def test_empty_router_candidates_skip_model(environment,monkeypatch,mode):
+    from app.workflows import runtime
+    mongo,db=environment
+    mongo.tenant.v2_jobs.insert_one({"job_id":"empty"})
+    tools=WorkflowTools(); tools.profile=AsyncMock(); tools.model_call=AsyncMock()
+    call=AsyncMock(return_value={"result":{}})
+    monkeypatch.setattr(runtime,"invoke",call)
+    parent=run(linear([node("entry","entry"),node("done","complete")]))
+    result=await tools.select(db,parent,node("pick","playbook_selector",mode=mode,candidates=[],fallback="generic"),
+        {"job_id":"empty"},{"alert_type":"synthetic","normalized_payload":{}},{"references":{"pick:playbook:generic":"playbook:generic@1"}})
+    assert result["reason"]=="NO_MODEL_CANDIDATES" and result["fallback"]
+    tools.profile.assert_not_awaited(); tools.model_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_failed_reasoning_has_terminal_analysis_status_and_safe_snapshots(environment):
     mongo,db=environment
     parent=run(linear([node("entry","entry"),node("map","normalization",field_mapping={"host.name":"host"}),
