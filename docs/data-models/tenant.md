@@ -2,7 +2,7 @@
 
 The `Tenant` document is the central representation of a customer organization or isolated workspace within the TierX platform.
 
-All tenants are stored in a shared MongoDB database called `soc_mind_platform`, in the `tenants` collection. The actual alert, entity, and event data for the tenant is stored in a dedicated, isolated database provisioned specifically for that tenant.
+All tenants are stored in a shared MongoDB database called `tierx_platform`, in the `tenants` collection. The actual alert, entity, and event data for the tenant is stored in a dedicated, isolated database provisioned specifically for that tenant.
 
 ## Schema Definition
 
@@ -12,7 +12,7 @@ All tenants are stored in a shared MongoDB database called `soc_mind_platform`, 
 | `tenant_id` | UUID | Yes | Yes | Unique string UUID assigned on creation. Never accepted from user request body. |
 | `name` | String | Yes | Yes | Unique URL-friendly slug across all tenants. Enforced by unique index. |
 | `display_name` | String | Yes | No | Human-readable name shown in the UI. |
-| `db_name` | String | Yes | Yes | The dedicated MongoDB database name for this tenant's data. Format: `soc_mind_tenant_{slug}`. |
+| `db_name` | String | Yes | Yes | The dedicated MongoDB database name for this tenant's data. Format: `tierx_tenant_{slug}`. |
 | `status` | String (Enum) | Yes | No | Current lifecycle state: `ONBOARDING`, `ACTIVE`, `SUSPENDED`, or `DELETED`. |
 | `allowed_source_systems` | List[String] | No | No | List of allowed data source identifiers (e.g., `["SPLUNK", "JIRA", "CORTEX_XDR"]`). |
 | `contact_email` | String | No | No | Primary technical or billing contact email for the tenant. |
@@ -31,7 +31,7 @@ All tenants are stored in a shared MongoDB database called `soc_mind_platform`, 
 ## Database Generation Logic
 
 The `db_name` is automatically generated on creation using the assigned `name`.
-Given a `name` like `"example-corp"`, the `db_name` will be initialized as `"soc_mind_tenant_example_corp"`.
+Given a `name` like `"example-corp"`, the `db_name` will be initialized as `"tierx_tenant_example_corp"`.
 
 The underlying MongoDB database and its core collections/indexes are immediately provisioned when the tenant document is persisted.
 
@@ -45,7 +45,7 @@ The underlying MongoDB database and its core collections/indexes are immediately
   "tenant_id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
   "name": "example-corp",
   "display_name": "Example Corporation",
-  "db_name": "soc_mind_tenant_example_corp",
+  "db_name": "tierx_tenant_example_corp",
   "status": "ACTIVE",
   "allowed_source_systems": ["SPLUNK", "CORTEX_XDR"],
   "contact_email": "soc-admin@example.com",

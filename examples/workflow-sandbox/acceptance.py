@@ -26,7 +26,7 @@ STATE = Path.home() / ".local/share/tierx-workflow-sandbox"
 def local_environment():
     """Never let a deployment shell redirect the disposable acceptance stack."""
     return {**{key: value for key, value in os.environ.items()
-               if not key.startswith(("TIERX_", "SOC_MIND_"))},
+               if not key.startswith("TIERX_")},
             "MONGO_URL": "mongodb://127.0.0.1:27028/",
             "TIERX_MONGO_URL": "mongodb://127.0.0.1:27028/"}
 

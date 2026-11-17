@@ -137,7 +137,7 @@ class AlertInput(BaseModel):
 def resources(db, graph, tenant_id):
     """Resolve and pin resources; cross-tenant IDs cannot resolve."""
     result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}, "connectors": {}, "python_tools": {}}
-    platform = DatabaseManager.get_tenant_database("soc_mind_platform")
+    platform = DatabaseManager.get_tenant_database("tierx_platform")
     for node in graph["nodes"]:
         cfg, kind = node.get("config", {}), node["type"]
         python_codes = [cfg["python_tool_code"]] if kind == "python_tool" else []
@@ -399,7 +399,7 @@ def allowed_profiles(
     tenant_id=Depends(verify_tenant_access), user=Depends(get_current_user)
 ):
     db_for(tenant_id)
-    platform = DatabaseManager.get_tenant_database("soc_mind_platform")
+    platform = DatabaseManager.get_tenant_database("tierx_platform")
     return {
         "items": list(
             platform.v2_llm_profiles.find(
@@ -482,7 +482,7 @@ def ingest(
     snapshots["active_schema"] = schema
     snapshots["tenant_settings"] = dict(getattr(tenant, "settings", {}) or {})
     snapshots["system_prompt"] = DatabaseManager.get_tenant_database(
-        "soc_mind_platform"
+        "tierx_platform"
     ).prompt_templates.find_one(
         {"template_id": "TIERX_ANALYSIS_DEFAULT", "is_active": True},
         {"_id": 0},

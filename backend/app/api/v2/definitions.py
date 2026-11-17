@@ -25,7 +25,7 @@ def now():
 
 
 def platform():
-    db = DatabaseManager.get_tenant_database("soc_mind_platform")
+    db = DatabaseManager.get_tenant_database("tierx_platform")
     db.workflow_definitions.create_index([("kind", 1), ("code", 1)], unique=True)
     db.workflow_definition_revisions.create_index([("kind", 1), ("code", 1), ("revision", 1)], unique=True)
     db.workflow_entries.create_index([("code", 1), ("tenant_id", 1)], unique=True)

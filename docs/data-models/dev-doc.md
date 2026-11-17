@@ -48,14 +48,14 @@ containers orchestrated by Docker Compose.
 
 | Service           | Container                 | Host port | Purpose                                              |
 | ----------------- | ------------------------- | --------- | ---------------------------------------------------- |
-| frontend          | `socmind_frontend`        | **3000**  | Next.js web UI                                       |
-| backend           | `socmind_backend`         | **8000**  | FastAPI: auth, user & tenant admin, playbooks        |
-| ingestion-proxy   | `socmind_ingestion_proxy` | **8001**  | Receives alerts, validates, publishes to Kafka       |
-| mongodb           | `socmind_mongodb`         | **27017** | Persistence (platform DB + per-tenant DBs)           |
-| kafka             | `socmind_kafka`           | **9092**  | Message bus between proxy and pipeline               |
-| ollama            | `socmind_ollama`          | **11434** | Local LLM serving                                    |
-| pipeline          | `socmind_pipeline`        | —         | Background Kafka workers (no host port)              |
-| init              | `socmind_init`            | —         | One-off job: pulls the Ollama model on first startup |
+| frontend          | `tierx_frontend`        | **3000**  | Next.js web UI                                       |
+| backend           | `tierx_backend`         | **8000**  | FastAPI: auth, user & tenant admin, playbooks        |
+| ingestion-proxy   | `tierx_ingestion_proxy` | **8001**  | Receives alerts, validates, publishes to Kafka       |
+| mongodb           | `tierx_mongodb`         | **27017** | Persistence (platform DB + per-tenant DBs)           |
+| kafka             | `tierx_kafka`           | **9092**  | Message bus between proxy and pipeline               |
+| ollama            | `tierx_ollama`          | **11434** | Local LLM serving                                    |
+| pipeline          | `tierx_pipeline`        | —         | Background Kafka workers (no host port)              |
+| init              | `tierx_init`            | —         | One-off job: pulls the Ollama model on first startup |
 
 > **Note:** ports above are published only in **dev mode** (`make up`). In production
 > mode (`make up-prod`) only the frontend (3000) is exposed; the backend and proxy stay

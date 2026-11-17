@@ -58,9 +58,7 @@ X-TierX-Key-ID: <key id>
 X-TierX-Signature: v1=<hex HMAC-SHA256>
 ```
 
-TierX also emits the permanent `X-SOC-Mind-*` compatibility family with
-identical values. Providers should prefer `X-TierX-*`; receivers that accept
-both must reject conflicting pairs.
+Only the `X-TierX-*` header family is emitted and accepted.
 
 Verify the HMAC over the exact bytes:
 

@@ -50,7 +50,7 @@ def main() -> None:
     DatabaseManager.initialize()
     interval = max(1, int(os.getenv("KNOWLEDGE_BASE_PROCESSOR_INTERVAL_SECONDS", "5")))
     lease = max(60, int(os.getenv("KNOWLEDGE_BASE_PROCESSOR_LEASE_SECONDS", "600")))
-    platform_db = DatabaseManager.get_tenant_database("soc_mind_platform")
+    platform_db = DatabaseManager.get_tenant_database("tierx_platform")
     logger.info("Knowledge Base processor ready")
     cached_configuration = None
     processing_error = None

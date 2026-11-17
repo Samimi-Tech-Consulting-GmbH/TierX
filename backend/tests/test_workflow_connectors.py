@@ -37,7 +37,7 @@ def test_connector_permissions_encryption_and_revision(setup, monkeypatch):
     response = client.put("/api/v2/admin/connectors/assets", json=body)
     assert response.status_code == 200
     assert "synthetic-test-credential" not in response.text
-    stored = mongo.soc_mind_platform.v2_connectors.find_one({})
+    stored = mongo.tierx_platform.v2_connectors.find_one({})
     assert connectors.decrypt(stored) == "synthetic-test-credential"
     assert "synthetic-test-credential" not in str(stored)
     assert client.put("/api/v2/admin/connectors/assets", json=body).status_code == 409
@@ -69,7 +69,7 @@ def test_entry_token_scope_rotation_and_raw_timestamp(setup, monkeypatch):
     )
     assert credential.status_code == 200
     token = credential.json()["token"]
-    assert token not in str(mongo.soc_mind_platform.workflow_entries.find_one({}))
+    assert token not in str(mongo.tierx_platform.workflow_entries.find_one({}))
     endpoint = "/api/v2/workflows/raw/tenants/one/ingest"
     assert client.post(endpoint, json={}).status_code == 401
     headers = {"Authorization": "Bearer " + token}

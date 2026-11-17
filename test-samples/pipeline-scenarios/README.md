@@ -4,7 +4,7 @@ Sample data for every pipeline stage: **alerts** (per-topic Kafka messages and H
 
 | Object | Value |
 |---|---|
-| Tenant | `tenant-demo` (db `soc_mind_tenant_demo`, allowed sources: SPLUNK, CORTEX_XDR) |
+| Tenant | `tenant-demo` (db `tierx_tenant_demo`, allowed sources: SPLUNK, CORTEX_XDR) |
 | Alert type A | `splunk.notable.endpoint_malware` — schema linked to playbook `pb-malware-triage` |
 | Alert type B | `splunk.notable.phishing` — schema WITHOUT playbook link; playbook `pb-phishing` matches via `alert_types` |
 | Alert type C | `splunk.notable.poisoned` — schema valid at upload, fails every alert at validation |

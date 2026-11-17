@@ -102,25 +102,16 @@ def test_private_caller_can_reserve_alert_id(monkeypatch):
     assert publisher.traces[-1]["alert_id"] == reserved
 
 
-def test_legacy_private_header_is_accepted_and_conflict_is_rejected(monkeypatch):
+def test_tierx_private_header_is_accepted(monkeypatch):
     client, _ = _client(monkeypatch)
     reserved = "00000000-0000-4000-8000-000000000201"
     legacy = client.post(
         "/api/v1/alerts/ingest",
         json=_body(),
-        headers={"X-SOC-Mind-Requested-Alert-ID": reserved},
+        headers={"X-TierX-Requested-Alert-ID": reserved},
     )
     assert legacy.status_code == 200
     assert legacy.json()["alert_id"] == reserved
-    conflict = client.post(
-        "/api/v1/alerts/ingest",
-        json=_body(),
-        headers={
-            "X-TierX-Requested-Alert-ID": reserved,
-            "X-SOC-Mind-Requested-Alert-ID": "00000000-0000-4000-8000-000000000202",
-        },
-    )
-    assert conflict.status_code == 400
 
 
 def test_jira_source_reference_is_forwarded_without_changing_raw_alert(monkeypatch):

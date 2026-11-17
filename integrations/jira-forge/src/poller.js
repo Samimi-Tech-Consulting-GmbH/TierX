@@ -4,7 +4,7 @@ import { addAppComment, commentMarker, failureComment, finalComment } from "./li
 import { getConfig, submissionRequest, withConnection, TierXRequestError } from "./lib/tierx.js";
 import { ConnectionChangedError, cancelConnectionJob } from "./lib/connection-store.js";
 
-const POLL_CURSOR_KEY = "soc-mind:pending-poll-cursor";
+const POLL_CURSOR_KEY = "tierx:pending-poll-cursor";
 
 export function safePollFailure(error) {
   if (error instanceof TierXRequestError) {

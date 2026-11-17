@@ -125,7 +125,7 @@ def test_processing_duration_counts_only_valid_completed_spans():
 def test_trace_service_lists_and_reads_spans():
     mongoengine.disconnect_all()
     mongoengine.connect(
-        "soc_mind_platform",
+        "tierx_platform",
         host="mongodb://unit-test.invalid/",
         mongo_client_class=mongomock.MongoClient,
         alias="default",

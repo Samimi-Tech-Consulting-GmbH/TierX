@@ -31,7 +31,7 @@ class EnrichmentActionService:
 
     @classmethod
     def _collection(cls):
-        return DatabaseManager.get_tenant_database("soc_mind_platform")[cls.COLLECTION]
+        return DatabaseManager.get_tenant_database("tierx_platform")[cls.COLLECTION]
 
     @classmethod
     def ensure_indexes(cls) -> None:

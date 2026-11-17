@@ -64,11 +64,11 @@ async def test_scheduler_recovers_expired_leases_and_limits_parallel_nodes(monke
 
     mongo = mongomock.MongoClient(tz_aware=True)
     raw = Client(mongo)
-    mongo.soc_mind_platform.tenants.insert_one(
+    mongo.tierx_platform.tenants.insert_one(
         {"tenant_id": "t", "db_name": "tenant", "status": "ACTIVE"}
     )
     monkeypatch.setattr(module, "get_client", lambda: raw)
-    monkeypatch.setattr(module, "get_database", lambda: raw["soc_mind_platform"])
+    monkeypatch.setattr(module, "get_database", lambda: raw["tierx_platform"])
     engine = Engine()
     engine.tools.schedule = AsyncMock()
     release = asyncio.Event()
@@ -154,11 +154,11 @@ async def test_tenant_failure_isolated_and_reported_in_fresh_heartbeat(monkeypat
     from app.workflows import engine as module
     mongo = mongomock.MongoClient(tz_aware=True)
     raw = Client(mongo)
-    mongo.soc_mind_platform.tenants.insert_many([
+    mongo.tierx_platform.tenants.insert_many([
         {"tenant_id": "broken", "db_name": "broken", "status": "ACTIVE"},
         {"tenant_id": "working", "db_name": "working", "status": "ACTIVE"},
     ])
-    monkeypatch.setattr(module, "get_database", lambda: raw["soc_mind_platform"])
+    monkeypatch.setattr(module, "get_database", lambda: raw["tierx_platform"])
     engine = Engine()
     seen = []
     async def tick_tenant(tenant):
@@ -168,7 +168,7 @@ async def test_tenant_failure_isolated_and_reported_in_fresh_heartbeat(monkeypat
     engine.tick_tenant = tick_tenant
     assert await engine.tick() == 1
     assert seen == ["broken", "working"]
-    heartbeat = mongo.soc_mind_platform.service_heartbeats.find_one({"service": "workflow-engine"})
+    heartbeat = mongo.tierx_platform.service_heartbeats.find_one({"service": "workflow-engine"})
     assert heartbeat["state"] == "DEGRADED" and heartbeat["tenant_errors"] == 1
     assert heartbeat["updated_at"] >= datetime.now(timezone.utc) - timedelta(seconds=5)
 

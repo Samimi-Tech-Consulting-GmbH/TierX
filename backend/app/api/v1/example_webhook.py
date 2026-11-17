@@ -15,7 +15,7 @@ from pymongo import ASCENDING
 from pymongo.errors import DuplicateKeyError
 
 from app.services.webhook_signing_service import WebhookSigningService
-from app.core.brand_compat import compatible_header
+from app.core.brand_compat import tierx_header
 
 router = APIRouter(prefix="/examples", tags=["Examples"])
 
@@ -82,11 +82,11 @@ def _sample_footer(body: ReferenceRequest) -> str:
 async def playbook_context_webhook(
     request: Request,
 ) -> dict[str, str]:
-    version = compatible_header(request, "webhook-version", required=True)
-    delivery_id = compatible_header(request, "delivery-id", required=True)
-    timestamp_header = compatible_header(request, "timestamp", required=True)
-    key_id = compatible_header(request, "key-id", required=True)
-    signature = compatible_header(request, "signature", required=True)
+    version = tierx_header(request, "webhook-version", required=True)
+    delivery_id = tierx_header(request, "delivery-id", required=True)
+    timestamp_header = tierx_header(request, "timestamp", required=True)
+    key_id = tierx_header(request, "key-id", required=True)
+    signature = tierx_header(request, "signature", required=True)
     assert version and delivery_id and timestamp_header and key_id and signature
     if not WebhookSigningService.enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")

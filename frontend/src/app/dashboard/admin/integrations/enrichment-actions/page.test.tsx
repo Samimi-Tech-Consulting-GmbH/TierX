@@ -28,7 +28,7 @@ describe("enrichment actions page", () => {
         tenant_id: "tenant-1",
         name: "tenant-one",
         display_name: "Tenant One",
-        db_name: "soc_mind_tenant_one",
+        db_name: "tierx_tenant_one",
         status: TenantStatus.ACTIVE,
         allowed_source_systems: ["SPLUNK"],
         settings: {},

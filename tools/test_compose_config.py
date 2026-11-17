@@ -31,7 +31,7 @@ class ComposeConfigurationTests(unittest.TestCase):
         return json.loads(output)["services"]
 
     def test_supported_environment_families_reach_containers(self):
-        for prefix in ("TIERX_", "", "SOC_MIND_"):
+        for prefix in ("TIERX_", ""):
             with self.subTest(prefix=prefix):
                 services = self.render(prefix)
                 self.assertEqual(services["mongodb"]["environment"]["MONGO_INITDB_ROOT_USERNAME"], "test-user")

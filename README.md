@@ -137,7 +137,7 @@ and start semantic services only with `--profile semantic`.
 ## Configuration
 
 Environment resolution prefers canonical `TIERX_*` names, then unprefixed
-names, then legacy `SOC_MIND_*` aliases; see
+names; see
 [`docs/tierx-compatibility.md`](docs/tierx-compatibility.md). The variables
 that matter most for a local source setup are below. Released-image installs
 use the canonical `TIERX_*` variables documented in `examples/usage/.env.example`.

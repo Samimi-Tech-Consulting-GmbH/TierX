@@ -11,7 +11,7 @@ async def test_health_requires_workflow_heartbeat(monkeypatch, age, state, expec
     import main
     record = None if age is None else {"updated_at": datetime.now(timezone.utc) - timedelta(seconds=age), "state": state}
     collection = SimpleNamespace(find_one=lambda *args: record)
-    mongo = SimpleNamespace(admin=SimpleNamespace(command=lambda *args: {}), soc_mind_platform=SimpleNamespace(service_heartbeats=collection))
+    mongo = SimpleNamespace(admin=SimpleNamespace(command=lambda *args: {}), tierx_platform=SimpleNamespace(service_heartbeats=collection))
     monkeypatch.setattr(main, "MongoClient", lambda *args, **kwargs: mongo)
     monkeypatch.setattr(main, "KNOWLEDGE_BASE_PROCESSING_ENABLED", False)
     monkeypatch.setattr(main, "LLM_ANALYSIS_ENABLED", False)

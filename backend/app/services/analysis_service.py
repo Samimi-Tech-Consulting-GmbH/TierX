@@ -20,7 +20,6 @@ from app.schemas.analysis import (
 RUNS_COLLECTION = "analysis_runs"
 PROMPTS_COLLECTION = "prompt_templates"
 SYSTEM_PROMPT_ID = "TIERX_ANALYSIS_DEFAULT"
-LEGACY_SYSTEM_PROMPT_ID = "SOC_MIND_ANALYSIS_DEFAULT"
 SYSTEM_PROMPT = (
     "Act as a SOC analyst. Use only the evidence in the supplied context and do "
     "not invent indicators or facts. Return only JSON matching the required "
@@ -49,24 +48,6 @@ class AnalysisService:
             [("template_id", ASCENDING), ("is_active", ASCENDING)]
         )
         now = datetime.now(timezone.utc)
-        if not collection.find_one({"template_id": SYSTEM_PROMPT_ID}):
-            legacy = collection.find_one(
-                {"template_id": LEGACY_SYSTEM_PROMPT_ID, "is_active": True},
-                {"_id": 0},
-                sort=[("version", -1)],
-            )
-            if legacy:
-                legacy.update(
-                    template_id=SYSTEM_PROMPT_ID,
-                    migrated_from_template_id=LEGACY_SYSTEM_PROMPT_ID,
-                    created_by="tierx-prompt-migration",
-                    updated_at=now,
-                )
-                collection.update_one(
-                    {"template_id": SYSTEM_PROMPT_ID, "version": legacy["version"]},
-                    {"$setOnInsert": legacy},
-                    upsert=True,
-                )
         if not collection.find_one({"template_id": SYSTEM_PROMPT_ID}):
             collection.update_one(
                 {"template_id": SYSTEM_PROMPT_ID, "version": 1},

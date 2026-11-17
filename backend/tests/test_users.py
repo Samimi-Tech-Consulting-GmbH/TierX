@@ -15,7 +15,7 @@ ADMIN_PASSWORD = os.environ["PLATFORM_ADMIN_PASSWORD"]
 
 mongoengine.disconnect_all()
 mongoengine.connect(
-    "soc_mind_platform",
+    "tierx_platform",
     host="mongodb://root:example@mongodb:27017/",
     mongo_client_class=mongomock.MongoClient,
     alias="default",

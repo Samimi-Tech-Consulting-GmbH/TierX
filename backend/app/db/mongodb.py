@@ -10,7 +10,7 @@ class DatabaseManager:
     def initialize():
         """Creates the default connection to the platform database."""
         connect(
-            db="soc_mind_platform",
+            db="tierx_platform",
             host=MONGO_URL,
             alias="default",
             uuidRepresentation="standard"

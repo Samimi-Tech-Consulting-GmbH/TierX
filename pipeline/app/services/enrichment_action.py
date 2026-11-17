@@ -30,8 +30,8 @@ def canonical_json(value: Any) -> bytes:
 
 
 def deterministic_id(kind: str, *parts: object) -> str:
-    # Persisted identity namespace: changing it would repeat external deliveries.
-    identity = ":".join(["soc-mind", "enrichment-action", "v1", kind, *map(str, parts)])
+    # Stable namespace for deliveries created by a clean TierX installation.
+    identity = ":".join(["tierx", "enrichment-action", "v1", kind, *map(str, parts)])
     return str(uuid5(NAMESPACE_URL, identity))
 
 
@@ -66,7 +66,7 @@ def _decode(value: str) -> bytes:
 
 
 def decrypt_action_secret(record: dict[str, Any]) -> str:
-    namespace = record.get("aad_namespace") or "soc-mind"
+    namespace = record.get("aad_namespace") or "tierx"
     aad = (
         f"{namespace}:enrichment-action:v1:{record['action_code']}:{record['key_id']}"
     ).encode()
@@ -452,11 +452,6 @@ class EnrichmentActionCoordinator:
                 "X-TierX-Timestamp": timestamp,
                 "X-TierX-Key-ID": action["key_id"],
                 "X-TierX-Signature": f"v1={signature}",
-                "X-SOC-Mind-Action-Version": "1",
-                "X-SOC-Mind-Delivery-ID": delivery_id,
-                "X-SOC-Mind-Timestamp": timestamp,
-                "X-SOC-Mind-Key-ID": action["key_id"],
-                "X-SOC-Mind-Signature": f"v1={signature}",
             }
             url = await validate_public_https_url(str(action["url"]))
             timeout = httpx.Timeout(timeout_seconds, connect=10, write=10, pool=10)

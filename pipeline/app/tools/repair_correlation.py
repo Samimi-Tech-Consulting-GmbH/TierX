@@ -77,7 +77,7 @@ async def repair(args: argparse.Namespace) -> dict[str, Any]:
     cluster_id = str(
         uuid5(
             NAMESPACE_URL,
-            f"soc-mind-correlation-repair:{args.tenant_id}:{':'.join(alert_ids)}",
+            f"tierx-correlation-repair:{args.tenant_id}:{':'.join(alert_ids)}",
         )
     )
     if cluster_ids:

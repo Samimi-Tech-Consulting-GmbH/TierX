@@ -52,7 +52,7 @@ def prepare(setup, monkeypatch):
     assert client.put(path, json={"name": "Raw", "tenant_ids": ["one"], "configuration": graph}).status_code == 200
     assert client.post(path + "/publish").status_code == 200
     integration = {"integration_id": "jira-one", "state": "ACTIVE", "name": "Synthetic Jira", "jira_cloud_id": "cloud-one", "jira_site_url": "https://example.atlassian.net"}
-    mongo.soc_mind_platform.jira_integrations.insert_one(dict(integration))
+    mongo.tierx_platform.jira_integrations.insert_one(dict(integration))
     assert client.post(path + "/entry-credentials", json={"tenant_id": "one", "jira_connection_ids": ["jira-one"]}).status_code == 200
     client.app.dependency_overrides[require_jira_integration] = lambda: integration
     return client, mongo, user
@@ -80,7 +80,7 @@ def test_jira_workflow_identity_idempotency_and_explicit_delivery(setup, monkeyp
     assert client.get(endpoint).json()["state"] == "COMPLETED"
     assert client.get(endpoint).json()["trace_path"] == f"/dashboard/one/workflows/runs/{row['run_id']}"
     assert client.post(endpoint + "/comments", json={"kind": "FINAL", "jira_comment_id": "2"}).status_code == 409
-    mongo.soc_mind_platform.workflow_jira_deliveries.insert_one({"_id": "d", "submission_id": row["submission_id"], "integration_id": "jira-one", "state": "PENDING", "analysis": {"headline": "Synthetic analysis"}})
+    mongo.tierx_platform.workflow_jira_deliveries.insert_one({"_id": "d", "submission_id": row["submission_id"], "integration_id": "jira-one", "state": "PENDING", "analysis": {"headline": "Synthetic analysis"}})
     assert client.get(endpoint).json()["result"]["headline"] == "Synthetic analysis"
     assert client.post(endpoint + "/comments", json={"kind": "FINAL", "jira_comment_id": "2", "delivery_id": "d"}).json()["state"] == "COMPLETED"
     assert client.post(path + "/submissions", json={**body, "jira_cloud_id": "another-cloud"}).status_code == 403
@@ -160,10 +160,10 @@ def test_acceptance_environment_cannot_inherit_remote_database(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setenv("TIERX_MONGO_URL", "mongodb://remote.invalid/")
-    monkeypatch.setenv("SOC_MIND_MONGO_URL", "mongodb://legacy.invalid/")
+    monkeypatch.setenv("MONGO_URL", "mongodb://unprefixed.invalid/")
     env = module.local_environment()
     assert env["MONGO_URL"] == env["TIERX_MONGO_URL"] == "mongodb://127.0.0.1:27028/"
-    assert "SOC_MIND_MONGO_URL" not in env
+    assert "remote.invalid" not in env["TIERX_MONGO_URL"]
 
 
 def test_cancel_preserves_previously_persisted_success(setup, monkeypatch):

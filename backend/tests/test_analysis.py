@@ -10,7 +10,6 @@ from app.api.v1 import analysis as analysis_api
 from app.core.security import create_access_token
 from app.services.analysis_service import (
     AnalysisService,
-    LEGACY_SYSTEM_PROMPT_ID,
     SYSTEM_PROMPT_ID,
 )
 
@@ -81,7 +80,7 @@ def test_retry_rejects_promoted_standalone_alert(tenant_db):
 def test_system_prompt_is_seeded_and_versioned():
     mongoengine.disconnect_all()
     mongoengine.connect(
-        "soc_mind_platform",
+        "tierx_platform",
         host="mongodb://unit-test.invalid/",
         mongo_client_class=mongomock.MongoClient,
         alias="default",
@@ -97,10 +96,10 @@ def test_system_prompt_is_seeded_and_versioned():
     assert AnalysisService.get_system_prompt().prompt.startswith("Updated")
 
 
-def test_active_legacy_prompt_is_copied_idempotently():
+def test_unrelated_prompt_is_not_migrated_and_bootstrap_is_idempotent():
     mongoengine.disconnect_all()
     mongoengine.connect(
-        "soc_mind_platform",
+        "tierx_platform",
         host="mongodb://unit-test.invalid/",
         mongo_client_class=mongomock.MongoClient,
         alias="default",
@@ -108,7 +107,7 @@ def test_active_legacy_prompt_is_copied_idempotently():
     )
     collection = mongoengine.connection.get_db("default").prompt_templates
     collection.insert_one({
-        "template_id": LEGACY_SYSTEM_PROMPT_ID,
+        "template_id": "UNRELATED_PROMPT",
         "version": 7,
         "prompt": "Approved legacy prompt",
         "is_active": True,
@@ -117,9 +116,10 @@ def test_active_legacy_prompt_is_copied_idempotently():
     AnalysisService.ensure_system_prompt()
     copied = list(collection.find({"template_id": SYSTEM_PROMPT_ID}))
     assert len(copied) == 1
-    assert copied[0]["version"] == 7
-    assert copied[0]["prompt"] == "Approved legacy prompt"
-    assert copied[0]["migrated_from_template_id"] == LEGACY_SYSTEM_PROMPT_ID
+    assert copied[0]["version"] == 1
+    assert copied[0]["created_by"] == "system-bootstrap"
+    assert "migrated_from_template_id" not in copied[0]
+    assert collection.count_documents({"template_id": "UNRELATED_PROMPT"}) == 1
 
 
 def _headers(role: str, tenant_id: str | None = "tenant-1"):

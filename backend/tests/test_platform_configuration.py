@@ -94,7 +94,7 @@ def db(monkeypatch):
     monkeypatch.setattr(Service, "db", staticmethod(lambda: database))
     for name in (*DEFAULTS, "platform_admin_email", "platform_admin_password",
                  "bootstrap_configured", "installation_enabled", "installation_token"):
-        for prefix in ("", "TIERX_", "SOC_MIND_"):
+        for prefix in ("", "TIERX_"):
             monkeypatch.delenv(prefix + name.upper(), raising=False)
     monkeypatch.setenv("TIERX_INSTALLATION_TOKEN", "synthetic-one-time-token")
     monkeypatch.setattr(app.state, "configuration_ready", False, raising=False)

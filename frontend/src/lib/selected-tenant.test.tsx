@@ -133,7 +133,7 @@ describe("SelectedTenantProvider", () => {
 
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByTestId("scope")).toHaveTextContent(ALL_TENANTS);
-    expect(localStorage.getItem("soc_mind_selected_tenant")).toBe(ALL_TENANTS);
+    expect(localStorage.getItem("tierx_selected_tenant")).toBe(ALL_TENANTS);
     expect(localStorage.getItem("tierx_selected_tenant")).toBe(ALL_TENANTS);
   });
 
