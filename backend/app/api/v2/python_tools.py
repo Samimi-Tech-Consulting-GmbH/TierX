@@ -117,6 +117,11 @@ async def test(code: str, body: TestInput):
         database().workflow_python_test_calls.update_one({"call_id": identity}, {"$set": {"state": result["state"], "result": result}})
         return {"call_id": identity, **result}
     except ValueError as exc:
+        rejected = str(exc) in {"PYTHON_QUEUE_FULL", "RUNNER_ISOLATION_UNAVAILABLE", "PYTHON_SYNTAX_ERROR",
+            "SYNCHRONOUS_RUN_REQUIRED", "RUN_REQUIRES_ALERT_AND_CLUSTER"}
+        database().workflow_python_test_calls.update_one({"call_id": identity}, {"$set": {
+            "state": "REJECTED" if rejected else "UNCERTAIN", "result": {"state": "REJECTED" if rejected else "UNCERTAIN",
+            "error": str(exc) if rejected else "PYTHON_EXECUTION_UNCERTAIN"}}})
         raise runner_error(exc) from exc
 
 
@@ -130,7 +135,7 @@ async def test_result(code: str, call_id: str):
         return result
     except ValueError as exc:
         record = database().workflow_python_test_calls.find_one({"call_id": call_id, "code": code})
-        if record.get("state") in {"SUCCEEDED", "FAILED", "CANCELLED", "UNCERTAIN"}:
+        if record.get("state") in {"SUCCEEDED", "FAILED", "CANCELLED", "UNCERTAIN", "REJECTED"}:
             return record["result"]
         raise runner_error(exc) from exc
 
@@ -151,4 +156,8 @@ def runner_error(exc):
         return HTTPException(429, code)
     if code in {"PYTHON_REPLAY_CONFLICT", "PYTHON_EXECUTION_UNCERTAIN"}:
         return HTTPException(409, code)
+    if code in {"PYTHON_SYNTAX_ERROR", "SYNCHRONOUS_RUN_REQUIRED", "RUN_REQUIRES_ALERT_AND_CLUSTER"}:
+        return HTTPException(422, code)
+    if code == "RUNNER_ISOLATION_UNAVAILABLE":
+        return HTTPException(503, code)
     return HTTPException(503, "Python runner unavailable")

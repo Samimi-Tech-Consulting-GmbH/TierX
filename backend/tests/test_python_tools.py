@@ -111,3 +111,18 @@ def test_draft_storage_failure_cannot_start_external_execution(setup, monkeypatc
     with pytest.raises(RuntimeError, match="storage unavailable"):
         client.post(root + "/test", json={"tenant_id": "one", "alert": {"tenant_id": "one", "alert_id": "a", "normalized_payload": {}}})
     transport.assert_not_awaited()
+
+
+@pytest.mark.parametrize("code,status", [("PYTHON_QUEUE_FULL", 429), ("PYTHON_SYNTAX_ERROR", 422),
+    ("SYNCHRONOUS_RUN_REQUIRED", 422), ("RUN_REQUIRES_ALERT_AND_CLUSTER", 422), ("RUNNER_ISOLATION_UNAVAILABLE", 503)])
+def test_definitive_draft_rejections_are_recorded_and_mapped(setup, monkeypatch, code, status):
+    from tierx_workflows.python_tools import PythonToolError
+    client, _, _ = prepare(setup)
+    root = "/api/v2/admin/python-tools/observe"
+    client.put(root, json=value())
+    monkeypatch.setattr(python_tools, "broker_request", AsyncMock(side_effect=PythonToolError(code)))
+    result = client.post(root + "/test", json={"tenant_id": "one", "alert": {"tenant_id": "one", "alert_id": "a", "normalized_payload": {}}})
+    assert result.status_code == status
+    row = python_tools.database().workflow_python_test_calls.find_one({"code": "observe"})
+    assert row["state"] == "REJECTED"
+    assert row["result"]["error"] == code

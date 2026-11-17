@@ -59,6 +59,8 @@ infrastructure CIDRs are denied even when explicitly allowed. Each invocation ha
 Hostname approval alone permits only globally routable answers. Private addresses
 require an explicit IP/CIDR destination grant in addition to the hostname grant;
 infrastructure deny rules still take precedence.
+An explicit CIDR grant authorizes any approved connection resolving into that
+range, not just one hostname; restrict CIDRs and ports to operator-owned targets.
 Each proxy requires a fresh random invocation capability, so other proxy containers
 cannot use its policy endpoint. TCP checks open then close a connection; no arbitrary TCP
 payload forwarding is supported.
@@ -99,8 +101,11 @@ A persisted submission marker makes later observation GET-only: missing broker
 state is uncertain and never permission to execute again. Terminal broker request
 copies are blanked, while tenant audit inputs and broker result/checksum remain.
 Failed resource cleanup is retried on health checks/new submissions; the broker
-rejects new calls until that cleanup succeeds. Oversized stdout/stderr fails
-the invocation rather than preserving or exposing logs. Live queues are bounded
+rejects new calls until that cleanup succeeds.
+No Docker restart is triggered by health status alone; the healthcheck retries
+cleanup. Operators should alert on sustained `/health` 503 responses.
+Oversized stdout/stderr fails the invocation rather than preserving or exposing
+logs. Live queues are bounded
 at 100 calls, draft queues at 10; execution timeout starts when a queued call
 becomes running. Configure live capacity with `TIERX_PYTHON_WORKERS`.
 Runner errors follow explicit workflow error edges. Debug omits code, input

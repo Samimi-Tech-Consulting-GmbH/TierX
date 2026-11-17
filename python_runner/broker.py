@@ -159,6 +159,7 @@ class Broker:
     @contextmanager
     def db(self):
         connection = sqlite3.connect(self.path, timeout=10)
+        connection.execute("PRAGMA secure_delete=ON")
         try:
             with connection:
                 yield connection
@@ -167,9 +168,9 @@ class Broker:
 
     def cleanup_orphans(self):
         for identity in docker("ps", "-aq", "--filter", "label=tierx.python.sandbox=true").split():
-            docker("rm", "-f", identity)
+            remove_container(identity)
         for identity in docker("network", "ls", "-q", "--filter", "label=tierx.python.sandbox=true").split():
-            docker("network", "rm", identity)
+            remove_network(identity)
 
     def submit(self, identity, request):
         from tierx_workflows.graph import checksum
@@ -215,6 +216,13 @@ class Broker:
 
     def execute(self, identity, request):
         from tierx_workflows.python_tools import output_envelope
+        # Accepted work stays pending until failed isolation cleanup recovers.
+        while self.unhealthy:
+            self.retry_cleanup()
+            if (self.get(identity) or {}).get("state") != "PENDING":
+                return
+            if self.unhealthy:
+                time.sleep(1)
         prefix = "tierx-py-" + identity[:48]
         network, proxy, name = prefix + "-net", prefix + "-proxy", prefix + "-job"
         started = time.time()
@@ -225,8 +233,6 @@ class Broker:
                 if db.execute("UPDATE calls SET state='RUNNING',result=? WHERE id=? AND state='PENDING'", (json.dumps(metadata), identity)).rowcount != 1:
                     return
             definition = request["definition"]
-            if self.unhealthy:
-                raise BrokerError("RUNNER_ISOLATION_UNAVAILABLE")
             docker("network", "create", "--internal", "--label", "tierx.python.sandbox=true", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated", network)
             base = ["--label", "tierx.python.sandbox=true", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--memory=256m", "--memory-swap=256m", "--cpus=1", "--pids-limit=64", "--user=65532:65532", "--tmpfs=/tmp:rw,noexec,nosuid,size=16m", "--log-driver=none"]
             # Proxy is trusted and contains no instance credentials. Each job gets its own proxy.

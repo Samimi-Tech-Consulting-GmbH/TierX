@@ -88,6 +88,7 @@ class WorkflowTools(Tools):
             return {"python_call_id": identity, "tool_code": code, "revision": pinned["revision"]}
         if previous and previous["state"] in {"FAILED", "UNCERTAIN", "CANCELLED"}:
             raise NodeFailure(previous.get("error_type", "PYTHON_EXECUTION_UNCERTAIN"))
+        attempted_post = False
         try:
             if not previous:
                 alert = await db.v2_alerts.find_one({"alert_id": run["alert_id"], "tenant_id": run["tenant_id"]})
@@ -113,6 +114,7 @@ class WorkflowTools(Tools):
             # A crash in this window is uncertain, never permission to POST again.
             claimed = await db.v2_python_calls.update_one({"call_id": identity, "submission_started_at": {"$exists": False}},
                 {"$set": {"submission_started_at": now()}})
+            attempted_post = bool(claimed.modified_count)
             response = await broker_request(identity, request={"definition": previous["definition"], "input": previous["input"]}) if claimed.modified_count else await broker_request(identity)
             fields = {"state": response["state"], "last_checked_at": now()}
             fields.update({key: response[key] for key in ("runtime_digest", "queued_at", "started_at", "deadline", "duration_seconds", "destination_decisions") if key in response})
@@ -127,6 +129,12 @@ class WorkflowTools(Tools):
                 raise NodeFailure(fields["error_type"])
             return {"python_call_id": identity, "tool_code": code, "revision": pinned["revision"]}
         except PythonToolError as exc:
+            code = str(exc)
+            if attempted_post and code in {"PYTHON_QUEUE_FULL", "RUNNER_ISOLATION_UNAVAILABLE"}:
+                await db.v2_python_calls.update_one({"call_id": identity, "state": "PENDING"}, {"$unset": {"submission_started_at": ""}})
+                raise NodeWaiting(code) from exc
+            if not attempted_post and code != "PYTHON_EXECUTION_UNCERTAIN":
+                raise NodeWaiting("PYTHON_OBSERVATION_UNAVAILABLE") from exc
             # A timed-out HTTP submission may already have started a side effect.
             # Record uncertainty rather than dispatching this identity afresh.
             await db.v2_python_calls.update_one({"call_id": identity, "state": {"$in": ["PENDING", "RUNNING"]}},
