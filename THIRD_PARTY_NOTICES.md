@@ -394,16 +394,16 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT | `integrations/jira-forge/package-lock.json` |
 | `@napi-rs/wasm-runtime` | `0.2.12` | MIT | `frontend/package-lock.json` |
 | `@napi-rs/wasm-runtime` | `1.1.1` | MIT | `frontend/package-lock.json` |
-| `@next/env` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/eslint-plugin-next` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-darwin-arm64` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-darwin-x64` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-linux-arm64-gnu` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-linux-arm64-musl` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-linux-x64-gnu` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-linux-x64-musl` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-win32-arm64-msvc` | `16.4.3` | MIT | `frontend/package-lock.json` |
-| `@next/swc-win32-x64-msvc` | `16.4.3` | MIT | `frontend/package-lock.json` |
+| `@next/env` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/eslint-plugin-next` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-darwin-arm64` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-darwin-x64` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-linux-arm64-gnu` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-linux-arm64-musl` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-linux-x64-gnu` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-linux-x64-musl` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-win32-arm64-msvc` | `16.4.6` | MIT | `frontend/package-lock.json` |
+| `@next/swc-win32-x64-msvc` | `16.4.6` | MIT | `frontend/package-lock.json` |
 | `@nodelib/fs.scandir` | `2.1.5` | MIT | `frontend/package-lock.json` |
 | `@nodelib/fs.stat` | `2.0.5` | MIT | `frontend/package-lock.json` |
 | `@nodelib/fs.walk` | `1.2.8` | MIT | `frontend/package-lock.json` |
@@ -663,7 +663,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `escape-string-regexp` | `4.0.0` | MIT | `frontend/package-lock.json` |
 | `escape-string-regexp` | `4.0.0` | MIT | `integrations/jira-forge/package-lock.json` |
 | `eslint` | `9.39.4` | MIT | `frontend/package-lock.json` |
-| `eslint-config-next` | `16.4.3` | MIT | `frontend/package-lock.json` |
+| `eslint-config-next` | `16.4.6` | MIT | `frontend/package-lock.json` |
 | `eslint-import-resolver-node` | `0.3.10` | MIT | `frontend/package-lock.json` |
 | `eslint-import-resolver-typescript` | `3.10.1` | ISC | `frontend/package-lock.json` |
 | `eslint-module-utils` | `2.12.1` | MIT | `frontend/package-lock.json` |
@@ -693,7 +693,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `fastapi` | `Not resolved` | MIT | `backend/requirements.txt` |
 | `fastapi` | `Not resolved` | MIT | `ingestion-proxy/requirements.txt` |
 | `fastapi` | `0.116.1` | MIT | `kb_semantic/requirements.txt` |
-| `fastq` | `1.20.1` | ISC | `frontend/package-lock.json` |
+| `fastq` | `1.20.3` | ISC | `frontend/package-lock.json` |
 | `faststream` | `Not resolved` | Apache-2.0 | `ingestion-proxy/requirements.txt` |
 | `fdir` | `6.5.0` | MIT | `frontend/package-lock.json` |
 | `file-entry-cache` | `8.0.0` | MIT | `frontend/package-lock.json` |
@@ -874,7 +874,7 @@ TierX's AGPL license does not replace dependency licenses. npm licenses are take
 | `nanoid` | `3.3.19` | MIT | `frontend/package-lock.json` |
 | `napi-postinstall` | `0.3.4` | MIT | `frontend/package-lock.json` |
 | `natural-compare` | `1.4.0` | MIT | `frontend/package-lock.json` |
-| `next` | `16.4.3` | MIT | `frontend/package-lock.json` |
+| `next` | `16.4.6` | MIT | `frontend/package-lock.json` |
 | `next-themes` | `0.4.6` | MIT | `frontend/package-lock.json` |
 | `node-exports-info` | `1.6.0` | MIT | `frontend/package-lock.json` |
 | `node-releases` | `2.0.60` | MIT | `frontend/package-lock.json` |
