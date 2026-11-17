@@ -147,6 +147,37 @@ test("stop aborts generation and duration bounds prevent more sends", async () =
   assert.equal(result.state, "TIMED_OUT");
   assert.equal(result.counts.accepted, 1);
 });
+
+test("repeated user pauses do not consume submission retries", async () => {
+  let calls = 0;
+  const { runner, outcomes } = harness({
+    submit: async (_payload, _identity, signal) => {
+      calls++;
+      if (calls <= 6) {
+        setImmediate(() => runner.pause());
+        await new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("paused"))));
+      }
+      return { alert_id: "a", run_id: "r" };
+    },
+  });
+  const done = runner.start(scenario({ total: 1 }));
+  for (let index = 0; index < 6; index++) {
+    while (runner.state !== "PAUSED") await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(runner.pending.attempts, 0);
+    runner.resume();
+  }
+  assert.equal((await done).state, "COMPLETED");
+  assert.equal(calls, 7);
+  assert.equal(outcomes[0].attempts, 1);
+});
+
+test("400 payload rejections are not mislabeled as authentication errors", async () => {
+  const { runner } = harness({ submit: async () => { throw Object.assign(new Error("Invalid payload"), { status: 400 }); } });
+  const result = await runner.start(scenario({ total: 2 }));
+  assert.equal(result.state, "COMPLETED");
+  assert.equal(result.counts.rejected, 2);
+});
 test("duplicate replay stays identical and intentional missing fields stay missing after refresh", async () => {
   const duplicate = scenarioFile({
       alerts: [sample],

@@ -5,28 +5,42 @@ import {
   readdir,
   appendFile,
   stat,
+  chmod,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { scenarioFile, object } from "./scenario.mjs";
 
-export function scenarioStore(directory) {
+export function scenarioStore(directory, { maxFiles = 1000, maxBytes = 100 * 1024 * 1024 } = {}) {
   const path = (id, suffix = ".json") => {
     if (!/^[a-f0-9-]{36}$/.test(id))
       throw new Error("Invalid scenario identity.");
     return join(directory, id + suffix);
   };
-  const ready = () => mkdir(directory, { recursive: true, mode: 0o700 });
+  const ready = async () => {
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    await chmod(directory, 0o700);
+  };
+  const inventory = async () => {
+    const names = (await readdir(directory)).filter((name) => /^[a-f0-9-]{36}(\.json|\.outcomes\.jsonl)$/.test(name));
+    const sizes = await Promise.all(names.map((name) => stat(join(directory, name))));
+    return { count: names.filter((name) => name.endsWith(".json")).length, bytes: sizes.reduce((sum, item) => sum + item.size, 0) };
+  };
   let writing = Promise.resolve();
   return {
     async save(input) {
-      const scenario = scenarioFile(input),
+      const scenario = { ...scenarioFile(input), created_at: new Date().toISOString() },
         id = randomUUID();
-      await ready();
-      await writeFile(path(id), JSON.stringify(scenario, null, 2), {
-        mode: 0o600,
-        flag: "wx",
+      const work = writing.then(async () => {
+        await ready();
+        const stored = await inventory();
+        const content = JSON.stringify(scenario, null, 2);
+        if (stored.count >= maxFiles || stored.bytes + Buffer.byteLength(content) > maxBytes)
+          throw new Error("Scenario archive capacity reached; export and remove old local archives before continuing.");
+        await writeFile(path(id), content, { mode: 0o600, flag: "wx" });
       });
+      writing = work.catch(() => {});
+      await work;
       return { id, scenario };
     },
     async list() {
@@ -34,17 +48,22 @@ export function scenarioStore(directory) {
       const names = (await readdir(directory))
         .filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))
         .sort();
-      return Promise.all(
+      const rows = await Promise.all(
         names.map(async (name) => {
+          try {
           const row = JSON.parse(await readFile(join(directory, name), "utf8"));
+          if (!Array.isArray(row.alerts)) return null;
           return {
             id: name.slice(0, -5),
             name: row.name,
             count: row.alerts.length,
             generation: row.generation,
+            created_at: row.created_at || (await stat(join(directory, name))).mtime.toISOString(),
           };
+          } catch { return null; }
         }),
       );
+      return rows.filter(Boolean).sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
     },
     async read(id) {
       return JSON.parse(await readFile(path(id), "utf8"));
@@ -79,6 +98,8 @@ export function scenarioStore(directory) {
           throw new Error(
             "Scenario archive reached 10 MiB; export and start a new scenario.",
           );
+        if ((await inventory()).bytes + Buffer.byteLength(line) > maxBytes)
+          throw new Error("Scenario archive capacity reached; export and remove old local archives before continuing.");
         await appendFile(destination, line, { mode: 0o600 });
       });
       writing = work.catch(() => {});
@@ -94,14 +115,18 @@ export function scenarioStore(directory) {
       } catch (error) {
         if (error.code !== "ENOENT") throw error;
       }
+      const lines = content.trim() ? content.trim().split("\n") : [];
+      const outcomes = [];
+      for (const [index, line] of lines.entries()) {
+        try { outcomes.push(JSON.parse(line)); }
+        catch (error) {
+          if (index !== lines.length - 1 || content.endsWith("\n")) throw error;
+          // A crash can interrupt the last append; keep preceding complete records.
+        }
+      }
       return {
         ...scenario,
-        outcomes: content.trim()
-          ? content
-              .trim()
-              .split("\n")
-              .map((line) => JSON.parse(line))
-          : [],
+        outcomes,
       };
     },
   };

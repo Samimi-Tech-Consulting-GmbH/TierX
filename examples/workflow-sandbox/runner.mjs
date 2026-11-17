@@ -178,7 +178,10 @@ export class ScenarioRunner {
               failure = null;
               break;
             } catch (error) {
-              if (signal.aborted) throw error;
+              if (signal.aborted) {
+                this.pending.attempts--;
+                throw error;
+              }
               failure = error;
               const transient =
                 !error.status ||
@@ -201,7 +204,7 @@ export class ScenarioRunner {
               state: rejected ? "REJECTED" : "FAILED",
               status: failure.status || 0,
             });
-            if ([400, 401, 403, 404, 405, 410].includes(failure.status)) {
+            if ([401, 403, 404, 405, 410].includes(failure.status)) {
               this.error =
                 "Authentication or workflow routing failed; run stopped.";
               this.state = "FAILED";

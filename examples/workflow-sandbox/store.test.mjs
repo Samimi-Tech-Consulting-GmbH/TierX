@@ -1,12 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, stat, readFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, readFile, writeFile, appendFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { createSandbox } from "./server.mjs";
 import { scenarioStore } from "./store.mjs";
 const sample = { result: { host: "SYNTHETIC-01" } };
+
+test("archives are bounded, chronological and tolerate corrupt files and interrupted final outcomes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "tierx-archive-"));
+  try {
+    const store = scenarioStore(directory, { maxFiles: 2 });
+    const first = await store.save({ name: "First", alerts: [sample] });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await store.save({ name: "Second", alerts: [sample] });
+    await assert.rejects(store.save({ alerts: [sample] }), /capacity/);
+    await writeFile(join(directory, "11111111-1111-1111-1111-111111111111.json"), "broken");
+    assert.deepEqual((await store.list()).map((item) => item.id), [second.id, first.id]);
+    await store.outcome(first.id, { state: "ACCEPTED", payload: sample });
+    await appendFile(join(directory, first.id + ".outcomes.jsonl"), '{"interrupted":');
+    assert.equal((await store.export(first.id)).outcomes.length, 1);
+    const limited = scenarioStore(directory, { maxBytes: 1 });
+    await assert.rejects(limited.save({ alerts: [sample] }), /capacity/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 test("AI settings override environment defaults without returning or inheriting keys", async () => {
   const server = createSandbox("https://tierx.example", fetch, undefined, {
     ai: {
@@ -26,6 +44,7 @@ test("AI settings override environment defaults without returning or inheriting 
       body: JSON.stringify(body),
     });
   try {
+    assert.equal((await update({ provider: "ollama", url: "http://localhost:11434", model: "local", api_key: {} })).status, 400);
     const initial = await (await fetch(origin + "/ai/settings")).json();
     assert.equal(initial.source, "environment");
     assert.equal(initial.has_key, true);

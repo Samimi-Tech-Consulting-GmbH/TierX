@@ -133,13 +133,18 @@ export function createAlertSimulator(
               '{"detail":"Stop generation before changing AI settings"}',
             );
           try {
-            let raw = "";
+            const chunks = [];
+            let size = 0;
             for await (const chunk of request) {
-              raw += chunk.toString();
-              if (Buffer.byteLength(raw) > 16384)
+              chunks.push(chunk);
+              size += chunk.length;
+              if (size > 16384)
                 return send(413, '{"detail":"Settings too large"}');
             }
-            const body = JSON.parse(raw);
+            const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+            if (body.api_key !== undefined &&
+                (typeof body.api_key !== "string" || body.api_key.length > 8192))
+              return send(400, '{"detail":"API key must be a string of at most 8192 characters"}');
             const next = body.use_environment
               ? defaultAI
               : aiConfiguration({

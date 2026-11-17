@@ -168,6 +168,8 @@ export function createGenerator(config, upstreamFetch = fetch) {
             if (value !== undefined) writePath(alert, path, value);
           }
       if (input.preset === "duplicates") alerts.fill(alerts[0]);
+      if (!input.negative && input.schema !== null)
+        for (const alert of alerts) validateSchema(alert, input.schema);
       if (input.negative)
         for (const alert of alerts)
           writePath(alert, input.missing_path, undefined, true);

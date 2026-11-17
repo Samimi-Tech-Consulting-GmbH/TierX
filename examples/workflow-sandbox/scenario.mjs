@@ -361,6 +361,7 @@ export function scenarioFile(body) {
           provider: String(body.generation.provider || "imported").slice(0, 64),
           model: String(body.generation.model || "").slice(0, 128),
           generated_at: String(body.generation.generated_at || "").slice(0, 64),
+          batch_id: String(body.generation.batch_id || "").slice(0, 64),
           validation:
             schema === null
               ? "STRUCTURAL_ONLY"

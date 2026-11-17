@@ -12,6 +12,12 @@ silently reused. **Use environment defaults** removes the override and restores
 `SANDBOX_AI_PROVIDER`, `SANDBOX_AI_URL`, `SANDBOX_AI_MODEL` and optional
 `SANDBOX_AI_API_KEY`. With neither configured, AI stays disabled.
 
+Only run this loopback tool on a trusted workstation: UI overrides deliberately
+send synthetic sample content and the explicitly entered provider key to the
+selected HTTPS/local model endpoint. They are not a public multi-user service.
+OpenAI-compatible providers must support the requested JSON Schema dialect;
+unsupported strict schemas fail visibly rather than silently weakening validation.
+
 The UI is organized into Connection, Send alerts, AI scenarios & replay, and Live
 results tabs. Switching tabs preserves inputs and does not stop an active run.
 The package directory and `SANDBOX_*` configuration names remain compatible.
@@ -111,8 +117,15 @@ preset/count and optional schema are sent to the AI, never TierX routing/tokens.
    pending submission with the same idempotency key. Stop never recalls accepted
    alerts. Interrupted submissions are archived as `UNKNOWN`; inspect their delivery
    IDs before replaying. Transient failures allow three retries using the same key;
-   authentication/routing failures stop the run, while 422 payload rejections count
+   authentication/routing failures stop the run, while 400/422 payload rejections count
    separately and continue. Generation has one slot and a 120-second timeout.
+
+Local archives are capped at 1,000 scenarios and 100 MiB total, including outcomes;
+each outcomes file is also capped at 10 MiB. At capacity, export and remove old
+local archive files explicitly. There is no automatic deletion. Listings skip
+corrupt entries and sort newest first; export tolerates an interrupted final
+outcome append. Credential-like property names in schemas are conservatively
+rejected as well as credential values: keep test schemas synthetic and secret-free.
 
 The supplied correlated preset preserves `result.host`, `result.src`, `result.user`
 from the sample; adjust the sample/preview to the actual workflow mapping. Correlation
