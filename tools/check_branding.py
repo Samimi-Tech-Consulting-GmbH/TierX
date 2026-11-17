@@ -8,11 +8,10 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY = re.compile(r"soc[- _]?mind", re.IGNORECASE)
+LEGACY = re.compile(r"soc[- _]?mind|\bsocm\b", re.IGNORECASE)
 ALLOWED = [
     re.compile(pattern)
     for pattern in (
-        r"\bSOC-Mind-main\b",
         r"ghcr\.io/(?:\$\{\{ github\.repository_owner \}\}|\$\{REGISTRY_NAMESPACE\})/soc-mind[-\w${}.:]*",
         r"/opt/soc-mind", r"\bsocmind_(?:backend|frontend|ingestion_proxy|init|kafka|kb_processor|mongodb|ollama|pipeline)\b",
         r"\bsoc_mind_(?:platform|tenant[_\w]*)\b", r"\bSOC_MIND_(?:[A-Z0-9_]+|\{_?name\}|\*)?",

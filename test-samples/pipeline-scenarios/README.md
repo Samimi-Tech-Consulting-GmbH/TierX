@@ -14,18 +14,18 @@ Sample data for every pipeline stage: **alerts** (per-topic Kafka messages and H
 
 ```bash
 make up
-docker exec -i socmind_mongodb mongosh -u root -p example < seed/mongo-seed.js
+docker compose exec -T mongodb mongosh -u root -p example < seed/mongo-seed.js
 ```
 
 Kafka console tools must run **inside** the broker container (it advertises `kafka:9092`):
 
 ```bash
 # consume a topic (watch results):
-docker exec -it socmind_kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka:9092 --topic <topic> --from-beginning
 
 # produce a sample file to a topic (message must be one line):
-jq -c . <file>.json | docker exec -i socmind_kafka \
+jq -c . <file>.json | docker compose exec -T kafka \
   /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka:9092 --topic <topic>
 ```
 
@@ -113,7 +113,7 @@ curl -s -X POST http://localhost:8001/api/v1/alerts/ingest \
   -H 'Content-Type: application/json' \
   -d @01-ingestion/alert-valid.json | jq
 # then watch:
-docker exec -it socmind_kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka:9092 --topic enriched --from-beginning
 ```
 

@@ -1,5 +1,5 @@
 // Seed data for the pipeline test scenarios.
-// Run: docker exec -i socmind_mongodb mongosh -u root -p example < seed/mongo-seed.js
+// Run: docker compose exec -T mongodb mongosh -u root -p example < seed/mongo-seed.js
 const platform = db.getSiblingDB("soc_mind_platform");
 const tenantDb = db.getSiblingDB("soc_mind_tenant_demo");
 

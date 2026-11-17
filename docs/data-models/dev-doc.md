@@ -88,7 +88,7 @@ docker compose version
 
 ```bash
 # 1. Clone and enter the repo
-cd SOC-Mind-main
+cd TierX
 
 # 2. Create your environment file (defaults are fine for local dev)
 cp .env.example .env
@@ -321,7 +321,7 @@ Edit its `tenant_id` to your ACTIVE tenant's UUID first, then:
 
 ```bash
 # ⚠️ Run from the repo root OR use an absolute path (see gotcha #1 below)
-cd /path/to/SOC-Mind-main
+cd /path/to/TierX
 
 curl -s -X POST http://localhost:8001/api/v1/alerts/ingest \
   -H 'Content-Type: application/json' \
@@ -338,7 +338,7 @@ curl -s -X POST http://localhost:8001/api/v1/alerts/ingest \
 
 ```bash
 # Watch the pipeline process it
-docker logs -f socmind_pipeline
+docker compose logs -f pipeline
 
 # Query stored alerts for the tenant (needs admin token)
 curl -s -H "Authorization: Bearer $TOKEN" \
@@ -365,7 +365,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
    sees the change immediately:
 
    ```bash
-   docker restart socmind_ingestion_proxy && sleep 5
+   docker compose restart ingestion-proxy && sleep 5
    ```
 
 5. **Dead-lettered alerts.** Validation failures are pushed to a dead-letter queue, not
@@ -379,7 +379,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 ### End-to-end happy path (copy-paste)
 
 ```bash
-cd /path/to/SOC-Mind-main
+cd /path/to/TierX
 
 # 1. token
 TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
@@ -400,7 +400,7 @@ curl -s -X PATCH http://localhost:8000/api/v1/admin/tenants/$TENANT_ID/status \
 
 # 4. let the proxy see it
 make setup-topics
-docker restart socmind_ingestion_proxy && sleep 5
+docker compose restart ingestion-proxy && sleep 5
 
 # 5. ingest
 curl -s -X POST http://localhost:8001/api/v1/alerts/ingest \
