@@ -143,7 +143,7 @@ describe("SchemaRegistryView across tenants", () => {
 
     await waitFor(() => expect(listAlertTypeSchemas).toHaveBeenCalled());
     fireEvent.change(
-      view.getByPlaceholderText("Search alert type (e.g. phishing, malware)"),
+      await view.findByPlaceholderText("Search alert type (e.g. phishing, malware)"),
       { target: { value: "phish" } },
     );
 

@@ -14,6 +14,8 @@ routes one raw alert into an explicitly configured workflow URL while keeping
 the ingestion proxy private.
 The platform-managed graph runtime, fixed workflow URLs, nested playbooks,
 agents, and REST/MCP tools are documented in [Workflow Studio](docs/workflows.md).
+Platform-admin-authored [Python tools](docs/python-tools.md) run in disposable
+containers through a separately provisioned rootless execution broker.
 Workflows are the only execution system; an administrator must publish a workflow
 and grant its tenant access before sending alerts. No default workflow is seeded.
 

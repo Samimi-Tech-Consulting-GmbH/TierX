@@ -344,6 +344,7 @@ class Engine:
     async def tick_tenant(self, tenant):
         db = get_client()[tenant["db_name"]]
         await db.v2_jobs.create_index("job_id", unique=True)
+        await db.v2_python_calls.create_index("call_id", unique=True)
         await db.v2_joins.create_index("join_key", unique=True)
         await db.clusters.create_index("cluster_id", unique=True)
         await db.alerts.create_index("alert_id", unique=True)

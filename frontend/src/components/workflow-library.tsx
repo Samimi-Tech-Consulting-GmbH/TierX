@@ -18,6 +18,7 @@ export function ResourceLibrary({
   loading,
   error,
   children,
+  navigation,
 }: {
   title: string;
   description: string;
@@ -34,6 +35,7 @@ export function ResourceLibrary({
   loading?: boolean;
   error?: string;
   children?: ReactNode;
+  navigation?: ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const filtered = items.filter((item) =>
@@ -55,6 +57,7 @@ export function ResourceLibrary({
           {createLabel}
         </button>
       </header>
+      {navigation}
       {error && (
         <p
           role="alert"

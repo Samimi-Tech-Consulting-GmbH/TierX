@@ -3,6 +3,7 @@ from app.api.v1.jira_integrations import require_jira_integration
 from app.api.v2 import definitions, entrypoints, run_controls, workflows
 from test_workflows_v2 import setup, minimal
 import os
+import asyncio
 import pytest
 
 
@@ -24,7 +25,7 @@ def test_concurrent_cancellation_has_one_winner_on_mongodb44(monkeypatch):
         def attempt():
             barrier.wait(timeout=5)
             try:
-                run_controls.cancel("r", "one", SimpleNamespace(user_id="operator"))
+                asyncio.run(run_controls.cancel("r", "one", SimpleNamespace(user_id="operator")))
                 return 200
             except HTTPException as exc:
                 return exc.status_code

@@ -66,6 +66,7 @@ def db_for(tenant_id):
         ("v2_flows", "flow_id"),
         ("v2_runs", "run_id"),
         ("v2_jobs", "job_id"),
+        ("v2_python_calls", "call_id"),
         ("v2_alerts", "alert_id"),
         ("v2_clusters", "cluster_id"),
     ]:
@@ -135,10 +136,16 @@ class AlertInput(BaseModel):
 
 def resources(db, graph, tenant_id):
     """Resolve and pin resources; cross-tenant IDs cannot resolve."""
-    result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}, "connectors": {}}
+    result = {"schemas": {}, "playbooks": {}, "actions": {}, "profiles": {}, "connectors": {}, "python_tools": {}}
     platform = DatabaseManager.get_tenant_database("soc_mind_platform")
     for node in graph["nodes"]:
         cfg, kind = node.get("config", {}), node["type"]
+        python_codes = [cfg["python_tool_code"]] if kind == "python_tool" else []
+        python_codes += [tool[7:] for tool in cfg.get("tools", []) if tool.startswith("python:")]
+        for code in python_codes:
+            current = found(platform.workflow_python_tools, {"code": code, "enabled": True, "tenant_ids": tenant_id})
+            row = found(platform.workflow_python_tool_revisions, {"code": code, "revision": current.get("active_revision")})
+            result["python_tools"][code] = row
         if cfg.get("schema_id"):
             query = {"schema_id": cfg["schema_id"], "deleted_at": None}
             if cfg.get("schema_version"):
@@ -579,6 +586,7 @@ def run_detail(
     for call in run["tool_calls"]:
         call["call_id"] = str(call.pop("_id"))
     run["model_calls"] = list(db.v2_model_calls.find({"run_id": run_id}, {"_id": 0, "response": 0}).sort("created_at", 1))
+    run["python_calls"] = list(db.v2_python_calls.find({"run_id": run_id}, {"_id": 0, "input": 0, "definition": 0, "result": 0}).limit(100))
     if run["alert"] and run["alert"].get("cluster_id"):
         run["cluster"] = db["clusters" if run["graph"].get("format_version") == "2.0" else "v2_clusters"].find_one(
             {"cluster_id": run["alert"]["cluster_id"]}, {"_id": 0}
