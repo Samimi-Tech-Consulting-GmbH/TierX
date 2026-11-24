@@ -62,7 +62,10 @@ export function WorkflowRunView({
         setError("");
         if (
           !paused &&
-          value.runs.some((run) => ["PENDING", "RUNNING"].includes(run.state))
+          (value.retryable ||
+            value.runs.some((run) =>
+              ["PENDING", "RUNNING"].includes(run.state),
+            ))
         )
           timer = setTimeout(refresh, 5000);
       } catch (reason) {

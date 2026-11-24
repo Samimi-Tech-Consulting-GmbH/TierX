@@ -71,6 +71,21 @@ describe("Complete execution loading and layout", () => {
       now.mockRestore();
     }
   });
+  it("keeps terminal partial trees retryable after a transient child read", async () => {
+    const [root] = executionFixture();
+    vi.mocked(workflowRequest).mockImplementation(async (path) => {
+      if (path.endsWith("/p"))
+        throw new WorkflowRequestError(503, "Unavailable");
+      return root;
+    });
+    const result = await loadExecution(
+      "one",
+      "r",
+      new AbortController().signal,
+    );
+    expect(result.root.state).toBe("SUCCEEDED");
+    expect(result.retryable).toBe(true);
+  });
   it("does not associate calls or child flows with unexecuted placeholder jobs", () => {
     const runs = executionFixture();
     runs[1].parent_job_id = "not-executed:skipped";

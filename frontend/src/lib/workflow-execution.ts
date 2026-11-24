@@ -30,6 +30,7 @@ export type Execution = {
   root: ExecutionRun;
   runs: ExecutionRun[];
   issues: string[];
+  retryable?: boolean;
 };
 export type ExecutionCache = {
   successful: Map<string, ExecutionRun>;
@@ -123,6 +124,7 @@ export async function loadExecution(
     throw new Error(
       "Execution identity mismatch; cannot display a complete trace.",
     );
+  let retryable = false;
   const runs = [root],
     issues: string[] = [],
     seen = new Set([root.run_id]);
@@ -165,6 +167,14 @@ export async function loadExecution(
           return { child, depth: item.depth };
         } catch (error) {
           if (signal.aborted) throw error;
+          if (
+            !permanentReadError(error) &&
+            !(
+              error instanceof Error &&
+              error.message === "Subflow identity or parent mismatch"
+            )
+          )
+            retryable = true;
           const cause =
             error instanceof WorkflowRequestError
               ? `HTTP ${error.status}`
@@ -212,7 +222,7 @@ export async function loadExecution(
         `Caller metadata is missing for subflow ${run.run_id}; its position cannot be inferred.`,
       );
   }
-  return { root, runs, issues };
+  return { root, runs, issues, retryable };
 }
 
 export function callsFor(run: ExecutionRun, job?: WorkflowJob) {

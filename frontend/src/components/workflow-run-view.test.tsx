@@ -162,6 +162,20 @@ describe("Complete workflow debugger", () => {
       screen.getByLabelText("Complete nested execution map"),
     ).toBeInTheDocument();
   });
+  it("keeps full screen open when its nested inspector closes", async () => {
+    render(<WorkflowRunView tenantId="one" runId="r" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Full screen" }));
+    const fullScreen = await screen.findByRole("dialog");
+    fireEvent.click(
+      within(fullScreen).getByRole("button", { name: "Assess evidence" }),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole("dialog", { hidden: true })).toHaveLength(2),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1));
+    expect(screen.getByRole("dialog")).toHaveClass("h-dvh");
+  });
   it("labels placeholder steps as unexecuted instead of presenting fabricated job metadata", async () => {
     render(<WorkflowRunView tenantId="one" runId="r" />);
     fireEvent.click(

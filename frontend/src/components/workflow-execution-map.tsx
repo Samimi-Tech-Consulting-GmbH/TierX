@@ -269,20 +269,24 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
     [execution, collapsed],
   );
   const inspect = (data: ExecutionNodeData) => setSelected(data);
-  const nodes = map.nodes.map((node) => ({
-    ...node,
-    data: {
-      ...node.data,
-      inspect: () => inspect(node.data),
-      toggle: () =>
-        setCollapsed((previous) => {
-          const next = new Set(previous);
-          if (next.has(node.id)) next.delete(node.id);
-          else next.add(node.id);
-          return next;
-        }),
-    },
-  }));
+  const nodes = useMemo(
+    () =>
+      map.nodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          inspect: () => setSelected(node.data),
+          toggle: () =>
+            setCollapsed((previous) => {
+              const next = new Set(previous);
+              if (next.has(node.id)) next.delete(node.id);
+              else next.add(node.id);
+              return next;
+            }),
+        },
+      })),
+    [map],
+  );
   const selectedRun = execution.runs.find(
     (run) => run.run_id === selected?.run.run_id,
   );
@@ -329,7 +333,7 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
     return (
       <ol
         className="space-y-3 border-l border-violet-400/30 pl-4"
-        aria-label={`Steps in ${run.definition_ref}`}
+        aria-label={`Steps in ${run.definition_ref || run.run_id}`}
       >
         {orderedNodes(run).nodes.map((definition, i) => {
           const job = run.nodes?.find((job) => job.node_id === definition.id),
@@ -370,7 +374,7 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
               {children.map((child, c) => (
                 <section key={child.run_id} className="space-y-2 pl-3">
                   <h3 className="text-xs text-violet-300">
-                    {child.definition_ref} · {child.state}
+                    {child.definition_ref || child.run_id} · {child.state}
                   </h3>
                   {outline(
                     child,
@@ -424,20 +428,22 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
             default · branches may run in parallel
           </p>
         </div>
-        <button
-          className={studioButton}
-          aria-pressed={view === "map"}
-          onClick={() => setView("map")}
-        >
-          Execution map
-        </button>
-        <button
-          className={studioButton}
-          aria-pressed={view === "steps"}
-          onClick={() => setView("steps")}
-        >
-          Step by step
-        </button>
+        <div role="group" aria-label="Execution view" className="flex gap-2">
+          <button
+            className={studioButton}
+            aria-pressed={view === "map"}
+            onClick={() => setView("map")}
+          >
+            Execution map
+          </button>
+          <button
+            className={studioButton}
+            aria-pressed={view === "steps"}
+            onClick={() => setView("steps")}
+          >
+            Step by step
+          </button>
+        </div>
         {view === "map" && (
           <>
             <button
@@ -454,7 +460,11 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
             </button>
           </>
         )}
-        <button className={studioButton} onClick={() => setFull(!full)}>
+        <button
+          className={studioButton}
+          aria-expanded={full}
+          onClick={() => setFull(!full)}
+        >
           <Maximize2 className="size-4" />
           {full ? "Close full screen" : "Full screen"}
         </button>
@@ -489,6 +499,7 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
             minZoom={0.03}
             maxZoom={1.5}
             nodesDraggable={false}
+            nodesFocusable={false}
             nodesConnectable={false}
             edgesReconnectable={false}
             deleteKeyCode={null}
@@ -523,12 +534,15 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
                 run.run_id !== execution.root.run_id &&
                 !execution.runs
                   .find((parent) => parent.run_id === run.parent_run_id)
-                  ?.nodes?.some((job) => job.job_id === run.parent_job_id),
+                  ?.nodes?.some(
+                    (job) =>
+                      isRecordedJob(job) && job.job_id === run.parent_job_id,
+                  ),
             )
             .map((run) => (
               <section key={run.run_id}>
                 <h3 className="text-sm font-semibold">
-                  Unlinked subflow: {run.definition_ref}
+                  Unlinked subflow: {run.definition_ref || run.run_id}
                 </h3>
                 {outline(run)}
               </section>
@@ -579,6 +593,10 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
               opens above this map.
             </DialogDescription>
             {content}
+            <Inspector
+              data={currentSelection}
+              close={() => setSelected(null)}
+            />
           </DialogContent>
         </Dialog>
       ) : (
@@ -586,7 +604,9 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
           {content}
         </section>
       )}
-      <Inspector data={currentSelection} close={() => setSelected(null)} />
+      {!full && (
+        <Inspector data={currentSelection} close={() => setSelected(null)} />
+      )}
     </>
   );
 }
