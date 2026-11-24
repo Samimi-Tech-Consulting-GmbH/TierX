@@ -424,7 +424,7 @@ def test_malformed_semantic_reasons_use_deterministic_fallback(monkeypatch, reas
 def test_real_mem0_adapter_uses_infer_false_and_scopes_replay(monkeypatch, tmp_path):
     from mem0 import Memory
     from mem0.utils.factory import EmbedderFactory, LlmFactory
-    from engine import Engine
+    from engine import Engine, NoConversationHistory
     from qdrant_client import QdrantClient
 
     class Embeddings:
@@ -453,6 +453,7 @@ def test_real_mem0_adapter_uses_infer_false_and_scopes_replay(monkeypatch, tmp_p
     )
     engine = Engine.__new__(Engine)
     engine.memory, engine.tokenizer = memory, Tokenizer()
+    engine.memory.db = NoConversationHistory()
     metadata = {
         "source_key": "source1",
         "semantic_generation": "generation1",
