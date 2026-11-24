@@ -28,11 +28,14 @@ export interface FlowDraft {
   draft_version: number;
 }
 export interface WorkflowJob {
+  release_version?: string;
+  release_sha?: string;
   node_type?: string;
   label?: string;
   definition_ref?: string;
   input_snapshot?: unknown;
   output_snapshot?: unknown;
+  error_input_snapshot?: unknown;
   selection?: unknown;
   decisions?: unknown;
   port?: string;
@@ -69,6 +72,15 @@ const base =
   process.env.NEXT_PUBLIC_TIERX_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   "";
+export class WorkflowRequestError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WorkflowRequestError";
+  }
+}
 export async function workflowRequest<T>(
   path: string,
   method = "GET",
@@ -88,11 +100,15 @@ export async function workflowRequest<T>(
   if (r.status === 204) return undefined as T;
   if (r.status === 401) {
     clearToken();
-    throw new Error("Session expired; please sign in again.");
+    throw new WorkflowRequestError(
+      401,
+      "Session expired; please sign in again.",
+    );
   }
   const data = await r.json();
   if (!r.ok)
-    throw new Error(
+    throw new WorkflowRequestError(
+      r.status,
       typeof data.detail === "string"
         ? data.detail
         : `Request failed (${r.status})`,
