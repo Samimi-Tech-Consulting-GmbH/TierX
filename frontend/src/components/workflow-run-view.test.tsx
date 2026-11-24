@@ -40,8 +40,8 @@ describe("Complete workflow debugger", () => {
   beforeEach(() => {
     vi.mocked(workflowRequest).mockReset();
     const runs = executionFixture();
-    vi.mocked(workflowRequest).mockImplementation(
-      async (path) => runs.find((run) => path.endsWith(`/${run.run_id}`))!,
+    vi.mocked(workflowRequest).mockImplementation(async (path) =>
+      runs.find((run) => path.endsWith(`/${run.run_id}`))!,
     );
   });
   it("displays root, playbook, agent, not-reached branches and recorded calls in one map", async () => {
@@ -117,8 +117,8 @@ describe("Complete workflow debugger", () => {
   it("a nested permalink still displays the root and cancels only the root after confirmation", async () => {
     const runs = executionFixture();
     runs[0].state = "RUNNING";
-    vi.mocked(workflowRequest).mockImplementation(
-      async (path) => runs.find((run) => path.endsWith(`/${run.run_id}`))!,
+    vi.mocked(workflowRequest).mockImplementation(async (path) =>
+      runs.find((run) => path.endsWith(`/${run.run_id}`))!,
     );
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<WorkflowRunView tenantId="one" runId="s" />);
@@ -141,8 +141,8 @@ describe("Complete workflow debugger", () => {
       release_version: "0.2.19",
       release_sha: "b".repeat(40),
     });
-    vi.mocked(workflowRequest).mockImplementation(
-      async (path) => runs.find((run) => path.endsWith(`/${run.run_id}`))!,
+    vi.mocked(workflowRequest).mockImplementation(async (path) =>
+      runs.find((run) => path.endsWith(`/${run.run_id}`))!,
     );
     render(<WorkflowRunView tenantId="one" runId="r" />);
     fireEvent.click(
@@ -160,6 +160,20 @@ describe("Complete workflow debugger", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close full screen" }));
     expect(
       screen.getByLabelText("Complete nested execution map"),
+    ).toBeInTheDocument();
+  });
+  it("labels placeholder steps as unexecuted instead of presenting fabricated job metadata", async () => {
+    render(<WorkflowRunView tenantId="one" runId="r" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Rejected branch" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Attempts: 0/)).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText("Recorded execution metadata"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/has no recorded execution/),
     ).toBeInTheDocument();
   });
   it("can retry a partially loaded terminal execution without hiding missing records", async () => {

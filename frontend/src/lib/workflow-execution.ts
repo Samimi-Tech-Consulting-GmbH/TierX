@@ -1,5 +1,6 @@
 import {
   workflowRequest,
+  WorkflowRequestError,
   type FlowNode,
   type WorkflowJob,
   type WorkflowRun,
@@ -30,20 +31,81 @@ export type Execution = {
   runs: ExecutionRun[];
   issues: string[];
 };
+export type ExecutionCache = {
+  successful: Map<string, ExecutionRun>;
+  denied: Map<string, WorkflowRequestError>;
+  transient: Map<string, { error: unknown; attempts: number; retryAt: number }>;
+};
+export const newExecutionCache = (): ExecutionCache => ({
+  successful: new Map(),
+  denied: new Map(),
+  transient: new Map(),
+});
+export const permanentReadError = (error: unknown) =>
+  error instanceof WorkflowRequestError &&
+  error.status >= 400 &&
+  error.status < 500 &&
+  ![408, 429].includes(error.status);
+export function isRecordedJob(job?: WorkflowJob): boolean {
+  return Boolean(
+    job &&
+    !["NOT_REACHED", "CAPABILITY_ONLY"].includes(job.state) &&
+    !job.job_id.startsWith("not-executed:"),
+  );
+}
 
 /** Existing tenant-authorized, redacted Debug APIs remain the only data source. */
 export async function loadExecution(
   tenant: string,
   requestedId: string,
   signal: AbortSignal,
+  cache = newExecutionCache(),
 ): Promise<Execution> {
-  const read = (id: string) =>
-    workflowRequest<ExecutionRun>(
-      `/tenants/${encodeURIComponent(tenant)}/runs/${encodeURIComponent(id)}`,
-      "GET",
-      undefined,
-      signal,
-    );
+  const read = async (id: string): Promise<ExecutionRun> => {
+    if (cache.denied.has(id)) throw cache.denied.get(id);
+    if (cache.successful.has(id)) return cache.successful.get(id)!;
+    const previousFailure = cache.transient.get(id);
+    if (previousFailure && Date.now() < previousFailure.retryAt)
+      throw previousFailure.error;
+    try {
+      const value = await workflowRequest<ExecutionRun>(
+        `/tenants/${encodeURIComponent(tenant)}/runs/${encodeURIComponent(id)}`,
+        "GET",
+        undefined,
+        signal,
+      );
+      cache.transient.delete(id);
+      // Successful runs have finished all their jobs; failed/cancelled runs may
+      // still receive late delivery metadata and are deliberately not cached.
+      if (
+        value.state === "SUCCEEDED" &&
+        [value.model_calls, value.tool_calls, value.python_calls].every(
+          (calls) =>
+            (calls || []).every(
+              (call) =>
+                !["PENDING", "RUNNING", "WAITING", "DISPATCHED"].includes(
+                  String(call.state),
+                ),
+            ),
+        )
+      )
+        cache.successful.set(id, value);
+      return value;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      if (permanentReadError(error))
+        cache.denied.set(id, error as WorkflowRequestError);
+      else {
+        const attempts = (previousFailure?.attempts || 0) + 1;
+        cache.transient.set(id, {
+          error,
+          attempts,
+          retryAt: Date.now() + Math.min(30000, 5000 * 2 ** (attempts - 1)),
+        });
+      }
+      throw error;
+    }
+  };
   const requested = await read(requestedId);
   if (requested.run_id !== requestedId || requested.tenant_id !== tenant)
     throw new Error("Requested execution identity mismatch.");
@@ -54,7 +116,9 @@ export async function loadExecution(
   if (
     root.tenant_id !== tenant ||
     root.run_id !== (requested.root_run_id || requestedId) ||
-    root.alert_id !== requested.alert_id
+    root.alert_id !== requested.alert_id ||
+    Boolean(root.parent_run_id) ||
+    Boolean(root.root_run_id && root.root_run_id !== root.run_id)
   )
     throw new Error(
       "Execution identity mismatch; cannot display a complete trace.",
@@ -101,8 +165,15 @@ export async function loadExecution(
           return { child, depth: item.depth };
         } catch (error) {
           if (signal.aborted) throw error;
+          const cause =
+            error instanceof WorkflowRequestError
+              ? `HTTP ${error.status}`
+              : error instanceof Error &&
+                  error.message === "Subflow identity or parent mismatch"
+                ? "identity/parent metadata mismatch"
+                : "read failed";
           issues.push(
-            `Subflow ${item.id} could not be loaded. The map is incomplete.`,
+            `Subflow ${item.id} could not be loaded (${cause}). The map is incomplete.`,
           );
           return null;
         }
@@ -133,7 +204,9 @@ export async function loadExecution(
       run.run_id !== root.run_id &&
       !runs
         .find((parent) => parent.run_id === run.parent_run_id)
-        ?.nodes?.some((job) => job.job_id === run.parent_job_id)
+        ?.nodes?.some(
+          (job) => isRecordedJob(job) && job.job_id === run.parent_job_id,
+        )
     )
       issues.push(
         `Caller metadata is missing for subflow ${run.run_id}; its position cannot be inferred.`,
@@ -143,13 +216,18 @@ export async function loadExecution(
 }
 
 export function callsFor(run: ExecutionRun, job?: WorkflowJob) {
-  if (!job) return [];
-  return callRecords(run).filter((record) => record.call.job_id === job.job_id);
+  if (!isRecordedJob(job)) return [];
+  return callRecords(run).filter(
+    (record) => record.call.job_id === job!.job_id,
+  );
 }
 
 export function unattributedCalls(run: ExecutionRun) {
   return callRecords(run).filter(
-    (record) => !run.nodes?.some((job) => job.job_id === record.call.job_id),
+    (record) =>
+      !run.nodes?.some(
+        (job) => isRecordedJob(job) && job.job_id === record.call.job_id,
+      ),
   );
 }
 
@@ -158,7 +236,7 @@ function callRecords(run: ExecutionRun) {
     (run[`${kind}_calls`] || []).map((call, i) => ({
       kind,
       call,
-      id: `${kind}:${String(call.call_id || call.python_call_id || i)}`,
+      id: `${kind}:${String(call.call_id || call.python_call_id || "record")}:${i}`,
     })),
   );
 }
@@ -255,12 +333,14 @@ export function executionMap(
       stepNodes = new Map<string, ExecutionNode>();
     for (const definition of order.nodes) {
       const id = stepId(run.run_id, definition.id),
+        // Validated DAGs forbid loops and shared fork branches before the paired
+        // join. enqueue(run,node,fork-path) upserts the same job on retry.
         job = run.nodes?.find((job) => job.node_id === definition.id);
       const children = execution.runs.filter(
         (child) =>
           child.parent_run_id === run.run_id &&
           child.parent_job_id === job?.job_id &&
-          Boolean(job),
+          isRecordedJob(job),
       );
       const calls = callsFor(run, job),
         count = children.length + calls.length;
@@ -363,19 +443,19 @@ export function executionMap(
       );
       const observed = Boolean(
         source &&
-          target &&
-          !["NOT_REACHED", "CAPABILITY_ONLY"].includes(target.state) &&
-          (source.port === (edge.sourceHandle || "success") ||
-            (sourceNode?.type === "fork" &&
-              Array.isArray(sourceNode.config.branches) &&
-              sourceNode.config.branches.includes(edge.sourceHandle))),
+        target &&
+        !["NOT_REACHED", "CAPABILITY_ONLY"].includes(target.state) &&
+        (source.port === (edge.sourceHandle || "success") ||
+          (sourceNode?.type === "fork" &&
+            Array.isArray(sourceNode.config.branches) &&
+            sourceNode.config.branches.includes(edge.sourceHandle))),
       );
       edges.push({
         id: `${frameId}:${edge.id}`,
         source: stepId(run.run_id, edge.source),
         target: stepId(run.run_id, edge.target),
         sourceHandle: edge.sourceHandle || "success",
-        label: edge.sourceHandle || "success",
+        label: `${edge.sourceHandle || "success"} · ${observed ? "recorded route" : "no traversal recorded"}`,
         style: {
           stroke: observed ? "#34d399" : "#71717a",
           strokeWidth: observed ? 2 : 1,
@@ -393,23 +473,14 @@ export function executionMap(
   }
   layout(execution.root);
   // Legacy/missing caller metadata must not be guessed or silently dropped.
-  const visibleAncestors = new Set(
-    execution.runs
-      .filter((run) => !linked.has(run.run_id))
-      .map((run) => run.run_id),
-  );
   let detachedY = Number(nodes[0]?.style?.height || 0) + 100;
   for (const run of execution.runs) {
-    if (
-      linked.has(run.run_id) ||
-      (run.parent_run_id && visibleAncestors.has(run.parent_run_id))
-    )
-      continue;
+    if (linked.has(run.run_id)) continue;
     const parent = execution.runs.find(
       (parent) => parent.run_id === run.parent_run_id,
     );
     const caller = parent?.nodes?.find(
-      (job) => job.job_id === run.parent_job_id,
+      (job) => isRecordedJob(job) && job.job_id === run.parent_job_id,
     );
     if (caller && collapsed.has(stepId(parent!.run_id, caller.node_id)))
       continue;

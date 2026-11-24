@@ -3,9 +3,10 @@ import {
   callsFor,
   executionMap,
   loadExecution,
+  newExecutionCache,
   stepId,
 } from "./workflow-execution";
-import { workflowRequest } from "./workflows";
+import { workflowRequest, WorkflowRequestError } from "./workflows";
 import { executionFixture } from "@/test/execution-fixture";
 vi.mock("./workflows", async (original) => ({
   ...(await original<typeof import("./workflows")>()),
@@ -13,7 +14,73 @@ vi.mock("./workflows", async (original) => ({
 }));
 
 describe("Complete execution loading and layout", () => {
-  beforeEach(() => vi.mocked(workflowRequest).mockReset());
+  beforeEach(() => {
+    vi.mocked(workflowRequest).mockReset();
+  });
+  it("keeps malformed detached descendants visible", () => {
+    const runs = executionFixture();
+    runs[1].parent_job_id = "missing-parent";
+    runs[2].parent_job_id = "missing-agent";
+    const result = executionMap({ root: runs[0], runs, issues: [] });
+    expect(result.nodes.some((node) => node.id === "run:p")).toBe(true);
+    expect(result.nodes.some((node) => node.id === "run:s")).toBe(true);
+  });
+  it("caches completed subflows and denied reads while polling an active root", async () => {
+    const runs = executionFixture();
+    runs[0].state = "RUNNING";
+    const cache = newExecutionCache();
+    vi.mocked(workflowRequest).mockImplementation(async (path) => {
+      if (path.endsWith("/s")) throw new WorkflowRequestError(403, "Denied");
+      return runs.find((run) => path.endsWith(`/${run.run_id}`))!;
+    });
+    await loadExecution("one", "r", new AbortController().signal, cache);
+    await loadExecution("one", "r", new AbortController().signal, cache);
+    expect(vi.mocked(workflowRequest).mock.calls.map(([path]) => path)).toEqual(
+      [
+        "/tenants/one/runs/r",
+        "/tenants/one/runs/p",
+        "/tenants/one/runs/s",
+        "/tenants/one/runs/r",
+      ],
+    );
+  });
+  it("backs off transient child failures without hiding the warning", async () => {
+    const runs = executionFixture();
+    runs[0].state = "RUNNING";
+    const cache = newExecutionCache();
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+    vi.mocked(workflowRequest).mockImplementation(async (path) => {
+      if (path.endsWith("/p"))
+        throw new WorkflowRequestError(429, "Retry later");
+      return runs[0];
+    });
+    try {
+      await loadExecution("one", "r", new AbortController().signal, cache);
+      const result = await loadExecution(
+        "one",
+        "r",
+        new AbortController().signal,
+        cache,
+      );
+      expect(workflowRequest).toHaveBeenCalledTimes(3);
+      expect(result.issues.join(" ")).toContain("HTTP 429");
+      now.mockReturnValue(6000);
+      await loadExecution("one", "r", new AbortController().signal, cache);
+      expect(workflowRequest).toHaveBeenCalledTimes(5);
+    } finally {
+      now.mockRestore();
+    }
+  });
+  it("does not associate calls or child flows with unexecuted placeholder jobs", () => {
+    const runs = executionFixture();
+    runs[1].parent_job_id = "not-executed:skipped";
+    expect(callsFor(runs[0], runs[0].nodes!.at(-1)!)).toEqual([]);
+    const result = executionMap({ root: runs[0], runs, issues: [] });
+    expect(
+      result.nodes.find((node) => node.id === "run:p")?.parentId,
+    ).toBeUndefined();
+    expect(result.issues.length).toBeGreaterThan(0);
+  });
   it("loads all nested runs from pinned read-only endpoints and resolves a child link to the root", async () => {
     const runs = executionFixture();
     vi.mocked(workflowRequest)
@@ -123,7 +190,7 @@ describe("Complete execution loading and layout", () => {
     runs[2].tool_calls!.push({ call_id: "legacy-call", state: "FAILED" });
     const result = executionMap({ root: runs[0], runs, issues: [] });
     expect(
-      result.nodes.find((node) => node.id === "unlinked:s:tool:legacy-call")
+      result.nodes.find((node) => node.id === "unlinked:s:tool:legacy-call:1")
         ?.parentId,
     ).toBeUndefined();
     expect(result.issues.join(" ")).toContain("no recorded caller");

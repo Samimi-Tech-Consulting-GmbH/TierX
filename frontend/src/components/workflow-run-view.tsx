@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { WorkflowExecutionMap } from "@/components/workflow-execution-map";
-import { loadExecution, type Execution } from "@/lib/workflow-execution";
+import {
+  loadExecution,
+  newExecutionCache,
+  permanentReadError,
+  type Execution,
+} from "@/lib/workflow-execution";
 import { workflowRequest } from "@/lib/workflows";
 import { formatDurationMs } from "@/lib/duration";
 import { formatLocaleDateTime } from "@/lib/datetime";
@@ -20,6 +25,8 @@ export function WorkflowRunView({
 }) {
   const { user } = useAuth();
   const key = `${tenantId}:${runId}`;
+  const cache = useRef({ key: "", revision: -1, value: newExecutionCache() });
+  const loadedKey = useRef("");
   const [loaded, setLoaded] = useState<{
       key: string;
       execution: Execution;
@@ -31,13 +38,26 @@ export function WorkflowRunView({
   const execution = loaded?.key === key ? loaded.execution : null,
     run = execution?.root;
   useEffect(() => {
+    const manualOrNew =
+      cache.current.key !== key || cache.current.revision !== revision;
+    if (manualOrNew)
+      cache.current = { key, revision, value: newExecutionCache() };
+    if (paused && loadedKey.current === key && !manualOrNew) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
+    let failures = 0;
     async function refresh() {
       try {
-        const value = await loadExecution(tenantId, runId, controller.signal);
+        const value = await loadExecution(
+          tenantId,
+          runId,
+          controller.signal,
+          cache.current.value,
+        );
         if (controller.signal.aborted) return;
         setLoaded({ key, execution: value });
+        loadedKey.current = key;
+        failures = 0;
         setRefreshedAt(Date.now());
         setError("");
         if (
@@ -48,7 +68,11 @@ export function WorkflowRunView({
       } catch (reason) {
         if (!controller.signal.aborted) {
           setError(reason instanceof Error ? reason.message : "Refresh failed");
-          if (!paused) timer = setTimeout(refresh, 5000);
+          if (!paused && !permanentReadError(reason))
+            timer = setTimeout(
+              refresh,
+              Math.min(30000, 5000 * 2 ** failures++),
+            );
         }
       }
     }
@@ -80,9 +104,17 @@ export function WorkflowRunView({
   }
   if (!run || !execution)
     return (
-      <p className="p-6" role="status">
-        {error || "Loading complete execution…"}
-      </p>
+      <section className="p-6">
+        <p role="status">{error || "Loading complete execution…"}</p>
+        {error && (
+          <button
+            className={studioButton}
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            Retry execution
+          </button>
+        )}
+      </section>
     );
   const elapsed = Math.max(
     0,

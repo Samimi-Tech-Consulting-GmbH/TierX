@@ -9,6 +9,7 @@ import {
   Position,
   ReactFlow,
   type NodeProps,
+  type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -17,13 +18,19 @@ import {
   ChevronRight,
   Maximize2,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { NODE_DESIGN } from "@/components/workflow-node-kit";
 import { studioButton } from "@/components/workflow-library";
 import { formatDurationMs } from "@/lib/duration";
 import { formatLocaleDateTime } from "@/lib/datetime";
 import {
   callsFor,
+  isRecordedJob,
   executionMap,
   orderedNodes,
   stepId,
@@ -80,7 +87,7 @@ function ExecutionCard({ data }: NodeProps<ExecutionNode>) {
         type="button"
         className="nodrag flex w-full gap-3 p-3 text-left text-foreground hover:bg-muted/50"
         onClick={data.inspect}
-        aria-label={`Inspect ${data.label} in ${data.run.definition_ref}`}
+        aria-label={`Inspect ${data.label} in ${data.run.definition_ref || data.run.run_id}`}
       >
         <Icon
           className="mt-1 size-5 shrink-0"
@@ -147,6 +154,7 @@ function Inspector({
   data: ExecutionNodeData | null;
   close: () => void;
 }) {
+  const recorded = isRecordedJob(data?.job);
   return (
     <Dialog
       open={Boolean(data)}
@@ -156,6 +164,10 @@ function Inspector({
     >
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
         <DialogTitle>{data?.label || "Recorded step"}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Recorded, redacted execution details. Closing returns to the complete
+          pipeline.
+        </DialogDescription>
         {data && (
           <>
             <p className="break-all text-xs text-muted-foreground">
@@ -165,7 +177,7 @@ function Inspector({
             </p>
             <p className="text-xs text-muted-foreground">
               Node execution release:{" "}
-              {data.job?.release_version
+              {recorded && data.job?.release_version
                 ? `${data.job.release_version} / ${data.job.release_sha?.slice(0, 8) || "SHA unavailable"}`
                 : "Not recorded"}
             </p>
@@ -181,7 +193,7 @@ function Inspector({
               <>
                 <p className="text-sm">
                   Route: {data.job?.port || "Not selected"} · Attempts:{" "}
-                  {data.job ? (data.job.attempt_count ?? "Not recorded") : 0} ·
+                  {recorded ? (data.job?.attempt_count ?? "Not recorded") : 0} ·
                   Active execution:{" "}
                   {data.job?.execution_duration_ms == null
                     ? "Not recorded"
@@ -217,13 +229,15 @@ function Inspector({
                     }}
                   />
                 </section>
-                <details>
-                  <summary className="cursor-pointer text-sm">
-                    Recorded execution metadata
-                  </summary>
-                  <Json value={data.job} />
-                </details>
-                {!data.job && (
+                {recorded && (
+                  <details>
+                    <summary className="cursor-pointer text-sm">
+                      Recorded execution metadata
+                    </summary>
+                    <Json value={data.job} />
+                  </details>
+                )}
+                {!recorded && (
                   <p className="text-sm text-muted-foreground">
                     This pinned step has no recorded execution. No inputs,
                     outputs or successful result have been inferred.
@@ -245,6 +259,7 @@ function Inspector({
 }
 
 export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
+  const [viewport, setViewport] = useState<Viewport>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set()),
     [view, setView] = useState<"map" | "steps">("map"),
     [full, setFull] = useState(false);
@@ -331,13 +346,14 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
           const children = execution.runs.filter(
             (child) =>
               child.parent_run_id === run.run_id &&
-              Boolean(job) &&
+              isRecordedJob(job) &&
               child.parent_job_id === job?.job_id,
           );
           return (
             <li key={stepId(run.run_id, definition.id)} className="space-y-3">
               <button
                 onClick={() => inspect(data)}
+                aria-label={`Step ${number} ${data.label} in ${run.definition_ref || run.run_id} · ${data.state}`}
                 className="flex w-full flex-wrap items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/40"
               >
                 <span className="font-mono text-xs text-muted-foreground">
@@ -460,18 +476,15 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
         <div
           className="min-h-0 flex-1"
           aria-label="Complete nested execution map"
+          role="region"
         >
           <ReactFlow
-            key={map.nodes
-              .map(
-                (node) =>
-                  `${node.id}:${node.style?.width}:${node.style?.height}`,
-              )
-              .join("|")}
             nodes={nodes}
             edges={map.edges}
             nodeTypes={nodeTypes}
-            fitView
+            defaultViewport={viewport}
+            onMoveEnd={(_, value) => setViewport(value)}
+            fitView={!viewport}
             fitViewOptions={{ padding: 0.1 }}
             minZoom={0.03}
             maxZoom={1.5}
@@ -561,6 +574,10 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
             <DialogTitle className="sr-only">
               Complete workflow execution
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Explore the recorded root and nested execution. The node inspector
+              opens above this map.
+            </DialogDescription>
             {content}
           </DialogContent>
         </Dialog>
