@@ -28,11 +28,14 @@ export interface FlowDraft {
   draft_version: number;
 }
 export interface WorkflowJob {
+  release_version?: string;
+  release_sha?: string;
   node_type?: string;
   label?: string;
   definition_ref?: string;
   input_snapshot?: unknown;
   output_snapshot?: unknown;
+  error_input_snapshot?: unknown;
   selection?: unknown;
   decisions?: unknown;
   port?: string;

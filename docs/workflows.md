@@ -132,7 +132,25 @@ Human-response waiting, implicit learning, automatic benign-rule approval and au
 
 ## Execution inspection
 
-The execution view shows the pinned root flow revision and checksum separately from the application release. Every graph node appears, including not-reached nodes and capability-only tool definitions. Executed nodes expose sanitized input/output snapshots, checks, decisions, routes, attempts, timestamps, active execution time and wall elapsed time. Nested playbook/agent runs link to their own node timelines. The alert Debug page resolves workflow executions automatically. Copied summaries include the pinned flow version.
+The execution view shows the pinned root flow revision and checksum separately from the application release. Every graph node appears, including not-reached nodes and capability-only tool definitions. Executed nodes expose sanitized input/output snapshots, checks, decisions, routes, attempts, timestamps, active execution time and wall elapsed time. The alert Debug page resolves workflow executions automatically.
+
+The default read-only execution map contains the complete recorded hierarchy:
+workflow → calling node → playbook/agent subflow → its nodes → recorded model,
+REST/MCP and Python calls. Subflows are expanded initially and remain inside their
+actual caller, not links that replace the parent pipeline. Open any node in an
+overlay inspector, switch to the numbered hierarchical outline, collapse/expand
+subflows, or use the true full-screen map. Forks/joins remain parallel branches;
+the outline is dependency order, not an invented serial timeline. A nested-run
+permalink also resolves to the complete root execution.
+
+Only recorded child runs are expanded; uninvoked router candidates are not
+fabricated as executions. Calls without caller metadata are shown separately.
+Failed reads, cycles, missing pinned graphs and display limits produce an explicit
+incomplete-map warning. Reads are tenant-authorized, abortable, bounded to six at
+a time and 100 runs/eight nesting levels. Inspectors distinguish run release from
+recorded node execution release. Attempt counts do not imply that separate payloads
+for every historical retry were retained. Safe copied summaries cover the loaded
+hierarchy and its completeness, pinned version and per-node execution metadata.
 
 Full prompts, raw alerts, evidence text and credentials are excluded from debug/run-list responses. Snapshots above 32 KiB are omitted with checksum and size metadata, not silently truncated. Authorized alert detail retains its separate original source record. Model profiles expose an explicit context-token limit (default 2,048) for Ollama; size it against the tested model and available memory.
 
