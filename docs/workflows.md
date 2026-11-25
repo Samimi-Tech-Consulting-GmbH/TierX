@@ -132,6 +132,12 @@ Human-response waiting, implicit learning, automatic benign-rule approval and au
 
 ## Execution inspection
 
+Execution inspection lives under **Debug**, not the workflow-definition editor.
+Platform-admin run links use `/dashboard/admin/debug/runs/{tenantId}/{runId}`;
+tenant-authorized links use `/dashboard/{tenantId}/debug/runs/{runId}`. Old
+`workflows/runs` bookmarks redirect to the corresponding Debug route. Workflows
+remains the definition-management area; its execution-history links open Debug.
+
 The execution view shows the pinned root flow revision and checksum separately from the application release. Every graph node appears, including not-reached nodes and capability-only tool definitions. Executed nodes expose sanitized input/output snapshots, checks, decisions, routes, attempts, timestamps, active execution time and wall elapsed time. The alert Debug page resolves workflow executions automatically.
 
 The default read-only execution map contains the complete recorded hierarchy:

@@ -3,8 +3,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { workflowRequest } from "@/lib/workflows";
 import type { AlertDocument } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
+import { executionDebugHref } from "@/lib/execution-navigation";
 
 export function WorkflowAlertAnalysis({ tenantId, alert }: { tenantId: string; alert: AlertDocument }) {
+  const { user } = useAuth();
   const [history, setHistory] = useState<unknown[]>([]), [feedback, setFeedback] = useState<unknown[]>([]);
   const [decision, setDecision] = useState("APPROVE"), [corrections, setCorrections] = useState("");
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
@@ -33,7 +36,7 @@ export function WorkflowAlertAnalysis({ tenantId, alert }: { tenantId: string; a
     finally { setBusy(false); }
   }
   return <section className="space-y-3 rounded-xl border p-5"><h2 className="font-semibold">Alert-owned workflow analysis</h2>
-    {alert.run_id && <Link className="underline" href={`/dashboard/${tenantId}/workflows/runs/${alert.run_id}`}>Open workflow execution</Link>}
+    {alert.run_id && <Link className="underline" href={executionDebugHref(tenantId, alert.run_id, user?.role === "PLATFORM_ADMIN")}>Open execution in Debug</Link>}
     <p className="text-sm text-muted-foreground">Cluster membership supplies context only. Each alert retains its own result and analyst decision.</p>
     <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(alert.alert_analysis || { status: alert.analysis_status || "No persisted analysis" }, null, 2)}</pre>
     <details><summary>Analysis history ({history.length})</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(history, null, 2)}</pre></details>
