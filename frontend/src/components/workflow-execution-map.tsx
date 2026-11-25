@@ -489,6 +489,7 @@ export function WorkflowExecutionMap({ execution }: { execution: Execution }) {
           role="region"
         >
           <ReactFlow
+            colorMode="dark"
             nodes={nodes}
             edges={map.edges}
             nodeTypes={nodeTypes}
