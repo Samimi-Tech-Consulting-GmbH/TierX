@@ -6,6 +6,12 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { randomUUID } from "node:crypto";
 
+test("full execution links use Debug rather than workflow management", async () => {
+  const source = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  assert.match(source, /\/debug\/runs\//);
+  assert.doesNotMatch(source, /\/workflows\/runs\//);
+});
+
 async function watcherHarness() {
   const elements = new Map();
   const timers = new Map();

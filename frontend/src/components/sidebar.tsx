@@ -46,6 +46,13 @@ interface NavItem {
 
 function navItemActive(pathname: string, item: NavItem): boolean {
   const { href, exact } = item;
+  if (href === "/dashboard/admin/debug") {
+    return (
+      pathname.startsWith(`${href}/`) ||
+      pathname === href ||
+      /^\/dashboard\/[^/]+\/debug(?:\/|$)/.test(pathname)
+    );
+  }
   if (exact) {
     return pathname === href || pathname === `${href}/`;
   }
@@ -178,6 +185,12 @@ function tenantNavItems(tenantId: string, isPlatformAdmin: boolean): NavItem[] {
     ...(isPlatformAdmin
       ? []
       : [
+          {
+            href: `/dashboard/${tenantId}/debug`,
+            label: "Debug",
+            icon: ScanSearch,
+            group: "Operations" as NavGroup,
+          },
           {
             href: `/dashboard/${tenantId}`,
             label: "Dashboard",

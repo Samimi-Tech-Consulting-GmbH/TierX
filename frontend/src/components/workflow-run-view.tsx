@@ -15,6 +15,7 @@ import { formatLocaleDateTime } from "@/lib/datetime";
 import { useAuth } from "@/lib/auth";
 import { UserRole } from "@/lib/types";
 import { studioButton } from "@/components/workflow-library";
+import { executionDebugHome } from "@/lib/execution-navigation";
 
 export function WorkflowRunView({
   tenantId,
@@ -129,13 +130,22 @@ export function WorkflowRunView({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <Link
+            className="mr-4 text-sm text-muted-foreground hover:text-primary"
+            href={executionDebugHome(
+              tenantId,
+              user?.role === UserRole.PLATFORM_ADMIN,
+            )}
+          >
+            ← Back to Debug
+          </Link>
+          <Link
             className="text-sm text-muted-foreground hover:text-primary"
             href={`/dashboard/${tenantId}/alerts/${run.alert_id}`}
           >
             ← Back to alert
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold">Workflow execution</h1>
+            <h1 className="text-2xl font-semibold">Execution debug</h1>
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${run.state === "SUCCEEDED" ? "bg-emerald-500/15 text-emerald-400" : run.state === "FAILED" ? "bg-red-500/15 text-red-400" : "bg-muted"}`}
             >

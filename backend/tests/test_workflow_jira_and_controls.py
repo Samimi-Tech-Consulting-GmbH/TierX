@@ -69,7 +69,7 @@ def test_jira_workflow_identity_idempotency_and_explicit_delivery(setup, monkeyp
     accepted = client.post(path + "/submissions", json=body)
     assert accepted.status_code == 202, accepted.text
     row = accepted.json()
-    assert row["trace_path"] == f"/dashboard/one/workflows/runs/{row['run_id']}"
+    assert row["trace_path"] == f"/dashboard/one/debug/runs/{row['run_id']}"
     repeated = client.post(path + "/submissions", json=body).json()
     assert repeated["alert_id"] == row["alert_id"]
     run = mongo.tenant_one.v2_runs.find_one({})
@@ -78,7 +78,7 @@ def test_jira_workflow_identity_idempotency_and_explicit_delivery(setup, monkeyp
     endpoint = path + "/submissions/" + row["submission_id"]
     mongo.tenant_one.v2_runs.update_one({"run_id": row["run_id"]}, {"$set": {"state": "SUCCEEDED"}})
     assert client.get(endpoint).json()["state"] == "COMPLETED"
-    assert client.get(endpoint).json()["trace_path"] == f"/dashboard/one/workflows/runs/{row['run_id']}"
+    assert client.get(endpoint).json()["trace_path"] == f"/dashboard/one/debug/runs/{row['run_id']}"
     assert client.post(endpoint + "/comments", json={"kind": "FINAL", "jira_comment_id": "2"}).status_code == 409
     mongo.tierx_platform.workflow_jira_deliveries.insert_one({"_id": "d", "submission_id": row["submission_id"], "integration_id": "jira-one", "state": "PENDING", "analysis": {"headline": "Synthetic analysis"}})
     assert client.get(endpoint).json()["result"]["headline"] == "Synthetic analysis"

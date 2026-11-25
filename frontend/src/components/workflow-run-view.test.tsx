@@ -71,6 +71,12 @@ describe("Complete workflow debugger", () => {
       screen.queryByRole("button", { name: "Cancel execution" }),
     ).not.toBeInTheDocument();
     expect(workflowRequest).toHaveBeenCalledTimes(3);
+    expect(
+      screen.getByRole("link", { name: "← Back to Debug" }),
+    ).toHaveAttribute("href", "/dashboard/admin/debug");
+    expect(
+      screen.getByRole("heading", { name: "Execution debug" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("execution-flow")).toHaveAttribute(
       "data-color-mode",
       "dark",

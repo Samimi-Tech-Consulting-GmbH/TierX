@@ -75,7 +75,9 @@ def test_entry_token_scope_rotation_and_raw_timestamp(setup, monkeypatch):
     headers = {"Authorization": "Bearer " + token}
     assert client.post(endpoint, headers=headers, json={}).status_code == 422
     payload = {"result": {"_time": "2026-01-01T12:00:00Z", "host": "synthetic"}}
-    assert client.post(endpoint, headers=headers, json=payload).status_code == 202
+    accepted = client.post(endpoint, headers=headers, json=payload)
+    assert accepted.status_code == 202
+    assert accepted.json()["trace_url"] == f"/dashboard/one/debug/runs/{accepted.json()['run_id']}"
     run = mongo.tenant_one.v2_runs.find_one({})
     assert run["input"]["raw_payload"] == payload
     assert run["input"]["timestamp"] == "2026-01-01T12:00:00+00:00"

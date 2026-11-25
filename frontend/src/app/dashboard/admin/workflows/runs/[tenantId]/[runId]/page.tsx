@@ -1,5 +1,10 @@
-import { WorkflowRunView } from "@/components/workflow-run-view";
-export default async function Page({ params }: { params: Promise<{ tenantId: string; runId: string }> }) {
+import { redirect } from "next/navigation";
+import { executionDebugHref } from "@/lib/execution-navigation";
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ tenantId: string; runId: string }>;
+}) {
   const { tenantId, runId } = await params;
-  return <WorkflowRunView tenantId={tenantId} runId={runId} />;
+  redirect(executionDebugHref(tenantId, runId, true));
 }

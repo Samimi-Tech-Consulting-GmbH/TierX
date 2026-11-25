@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { executionDebugHref } from "@/lib/execution-navigation";
 import {
   ReactFlow,
   Background,
@@ -1615,12 +1616,7 @@ export function WorkflowStudio({
             <Link
               className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4 text-sm hover:border-primary"
               key={row.run_id}
-              href={
-                "/dashboard/admin/workflows/runs/" +
-                encodeURIComponent(runTenant) +
-                "/" +
-                row.run_id
-              }
+              href={executionDebugHref(runTenant, row.run_id, true)}
             >
               <span className="flex-1 font-mono text-xs">{row.alert_id}</span>
               <span>{row.state}</span>
