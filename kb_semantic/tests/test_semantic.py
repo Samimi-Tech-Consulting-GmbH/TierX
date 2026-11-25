@@ -422,9 +422,11 @@ def test_malformed_semantic_reasons_use_deterministic_fallback(monkeypatch, reas
 
 
 def test_real_mem0_adapter_uses_infer_false_and_scopes_replay(monkeypatch, tmp_path):
+    import sqlite3
+    from unittest.mock import Mock
     from mem0 import Memory
     from mem0.utils.factory import EmbedderFactory, LlmFactory
-    from engine import Engine
+    from engine import Engine, NoConversationHistory
     from qdrant_client import QdrantClient
 
     class Embeddings:
@@ -453,6 +455,9 @@ def test_real_mem0_adapter_uses_infer_false_and_scopes_replay(monkeypatch, tmp_p
     )
     engine = Engine.__new__(Engine)
     engine.memory, engine.tokenizer = memory, Tokenizer()
+    engine.memory.db = NoConversationHistory()
+    history_write = Mock(wraps=engine.memory.db.add_history)
+    monkeypatch.setattr(engine.memory.db, "add_history", history_write)
     metadata = {
         "source_key": "source1",
         "semantic_generation": "generation1",
@@ -461,10 +466,17 @@ def test_real_mem0_adapter_uses_infer_false_and_scopes_replay(monkeypatch, tmp_p
     first = engine.ensure("tenant-a", "Original text", metadata)
     assert engine.ensure("tenant-a", "Original text", metadata) == first
     assert engine.ensure("tenant-b", "Original text", metadata) != first
+    scoped = memory.get_all(filters={"user_id": "tenant-a", "source_key": "source1"}, top_k=1000)["results"]
+    assert [row["id"] for row in scoped] == [first]
     assert len(engine.search("tenant-a", "Original")) == 1
     engine.delete_generation("tenant-a", "generation1")
     assert engine.search("tenant-a", "Original") == []
     assert len(engine.search("tenant-b", "Original")) == 1
+    assert history_write.call_count >= 3  # Two inserts and tenant-a deletion use our no-op sink.
+    with sqlite3.connect(tmp_path / "history.db") as db:
+        assert "Original text" not in "\n".join(db.iterdump())
+    from mem0.memory.telemetry import MEM0_TELEMETRY
+    assert MEM0_TELEMETRY is False
     memory.vector_store.client.close()
 
 

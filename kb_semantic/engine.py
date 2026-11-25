@@ -143,9 +143,8 @@ class Engine:
     def ensure(self, tenant_id, text, metadata):
         # A crash after vector write but before Mongo acknowledgement is reconciled here.
         existing = self.memory.get_all(
-            user_id=tenant_id,
-            filters={"source_key": metadata["source_key"]},
-            limit=1000,
+            filters={"user_id": tenant_id, "source_key": metadata["source_key"]},
+            top_k=1000,
         )["results"]
         if existing:
             ordered = sorted(existing, key=lambda m: m["id"])
@@ -162,18 +161,16 @@ class Engine:
             raise ValueError("QUERY_TOO_LARGE")
         return self.memory.search(
             text,
-            user_id=tenant_id,
-            filters={"model_id": MODEL_ID},
-            limit=50,
+            filters={"user_id": tenant_id, "model_id": MODEL_ID},
+            top_k=50,
             rerank=False,
         )["results"]
 
     def delete_generation(self, tenant_id, generation):
         while True:
             rows = self.memory.get_all(
-                user_id=tenant_id,
-                filters={"semantic_generation": generation},
-                limit=1000,
+                filters={"user_id": tenant_id, "semantic_generation": generation},
+                top_k=1000,
             )["results"]
             if not rows:
                 break
