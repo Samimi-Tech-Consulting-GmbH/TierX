@@ -9,7 +9,7 @@ describe("Tenant Debug execution list", () => {
   });
   it("loads only tenant-authorized runs and links to Debug", async () => {
     vi.mocked(workflowRequest).mockResolvedValue({
-      items: [{ run_id: "run", state: "SUCCEEDED" }],
+      items: [{ run_id: "run", tenant_id: "one", state: "SUCCEEDED" }], total: 1,
     });
     render(<TenantExecutionDebug tenantId="one" />);
     expect(await screen.findByRole("link", { name: /run/ })).toHaveAttribute(
@@ -17,7 +17,7 @@ describe("Tenant Debug execution list", () => {
       "/dashboard/one/debug/runs/run",
     );
     expect(workflowRequest).toHaveBeenCalledWith(
-      "/tenants/one/runs?limit=25",
+      "/tenants/one/debug/executions?skip=0&limit=25",
       "GET",
       undefined,
       expect.any(AbortSignal),

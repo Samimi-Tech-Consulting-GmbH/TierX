@@ -29,6 +29,7 @@ from app.api.dependencies.auth import (
 )
 from app.db.mongodb import DatabaseManager
 from app.models.tenant import Tenant
+from app.services.workflow_debug_service import ExecutionState, WorkflowDebugService
 
 
 def enabled():
@@ -536,6 +537,23 @@ def runs(
         "skip": skip,
         "limit": limit,
     }
+
+
+@router.get("/debug/executions")
+def debug_executions(
+    q: str | None = Query(None, max_length=512),
+    state: ExecutionState | None = None,
+    since_hours: int | None = Query(None, ge=1, le=720),
+    release_version: str | None = Query(None, max_length=64),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    tenant_id=Depends(verify_tenant_access),
+    user=Depends(get_current_user),
+):
+    return WorkflowDebugService.list_executions(
+        tenant_id=tenant_id, q=q, state=state, since_hours=since_hours,
+        release_version=release_version, skip=skip, limit=limit,
+    )
 
 
 @router.get("/runs/{run_id}")

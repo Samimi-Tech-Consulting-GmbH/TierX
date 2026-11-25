@@ -11,8 +11,26 @@ from app.api.dependencies.auth import require_platform_admin
 from app.core.brand_compat import tierx_headers
 from app.schemas.user import AuthenticatedUser
 from app.services.debug_trace_service import DebugTraceService
+from app.services.workflow_debug_service import ExecutionState, WorkflowDebugService
 
 router = APIRouter(prefix="/debug", tags=["Admin Debug"])
+
+
+@router.get("/executions")
+def list_workflow_executions(
+    tenant_id: Optional[str] = Query(None, max_length=128),
+    q: Optional[str] = Query(None, max_length=512),
+    state: Optional[ExecutionState] = None,
+    since_hours: Optional[int] = Query(None, ge=1, le=720),
+    release_version: Optional[str] = Query(None, max_length=64),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    _: AuthenticatedUser = Depends(require_platform_admin),
+):
+    return WorkflowDebugService.list_executions(
+        tenant_id=tenant_id, q=q, state=state, since_hours=since_hours,
+        release_version=release_version, skip=skip, limit=limit,
+    )
 
 DEBUG_TRACE_ENABLED = os.getenv("DEBUG_TRACE_ENABLED", "false").lower() in {
     "1",
