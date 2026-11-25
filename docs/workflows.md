@@ -198,3 +198,22 @@ Rollback requires deliberate draining/cancellation and deployment of a previous
 release, not changing an execution-mode flag. Preserve databases, volumes and
 encryption keys. Use immutable semantic releases; never build an unpinned branch
 on a server.
+# Debug execution index
+
+The Debug landing page lists recorded root workflow executions, not historical
+processing-event traces. Select a tenant (or All tenants for platform admins),
+search by alert/run/workflow, filter by status or time, and open a row to inspect
+the complete nested execution. The default time range includes all retained
+executions. Child runs appear inside their root, not as duplicate list rows.
+
+Read-only summary endpoints are `GET /api/v1/admin/debug/executions` (platform
+admins) and `GET /api/v2/tenants/{tenant_id}/debug/executions` (tenant-authorized).
+They support `q`, `state`, `since_hours`, `release_version`, `skip` and `limit`
+(maximum 100); the admin endpoint also accepts `tenant_id`. Responses contain
+`items`, `total`, `skip` and `limit`. Summaries exclude execution payloads,
+graphs, resource bundles and outputs. An unavailable active tenant database
+returns an error rather than a misleading empty or partial global index.
+
+Pre-workflow processing traces remain separate read-only history at
+`/dashboard/admin/debug/history`; their tracing flag does not gate workflow Debug.
+

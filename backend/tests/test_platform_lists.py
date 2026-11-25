@@ -200,6 +200,78 @@ def test_platform_lists_require_platform_admin(path):
     assert response.json() == {"items": [], "total": 0, "skip": 0, "limit": 25}
 
 
+def _run(tenant, run_id, created_at, **values):
+    row = dict(run_id=run_id, alert_id=f"alert-{run_id}", created_at=created_at,
+               definition_ref="workflow:investigate@3", state="SUCCEEDED")
+    row.update(values)
+    _db(tenant).v2_runs.insert_one(row)
+
+
+def test_workflow_debug_indexes_roots_without_legacy_events_or_payloads():
+    tenant = _tenant("debug")
+    now = datetime.now(timezone.utc)
+    _alert(tenant, "alert-root", now, raw_payload={"secret": "private"})
+    _run(tenant, "root", now, input={"secret": "private"}, graph={}, bundle={},
+         output={}, resources={}, evidence={}, unknown_secret="private")
+    _run(tenant, "child", now, parent_run_id="root")
+    response = client.get("/api/v1/admin/debug/executions", headers=_headers())
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 1
+    row = page["items"][0]
+    assert row["run_id"] == "root"
+    assert row["tenant_id"] == tenant.tenant_id
+    assert row["alert_type"] == "endpoint.malware"
+    assert not {"input", "graph", "bundle", "output", "resources", "evidence", "unknown_secret", "_id"} & row.keys()
+    assert "private" not in response.text
+
+
+def test_workflow_debug_global_paging_and_filters():
+    a, b = _tenant("a"), _tenant("b")
+    inactive = _tenant("inactive", status="SUSPENDED")
+    now = datetime.now(timezone.utc)
+    _run(a, "old", now - timedelta(days=40), parent_run_id=None)
+    _run(b, "new", now, parent_run_id="", state="FAILED", release_version="0.2.22")
+    _run(inactive, "hidden", now)
+    path = "/api/v1/admin/debug/executions"
+    assert client.get(path, headers=_headers()).json()["total"] == 2
+    page = client.get(path, params={"limit": 1, "skip": 1}, headers=_headers()).json()
+    assert page["total"] == 2
+    assert [row["run_id"] for row in page["items"]] == ["old"]
+    for filters in ({"tenant_id": b.tenant_id}, {"state": "FAILED"},
+                    {"since_hours": 24}, {"release_version": "0.2.22"}, {"q": "NEW"}):
+        page = client.get(path, params=filters, headers=_headers()).json()
+        assert [row["run_id"] for row in page["items"]] == ["new"]
+    assert client.get(path, params={"q": ".*"}, headers=_headers()).json()["total"] == 0
+    assert client.get(path, params={"tenant_id": inactive.tenant_id}, headers=_headers()).status_code == 404
+    assert client.get(path, params={"limit": 101}, headers=_headers()).status_code == 422
+    assert client.get(path, params={"state": "BOGUS"}, headers=_headers()).status_code == 422
+
+
+def test_workflow_debug_authorization_and_tenant_scope():
+    a, b = _tenant("a"), _tenant("b")
+    _run(a, "a", datetime.now(timezone.utc))
+    _run(b, "b", datetime.now(timezone.utc))
+    admin_path = "/api/v1/admin/debug/executions"
+    assert client.get(admin_path).status_code in {401, 403}
+    assert client.get(admin_path, headers=_headers("TENANT_ADMIN", a.tenant_id)).status_code == 403
+    tenant_path = f"/api/v2/tenants/{a.tenant_id}/debug/executions"
+    response = client.get(tenant_path, headers=_headers("TENANT_ADMIN", a.tenant_id))
+    assert response.status_code == 200
+    assert [row["run_id"] for row in response.json()["items"]] == ["a"]
+    assert client.get(tenant_path, headers=_headers("TENANT_ADMIN", b.tenant_id)).status_code == 403
+
+
+def test_workflow_debug_database_failure_is_not_an_empty_success(monkeypatch):
+    _tenant("broken")
+    def fail(_):
+        raise RuntimeError("sensitive connection details")
+    monkeypatch.setattr(PlatformListService, "_database", staticmethod(fail))
+    response = client.get("/api/v1/admin/debug/executions", headers=_headers())
+    assert response.status_code == 503
+    assert "sensitive" not in response.text
+
+
 @pytest.mark.parametrize(
     "path",
     ["/api/v1/admin/alerts/stats", "/api/v1/admin/playbooks/stats"],

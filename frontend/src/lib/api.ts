@@ -1064,6 +1064,12 @@ export async function getMyDeadLetter(
 
 // --- Platform debug traces ---
 
+export function listWorkflowDebugExecutions(query: string, signal?: AbortSignal) {
+  return request<import("./workflow-debug-index").WorkflowExecutionPage>(
+    `/api/v1/admin/debug/executions?${query}`, { signal },
+  );
+}
+
 export async function listDebugTraces(params?: {
   tenant_id?: string;
   alert_id?: string;
