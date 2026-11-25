@@ -19,10 +19,12 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@xyflow/react", () => ({
   ReactFlow: ({
     nodes,
+    colorMode,
   }: {
     nodes: { id: string; data: { label: string; inspect: () => void } }[];
+    colorMode?: string;
   }) => (
-    <div>
+    <div data-testid="execution-flow" data-color-mode={colorMode}>
       {nodes.map((node) => (
         <button key={node.id} onClick={node.data.inspect}>
           {node.data.label}
@@ -69,6 +71,10 @@ describe("Complete workflow debugger", () => {
       screen.queryByRole("button", { name: "Cancel execution" }),
     ).not.toBeInTheDocument();
     expect(workflowRequest).toHaveBeenCalledTimes(3);
+    expect(screen.getByTestId("execution-flow")).toHaveAttribute(
+      "data-color-mode",
+      "dark",
+    );
   });
   it("opens an overlay inspector without replacing the full execution and supports a nested outline", async () => {
     render(<WorkflowRunView tenantId="one" runId="r" />);
