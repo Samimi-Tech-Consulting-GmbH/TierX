@@ -198,7 +198,8 @@ Rollback requires deliberate draining/cancellation and deployment of a previous
 release, not changing an execution-mode flag. Preserve databases, volumes and
 encryption keys. Use immutable semantic releases; never build an unpinned branch
 on a server.
-# Debug execution index
+
+## Debug execution index
 
 The Debug landing page lists recorded root workflow executions, not historical
 processing-event traces. Select a tenant (or All tenants for platform admins),
@@ -216,4 +217,3 @@ returns an error rather than a misleading empty or partial global index.
 
 Pre-workflow processing traces remain separate read-only history at
 `/dashboard/admin/debug/history`; their tracing flag does not gate workflow Debug.
-
